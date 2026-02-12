@@ -21,6 +21,13 @@
   --safe: env(safe-area-inset-bottom, 0px);
   --safeTop: env(safe-area-inset-top, 0px);
   --font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Noto Sans JP", sans-serif;
+
+    /* text scale (light theme readability) */
+  --text-strong: #3b2a1f;   /* 見出し/強調 */
+  --text: #4a3728;          /* 既存：本文 */
+  --text-soft: #6b4f3a;     /* メニュー/補助 */
+  --muted: #8a6f5a;         /* 既存：補助 */
+  --muted2: #a98d77;        /* プレースホルダなどさらに薄い */
 }
 
 *{ box-sizing: border-box; }
@@ -471,3 +478,127 @@ svg{ width:22px; height:22px; fill: currentColor; }
   .navitem{ width: 96px; }
   .card__thumb{ width: 110px; min-width: 110px; height: 90px; }
 }
+
+/* =========================================
+   Light Brown Theme – readability overrides
+   （ダーク残骸の文字色/背景を一括で上書き）
+========================================= */
+
+/* topbar icon / brand */
+.brand__name{ color: var(--text-strong); }
+.brand__sub{ color: var(--muted); }
+.iconbtn{
+  background: rgba(255,255,255,.55);
+  color: var(--text-strong);
+}
+.iconbtn:hover{ background: rgba(255,255,255,.72); }
+
+/* search */
+.search__box{
+  background: rgba(255,255,255,.70);
+  box-shadow: 0 10px 24px rgba(75,50,30,.10);
+}
+.search__icon{ color: var(--muted); }
+.search input::placeholder{ color: var(--muted2); }
+.search__clear{ color: var(--muted); }
+.search__clear:hover{ background: rgba(176,125,79,.10); }
+
+/* chips */
+.chip{
+  background: rgba(255,255,255,.55);
+  color: var(--text-strong);
+}
+.chip:hover{ background: rgba(255,255,255,.72); }
+.chip--active{
+  border-color: rgba(176,125,79,.55);
+  background: rgba(176,125,79,.12);
+}
+
+/* cards */
+.card{
+  background: rgba(255,255,255,.62);
+  box-shadow: 0 16px 34px rgba(75,50,30,.10);
+}
+.card:hover{ background: rgba(255,255,255,.72); }
+.badge{
+  border: 1px solid rgba(176,125,79,.25);
+  background: rgba(255,255,255,.75);
+  color: var(--text-strong);
+}
+.card__desc{ color: var(--text-soft); }
+.pill{
+  color: var(--text-soft);
+  border: 1px solid rgba(176,125,79,.22);
+  background: rgba(255,255,255,.65);
+}
+
+/* empty / dashed box */
+.empty{
+  border: 1px dashed rgba(176,125,79,.35);
+  background: rgba(255,255,255,.55);
+}
+.empty__text{ color: var(--muted); }
+
+/* toggle */
+.toggle__ui{
+  border: 1px solid rgba(176,125,79,.32);
+  background: rgba(255,255,255,.72);
+}
+.toggle__ui::after{ background: #fff; }
+.toggle input:checked + .toggle__ui{
+  background: rgba(176,125,79,.22);
+  border-color: rgba(176,125,79,.55);
+}
+.toggle__label{ color: var(--text-soft); }
+
+/* notifications */
+.notif{
+  background: rgba(255,255,255,.62);
+}
+.notif__title{ color: var(--text-strong); }
+.notif__text{ color: var(--text-soft); }
+.notif--important{
+  border-color: rgba(196,138,74,.45);
+  background: rgba(196,138,74,.10);
+}
+
+/* bottom nav */
+.navitem{ color: var(--text-soft); }
+.navitem--active{ color: var(--text-strong); }
+.navitem:hover{ background: rgba(176,125,79,.10); }
+
+/* drawer – ここが最大の「読めない」原因なのでライト化 */
+.drawer__scrim{
+  background: rgba(60,40,25,.35);
+  backdrop-filter: blur(3px);
+}
+.drawer__panel{
+  border: 1px solid rgba(176,125,79,.20);
+  background: rgba(255,250,245,.98);
+  box-shadow: 0 22px 60px rgba(60,40,25,.22);
+}
+.drawer__top{
+  border-bottom: 1px solid rgba(176,125,79,.22);
+}
+.drawer__date{ color: var(--muted); }
+
+.article__hero{
+  border: 1px solid rgba(176,125,79,.20);
+}
+.article__title{ color: var(--text-strong); }
+.article__summary{
+  border: 1px solid rgba(176,125,79,.22);
+  background: rgba(255,255,255,.70);
+}
+.article__summary ul{ color: var(--text); }
+.article__body{ color: var(--text); }
+.article__body h3{ color: var(--text-strong); }
+.article__body a{ color: #8b5a2b; } /* 茶系リンク */
+
+/* CTA */
+.cta{
+  border: 1px solid rgba(176,125,79,.25);
+  background: rgba(176,125,79,.10);
+}
+.cta__text{ color: var(--text-strong); }
+
