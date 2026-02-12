@@ -48,8 +48,9 @@ svg{ width:22px; height:22px; fill: currentColor; }
   z-index: 10;
   padding: calc(14px + var(--safeTop)) 16px 14px;
   backdrop-filter: blur(10px);
-  background: linear-gradient(to bottom, rgba(11,18,32,.92), rgba(11,18,32,.70));
-  border-bottom: 1px solid var(--stroke);
+  background: rgba(255, 250, 245, 0.92);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid #e6d9cc;
   display:flex;
   align-items:center;
   justify-content: space-between;
@@ -318,21 +319,10 @@ svg{ width:22px; height:22px; fill: currentColor; }
   bottom: 0;
   z-index: 20;
   padding: 10px 10px calc(10px + var(--safe));
-  background: linear-gradient(to top, rgba(11,18,32,.96), rgba(11,18,32,.70));
-  border-top: 1px solid var(--stroke);
+  background: rgba(255, 250, 245, 0.95);
+  border-top: 1px solid #e6d9cc;
   display:flex;
   justify-content: center;
-}
-.bottomnav::before{
-  content:"";
-  position:absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  top: -10px;
-  width: min(var(--maxw), 100%);
-  height: 10px;
-  background: linear-gradient(to top, rgba(0,0,0,.15), transparent);
-  pointer-events:none;
 }
 .bottomnav{
   gap: 8px;
