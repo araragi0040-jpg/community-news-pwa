@@ -1,584 +1,636 @@
-/* Community News – sample (no backend) */
-(() => {
-  const $ = (sel, root=document) => root.querySelector(sel);
-  const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
+/* Community News Wire Sample + Schedule Tab (Calendar)
+   - single-file vanilla JS
+   - localStorage for saved
+*/
 
-  // --- Data (sample) ---
-  const CHANNELS = [
-    { id: "all", label: "全部", tone: "accent" },
-    { id: "announce", label: "お知らせ", tone: "accent" },
-    { id: "event", label: "イベント", tone: "warn" },
-    { id: "report", label: "活動レポ", tone: "good" },
-    { id: "learn", label: "学び共有", tone: "accent" },
-    { id: "recruit", label: "募集", tone: "warn" },
+const $ = (sel, root=document) => root.querySelector(sel);
+const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
+
+const LS_KEY_SAVED = "community_news_saved_v1";
+const LS_KEY_ONLY_IMPORTANT = "community_news_only_important_v1";
+const LS_KEY_ONLY_UPCOMING = "community_news_only_upcoming_v1";
+
+const CHANNELS = [
+  { key:"all", label:"All", tone:"accent" },
+  { key:"announce", label:"告知", tone:"accent" },
+  { key:"event", label:"イベント", tone:"good" },
+  { key:"ops", label:"運営", tone:"warn" },
+  { key:"tips", label:"Tips", tone:"accent" },
+];
+
+const ARTICLES = [
+  {
+    id:"a1",
+    channel:"announce",
+    tone:"accent",
+    badge:"告知",
+    date:"2026-02-12",
+    title:"コミュニティ限定：ニュースアプリ運用を開始します",
+    desc:"このアプリはコミュニティ内の告知・イベント・重要連絡をまとめます。",
+    tags:["運営","固定"],
+    summary:[
+      "このアプリはコミュ内限定で運用",
+      "重要な投稿は通知タブにも反映",
+      "保存であとで読むが可能"
+    ],
+    body:[
+      "ここに本文サンプルが入ります。運営からの重要な告知や、イベントの案内、締切のリマインドなどを集約します。",
+      "投稿のテンプレ化や、チャンネル分けも可能です。"
+    ],
+    cta:{ text:"案内ドキュメントを見る", url:"https://example.com" }
+  },
+  {
+    id:"a2",
+    channel:"event",
+    tone:"good",
+    badge:"イベント",
+    date:"2026-02-18",
+    title:"次回集まり：オンライン交流（テスト）",
+    desc:"試験的に30分の短い交流を実施します。参加方法は本文へ。",
+    tags:["Zoom","30分"],
+    summary:["日時：2/18 20:00","参加URLは当日掲示","途中入退室OK"],
+    body:["イベントの詳細です。ここにZoomリンクや参加方法など。"],
+    cta:{ text:"参加フォームへ", url:"https://example.com" }
+  },
+  {
+    id:"a3",
+    channel:"ops",
+    tone:"warn",
+    badge:"運営",
+    date:"2026-02-15",
+    title:"投稿ルール：個人情報の取り扱いについて",
+    desc:"招待制の場でも、個人情報は最小限に。守ってほしいポイントをまとめました。",
+    tags:["ルール"],
+    summary:["個人情報は原則書かない","外部リンクは確認","困ったら運営へ"],
+    body:["ここに本文。投稿のガイドラインなど。"],
+  }
+];
+
+// ==== Schedule data (sample) ====
+const SCHEDULE = [
+  {
+    id:"s1",
+    title:"オンライン交流（テスト）",
+    date:"2026-02-18",
+    time:"20:00",
+    tone:"good",
+    label:"イベント",
+    desc:"30分だけ。近況共有＋次の動き確認。"
+  },
+  {
+    id:"s2",
+    title:"募集締切：参加フォーム",
+    date:"2026-02-16",
+    time:"23:59",
+    tone:"warn",
+    label:"締切",
+    desc:"参加人数把握のため、期限までに入力お願いします。"
+  },
+  {
+    id:"s3",
+    title:"運営投稿：次月の方針共有",
+    date:"2026-03-02",
+    time:"21:00",
+    tone:"accent",
+    label:"運営",
+    desc:"来月の動きと、改善点の共有（15分）。"
+  },
+  {
+    id:"s4",
+    title:"重要：規約更新告知",
+    date:"2026-03-05",
+    time:"12:00",
+    tone:"danger",
+    label:"重要",
+    desc:"投稿ルールの追加。必読。"
+  }
+];
+
+// ==== Notifications (sample) ====
+const NOTIFS = [
+  { id:"n1", title:"重要：明日の締切", time:"2026-02-15 19:30", important:true, text:"参加フォームの締切は 2/16 23:59 です。" },
+  { id:"n2", title:"運営：新機能", time:"2026-02-12 10:05", important:false, text:"Scheduleタブを追加しました（UIサンプル）。" }
+];
+
+// ===== State =====
+let state = {
+  channel: "all",
+  query: "",
+  drawerOpen: false,
+  activeArticleId: null,
+
+  // schedule
+  calYear: null,
+  calMonth: null, // 0-11
+  selectedDate: null, // YYYY-MM-DD
+};
+
+// ===== Helpers =====
+function loadSaved(){
+  try { return JSON.parse(localStorage.getItem(LS_KEY_SAVED) || "[]"); }
+  catch { return []; }
+}
+function saveSaved(arr){
+  localStorage.setItem(LS_KEY_SAVED, JSON.stringify(arr));
+}
+function isSaved(id){
+  return loadSaved().includes(id);
+}
+function formatDateJP(iso){
+  // iso: YYYY-MM-DD
+  const [y,m,d] = iso.split("-").map(Number);
+  return `${y}/${String(m).padStart(2,"0")}/${String(d).padStart(2,"0")}`;
+}
+function clamp(n, a, b){ return Math.max(a, Math.min(b, n)); }
+function ymd(d){
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,"0");
+  const dd = String(d.getDate()).padStart(2,"0");
+  return `${y}-${m}-${dd}`;
+}
+function sameYMD(a,b){ return a === b; }
+function todayYMD(){ return ymd(new Date()); }
+
+function toneDot(tone){
+  return `<span class="badge__dot" style="background:${toneColor(tone)}"></span>`;
+}
+function toneColor(tone){
+  const css = getComputedStyle(document.documentElement);
+  const map = {
+    accent: css.getPropertyValue("--accent").trim() || "#b07d4f",
+    good: css.getPropertyValue("--good").trim() || "#7aa67a",
+    warn: css.getPropertyValue("--warn").trim() || "#c48a4a",
+    danger: css.getPropertyValue("--danger").trim() || "#c56a5c",
+  };
+  return map[tone] || (css.getPropertyValue("--accent2").trim() || "#d9b38c");
+}
+
+// ===== Rendering: Chips =====
+function renderChips(){
+  const row = $("#chipRow");
+  row.innerHTML = CHANNELS.map(ch => {
+    const active = (state.channel === ch.key) ? " chip--active" : "";
+    return `
+      <button class="chip${active}" data-chip="${ch.key}" data-tone="${ch.tone}">
+        <span class="chip__dot"></span>
+        <span>${ch.label}</span>
+      </button>
+    `;
+  }).join("");
+
+  $$(".chip", row).forEach(btn => {
+    btn.addEventListener("click", () => {
+      state.channel = btn.dataset.chip;
+      renderChips();
+      renderFeed();
+    });
+  });
+}
+
+// ===== Feed =====
+function filteredArticles(){
+  const q = state.query.trim().toLowerCase();
+  return ARTICLES
+    .filter(a => state.channel === "all" ? true : a.channel === state.channel)
+    .filter(a => {
+      if(!q) return true;
+      return (
+        a.title.toLowerCase().includes(q) ||
+        a.desc.toLowerCase().includes(q) ||
+        (a.tags||[]).join(" ").toLowerCase().includes(q) ||
+        (a.badge||"").toLowerCase().includes(q)
+      );
+    })
+    .sort((a,b) => (a.date < b.date ? 1 : -1));
+}
+
+function renderFeed(){
+  const items = filteredArticles();
+  $("#feedHint").textContent = `${items.length}件`;
+  $("#feedTitle").textContent = state.channel === "all"
+    ? "Latest"
+    : (CHANNELS.find(c=>c.key===state.channel)?.label || "Latest");
+
+  const cards = $("#cards");
+  cards.innerHTML = items.map(a => {
+    const pills = (a.tags||[]).map(t => `<span class="pill">${t}</span>`).join("");
+    return `
+      <article class="card" data-article="${a.id}">
+        <div class="card__row">
+          <div class="card__thumb" aria-hidden="true"></div>
+          <div class="card__body">
+            <div class="card__top">
+              <span class="badge" data-tone="${a.tone}">
+                <span class="badge__dot"></span>
+                <span>${a.badge}</span>
+              </span>
+              <div class="card__date">${formatDateJP(a.date)}</div>
+            </div>
+            <div class="card__title">${a.title}</div>
+            <div class="card__desc">${a.desc}</div>
+            <div class="card__meta">${pills}</div>
+          </div>
+        </div>
+      </article>
+    `;
+  }).join("");
+
+  $$(".card", cards).forEach(el => {
+    el.addEventListener("click", () => openDrawer(el.dataset.article));
+  });
+}
+
+// ===== Drawer =====
+function openDrawer(articleId){
+  const a = ARTICLES.find(x => x.id === articleId);
+  if(!a) return;
+
+  state.drawerOpen = true;
+  state.activeArticleId = a.id;
+
+  $("#drawer").classList.add("drawer--open");
+  $("#drawer").setAttribute("aria-hidden", "false");
+
+  // badge
+  const badge = $("#drawerBadge");
+  badge.setAttribute("data-tone", a.tone || "accent");
+  $("#drawerBadgeText").textContent = a.badge || "Info";
+  $("#drawerDate").textContent = formatDateJP(a.date);
+
+  $("#aTitle").textContent = a.title;
+  $("#aMeta").textContent = `#${a.channel}  /  ${a.tags?.join("・") || "-"}`;
+
+  const stats = $("#aStats");
+  stats.innerHTML = (a.tags||[]).map(t => `<span class="pill">${t}</span>`).join("");
+
+  const sum = $("#aSummaryList");
+  sum.innerHTML = (a.summary||[]).map(x => `<li>${x}</li>`).join("");
+  $("#aSummary").style.display = (a.summary && a.summary.length) ? "block" : "none";
+
+  const body = $("#aBody");
+  body.innerHTML = (a.body||[]).map(p => `<p>${p}</p>`).join("");
+
+  const cta = $("#cta");
+  if(a.cta && a.cta.url){
+    cta.style.display = "flex";
+    $("#ctaText").textContent = a.cta.text || "リンク";
+    $("#ctaBtn").href = a.cta.url;
+  }else{
+    cta.style.display = "none";
+  }
+
+  renderSaveBtn();
+}
+
+function closeDrawer(){
+  state.drawerOpen = false;
+  state.activeArticleId = null;
+  $("#drawer").classList.remove("drawer--open");
+  $("#drawer").setAttribute("aria-hidden","true");
+}
+
+function renderSaveBtn(){
+  const id = state.activeArticleId;
+  const btn = $("#btnSave");
+  if(!id) return;
+  const saved = isSaved(id);
+  btn.style.opacity = saved ? "1" : "0.8";
+  btn.title = saved ? "Saved" : "Save";
+}
+
+// ===== Saved =====
+function renderSaved(){
+  const saved = loadSaved();
+  const list = saved
+    .map(id => ARTICLES.find(a => a.id === id))
+    .filter(Boolean)
+    .sort((a,b)=> (a.date < b.date ? 1 : -1));
+
+  const cards = $("#savedCards");
+  const empty = $("#savedEmpty");
+
+  if(list.length === 0){
+    cards.innerHTML = "";
+    empty.style.display = "block";
+    return;
+  }
+  empty.style.display = "none";
+
+  cards.innerHTML = list.map(a => {
+    const pills = (a.tags||[]).map(t => `<span class="pill">${t}</span>`).join("");
+    return `
+      <article class="card" data-article="${a.id}">
+        <div class="card__row">
+          <div class="card__thumb" aria-hidden="true"></div>
+          <div class="card__body">
+            <div class="card__top">
+              <span class="badge" data-tone="${a.tone}">
+                <span class="badge__dot"></span>
+                <span>${a.badge}</span>
+              </span>
+              <div class="card__date">${formatDateJP(a.date)}</div>
+            </div>
+            <div class="card__title">${a.title}</div>
+            <div class="card__desc">${a.desc}</div>
+            <div class="card__meta">${pills}</div>
+          </div>
+        </div>
+      </article>
+    `;
+  }).join("");
+
+  $$(".card", cards).forEach(el => {
+    el.addEventListener("click", () => openDrawer(el.dataset.article));
+  });
+}
+
+// ===== Alerts =====
+function renderNotifs(){
+  const onlyImp = $("#onlyImportant").checked;
+  const list = onlyImp ? NOTIFS.filter(n => n.important) : NOTIFS;
+  const root = $("#notifs");
+  root.innerHTML = list.map(n => `
+    <div class="notif ${n.important ? "notif--important":""}">
+      <div class="notif__top">
+        <div class="notif__title">${n.title}</div>
+        <div class="notif__time">${n.time}</div>
+      </div>
+      <div class="notif__text">${n.text}</div>
+    </div>
+  `).join("");
+}
+
+// ===== Navigation =====
+function setActivePage(key){
+  $$(".page").forEach(p => p.classList.remove("page--active"));
+  const page = $(`.page[data-page="${key}"]`);
+  if(page) page.classList.add("page--active");
+
+  $$(".navitem").forEach(b => b.classList.remove("navitem--active"));
+  const nav = $(`.navitem[data-nav="${key}"]`);
+  if(nav) nav.classList.add("navitem--active");
+
+  // per page refresh
+  if(key === "saved") renderSaved();
+  if(key === "alerts") renderNotifs();
+  if(key === "schedule") renderScheduleUI();
+}
+
+// ===== Schedule: Calendar + list =====
+function scheduleItems(){
+  const onlyUpcoming = $("#onlyUpcoming")?.checked;
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  let list = [...SCHEDULE].sort((a,b)=> (a.date < b.date ? -1 : 1));
+  if(onlyUpcoming){
+    list = list.filter(it => {
+      const d = new Date(it.date + "T00:00:00");
+      return d >= today;
+    });
+  }
+  return list;
+}
+
+function renderLegend(){
+  const legend = $("#calLegend");
+  const tones = [
+    { tone:"good", label:"イベント" },
+    { tone:"warn", label:"締切" },
+    { tone:"accent", label:"運営" },
+    { tone:"danger", label:"重要" },
   ];
+  legend.innerHTML = tones.map(t => `
+    <div class="leg">
+      <span class="leg__dot" style="background:${toneColor(t.tone)}"></span>
+      <span>${t.label}</span>
+    </div>
+  `).join("");
+}
 
-  const ARTICLES = [
-    {
-      id: "a1",
-      channel: "announce",
-      tone: "accent",
-      badge: "お知らせ",
-      date: "2026-02-09",
-      read: "3分",
-      author: "運営",
-      pinned: true,
-      title: "今週の連絡：新チャンネル追加と投稿ルール",
-      desc: "投稿が増えてきたので、チャンネルを整理しました。運営投稿・メンバー投稿の使い分けも合わせて確認をお願いします。",
-      summary: [
-        "「学び共有」「募集」を追加",
-        "投稿は「要点→本文→CTA」の順に統一",
-        "重要連絡は通知で「重要」扱いにします"
-      ],
-      body: [
-        { type: "p", text: "コミュニティ内の発信が増えてきたので、見つけやすさ重視でチャンネルを整理しました。今後は、基本的に「要点（箇条書き）→本文→CTA（必要ならリンク）」の順で投稿してください。" },
-        { type: "h3", text: "投稿ルール（最小）" },
-        { type: "p", text: "・タイトルは短く具体的に（〜について / 〜のお知らせ）\n・要点を3つまで（読む前に全体像が掴める）\n・本文は長くなってもOK（見出しを増やす）" },
-        { type: "h3", text: "次の一手" },
-        { type: "p", text: "来週から「今週のまとめ」を毎週月曜に出します。気づきや提案があれば、運営にDMください。" },
-      ],
-      cta: { text: "投稿テンプレを見る", href: "https://example.com" }
-    },
-    {
-      id: "a2",
-      channel: "event",
-      tone: "warn",
-      badge: "イベント",
-      date: "2026-02-08",
-      read: "2分",
-      author: "運営",
-      pinned: false,
-      title: "2/16 オンライン交流会（初参加歓迎）",
-      desc: "30分だけ近況シェア→15分テーマトーク→最後に次のアクション決め、の軽めの回です。",
-      summary: [
-        "2/16（日）20:00〜20:45",
-        "テーマ：最近の“良かった行動”",
-        "参加リンクは当日この投稿に追記"
-      ],
-      body: [
-        { type: "p", text: "今回の交流会は「初参加でも温度差なく入れる」設計にします。\n近況シェアは1人30秒〜1分でOK。最後に、各自の次アクションを1つだけ決めて終わります。" },
-        { type: "h3", text: "当日の流れ" },
-        { type: "p", text: "1) 近況（全員）\n2) テーマトーク（小グループ）\n3) 次の一手（全員）" },
-      ],
-      cta: { text: "カレンダーに追加", href: "https://example.com" }
-    },
-    {
-      id: "a3",
-      channel: "report",
-      tone: "good",
-      badge: "活動レポ",
-      date: "2026-02-05",
-      read: "4分",
-      author: "メンバーA",
-      pinned: false,
-      title: "先週の小さな改善：投稿が読まれる形に整えた話",
-      desc: "サムネ・要点・CTAを揃えるだけで反応が変わりました。具体的に何を変えたかを共有します。",
-      summary: [
-        "サムネは“雰囲気”より“内容の手がかり”",
-        "要点は3つで十分",
-        "最後に「何してほしいか」を1行で書く"
-      ],
-      body: [
-        { type: "p", text: "投稿が増えると「読みたいけど追えない」が起きます。なので、最初の1画面に『理解に必要な情報』が揃っている形に寄せました。" },
-        { type: "h3", text: "変えたこと" },
-        { type: "p", text: "・タイトルを短く\n・要点を先頭に\n・最後に“お願い”を1行（返信/参加/シェアなど）" },
-        { type: "p", text: "たったこれだけですが、反応が読みやすくなりました。良ければ皆さんも試してみてください。" },
-      ],
-      cta: null
-    },
-    {
-      id: "a4",
-      channel: "learn",
-      tone: "accent",
-      badge: "学び共有",
-      date: "2026-01-30",
-      read: "5分",
-      author: "運営",
-      pinned: false,
-      title: "コミュニティ発信が続くコツ：『負担を下げる』設計",
-      desc: "“気合い”で続けるのではなく、手間を減らす。テンプレ・締め切り・担当をどう置くか。",
-      summary: [
-        "テンプレで迷いを減らす",
-        "担当を回して“属人化”を防ぐ",
-        "締め切りより“頻度”を先に決める"
-      ],
-      body: [
-        { type: "p", text: "継続の敵は『迷い』です。今日のテーマは、迷いを減らす仕組みづくり。" },
-        { type: "h3", text: "テンプレ（例）" },
-        { type: "p", text: "タイトル：何について\n要点：3つ\n本文：詳細\nCTA：何してほしい？" },
-        { type: "p", text: "この形に揃えるだけで、読む側も探す側もラクになります。" },
-      ],
-      cta: { text: "テンプレをコピー", href: "https://example.com" }
-    },
-    {
-      id: "a5",
-      channel: "recruit",
-      tone: "warn",
-      badge: "募集",
-      date: "2026-01-28",
-      read: "1分",
-      author: "運営",
-      pinned: false,
-      title: "デザイン相談できる人（30分）探してます",
-      desc: "アプリのトップ画面を整えたいです。UIを見て改善ポイントを出してくれる人、お願いします。",
-      summary: [
-        "所要：30分（オンライン）",
-        "内容：トップ画面の改善点洗い出し",
-        "お礼：コミュ内で紹介＋次回イベント招待"
-      ],
-      body: [
-        { type: "p", text: "ニュースアプリのUIを“読まれる形”に寄せたいです。改善点を一緒に出してくれる方がいたら助かります。" },
-        { type: "p", text: "興味ある方は、運営に連絡ください！" }
-      ],
-      cta: { text: "運営に連絡", href: "https://example.com" }
-    },
-  ];
+function buildMonthMatrix(year, month){
+  // month: 0-11
+  const first = new Date(year, month, 1);
+  const startDow = first.getDay(); // 0 Sun
+  const start = new Date(year, month, 1 - startDow);
+  const days = [];
+  for(let i=0;i<42;i++){
+    const d = new Date(start);
+    d.setDate(start.getDate()+i);
+    days.push(d);
+  }
+  return days;
+}
 
-  const NOTIFS = [
-    { id:"n1", important:true,  time:"今日 12:10", title:"重要：投稿ルール更新", text:"「要点→本文→CTA」の順に統一しました。確認お願いします。" },
-    { id:"n2", important:false, time:"昨日 20:05", title:"イベント：交流会が近づいてます", text:"2/16（日）20:00〜。初参加歓迎です。" },
-    { id:"n3", important:false, time:"2日前", title:"新着：活動レポが追加されました", text:"『投稿が読まれる形に整えた話』が公開。" },
-  ];
+function eventsByDate(){
+  const map = new Map();
+  for(const it of scheduleItems()){
+    if(!map.has(it.date)) map.set(it.date, []);
+    map.get(it.date).push(it);
+  }
+  return map;
+}
 
-  // --- State ---
-  let state = {
-    route: "home",
-    channel: "all",
-    q: "",
-    drawerOpen: false,
-    currentArticleId: null,
-    saved: loadSaved(),
-    importantOnly: false,
+function renderCalendar(){
+  const calRoot = $("#cal");
+  if(!calRoot) return;
+
+  const now = new Date();
+  if(state.calYear == null){
+    state.calYear = now.getFullYear();
+    state.calMonth = now.getMonth();
+    state.selectedDate = todayYMD();
+  }
+
+  const y = state.calYear;
+  const m = state.calMonth;
+
+  const monthName = `${y}年 ${String(m+1).padStart(2,"0")}月`;
+
+  const dows = ["日","月","火","水","木","金","土"];
+  const matrix = buildMonthMatrix(y, m);
+  const map = eventsByDate();
+
+  const head = `
+    <div class="cal__head">
+      <div class="cal__month">${monthName}</div>
+      <div class="cal__ctrl">
+        <button class="cal__btn" id="calPrev" aria-label="Prev month">←</button>
+        <button class="cal__btn" id="calToday" aria-label="Today">今日</button>
+        <button class="cal__btn" id="calNext" aria-label="Next month">→</button>
+      </div>
+    </div>
+  `;
+
+  const dowRow = dows.map(d => `<div class="cal__dow">${d}</div>`).join("");
+
+  const cells = matrix.map(d => {
+    const dateStr = ymd(d);
+    const inMonth = (d.getMonth() === m);
+    const isToday = (dateStr === todayYMD());
+    const muted = inMonth ? "" : " cal__day--muted";
+    const todayCls = isToday ? " cal__day--today" : "";
+    const evs = map.get(dateStr) || [];
+    const dots = evs.slice(0,4).map(ev => `<span class="cal__dot" data-tone="${ev.tone}"></span>`).join("");
+    return `
+      <div class="cal__day${muted}${todayCls}" data-date="${dateStr}">
+        <div class="cal__daynum">${d.getDate()}</div>
+        <div class="cal__dots">${dots}</div>
+      </div>
+    `;
+  }).join("");
+
+  calRoot.innerHTML = `
+    ${head}
+    <div class="cal__grid">
+      ${dowRow}
+      ${cells}
+    </div>
+  `;
+
+  $("#calPrev").onclick = () => {
+    state.calMonth -= 1;
+    if(state.calMonth < 0){ state.calMonth = 11; state.calYear -= 1; }
+    renderCalendar();
+    renderScheduleList();
+  };
+  $("#calNext").onclick = () => {
+    state.calMonth += 1;
+    if(state.calMonth > 11){ state.calMonth = 0; state.calYear += 1; }
+    renderCalendar();
+    renderScheduleList();
+  };
+  $("#calToday").onclick = () => {
+    const n = new Date();
+    state.calYear = n.getFullYear();
+    state.calMonth = n.getMonth();
+    state.selectedDate = todayYMD();
+    renderCalendar();
+    renderScheduleList();
   };
 
-  // --- Elements ---
-  const pageHome = $("#pageHome");
-  const pageSaved = $("#pageSaved");
-  const pageNotif = $("#pageNotif");
-  const cardList = $("#cardList");
-  const chipRow = $("#chipRow");
-  const qInput = $("#q");
-  const btnClear = $("#btnClear");
-  const feedHint = $("#feedHint");
+  $$(".cal__day", calRoot).forEach(el => {
+    el.addEventListener("click", () => {
+      state.selectedDate = el.dataset.date;
+      renderScheduleList();
+    });
+  });
+}
 
-  const savedList = $("#savedList");
-  const savedEmpty = $("#savedEmpty");
+function renderScheduleList(){
+  const listRoot = $("#schedList");
+  if(!listRoot) return;
 
-  const notifList = $("#notifList");
-  const toggleImportant = $("#toggleImportant");
+  const items = scheduleItems();
+  const selected = state.selectedDate;
 
-  const drawer = $("#drawer");
-  const drawerScrim = $("#drawerScrim");
-  const btnClose = $("#btnClose");
-  const btnSave = $("#btnSave");
-
-  // Article fields
-  const articleBadge = $("#articleBadge");
-  const articleDate = $("#articleDate");
-  const articleTitle = $("#articleTitle");
-  const articleRead = $("#articleRead");
-  const articleAuthor = $("#articleAuthor");
-  const articlePin = $("#articlePin");
-  const articleSummary = $("#articleSummary");
-  const articleBody = $("#articleBody");
-  const articleCTA = $("#articleCTA");
-  const ctaText = $("#ctaText");
-  const ctaLink = $("#ctaLink");
-
-  // Nav
-  const navItems = $$(".navitem");
-
-  // Header quick buttons
-  $("#btnBell").addEventListener("click", () => goto("notif"));
-  $("#btnProfile").addEventListener("click", () => goto("profile"));
-
-  // --- Init ---
-  renderChips();
-  bindEvents();
-  renderAll();
-
-  // --- Routing (simple) ---
-  function goto(route){
-    if(route === "channels"){
-      // for this sample, channels is just home with chip row focus
-      state.route = "home";
-      showToast("チャンネルはHomeの上部で切替できます");
-      renderPages();
-      return;
-    }
-    if(route === "profile"){
-      showToast("プロフィールはサンプルでは未実装です");
-      return;
-    }
-    state.route = route;
-    renderPages();
+  // If selected date has events, show those first; else show upcoming list for the month
+  const todays = items.filter(it => it.date === selected);
+  let show = [];
+  if(todays.length){
+    show = todays;
+  }else{
+    // show month items (or upcoming)
+    const y = state.calYear, m = state.calMonth;
+    show = items.filter(it => {
+      const d = new Date(it.date+"T00:00:00");
+      return d.getFullYear() === y && d.getMonth() === m;
+    });
+    if(show.length === 0) show = items.slice(0, 10);
   }
 
-  function renderPages(){
-    // active nav
-    navItems.forEach(btn => {
-      const active = (btn.dataset.route === state.route) || (state.route==="home" && btn.dataset.route==="home");
-      btn.classList.toggle("navitem--active", active);
-    });
-
-    // pages
-    [pageHome, pageSaved, pageNotif].forEach(p => p.classList.remove("page--active"));
-    if(state.route === "saved") pageSaved.classList.add("page--active");
-    else if(state.route === "notif") pageNotif.classList.add("page--active");
-    else pageHome.classList.add("page--active");
+  if(show.length === 0){
+    listRoot.innerHTML = `
+      <div class="empty">
+        <div class="empty__icon">📅</div>
+        <div class="empty__title">予定がありません</div>
+        <div class="empty__text">この月の予定がまだ登録されていません。</div>
+      </div>
+    `;
+    return;
   }
 
-  // --- Events ---
-  function bindEvents(){
-    navItems.forEach(btn => btn.addEventListener("click", () => goto(btn.dataset.route)));
+  listRoot.innerHTML = show.map(it => `
+    <div class="sitem" data-sid="${it.id}">
+      <div class="sitem__left">
+        <div class="sitem__title">${it.title}</div>
+        <div class="sitem__meta">${formatDateJP(it.date)} ${it.time || ""}</div>
+        <div class="sitem__desc">${it.desc || ""}</div>
+      </div>
+      <div class="sitem__tag">
+        <span class="sitem__dot" data-tone="${it.tone}"></span>
+        <span>${it.label || "予定"}</span>
+      </div>
+    </div>
+  `).join("");
+}
 
-    qInput.addEventListener("input", (e) => {
-      state.q = e.target.value.trim();
-      renderFeed();
-    });
-    btnClear.addEventListener("click", () => {
-      qInput.value = "";
-      state.q = "";
-      renderFeed();
-      qInput.focus();
-    });
+function renderScheduleUI(){
+  renderLegend();
+  renderCalendar();
+  renderScheduleList();
+}
 
-    drawerScrim.addEventListener("click", closeDrawer);
-    btnClose.addEventListener("click", closeDrawer);
-
-    btnSave.addEventListener("click", () => {
-      if(!state.currentArticleId) return;
-      toggleSaved(state.currentArticleId);
-      // update icon state visually
-      renderDrawerSaveState();
-      renderSaved();
-    });
-
-    toggleImportant.addEventListener("change", () => {
-      state.importantOnly = toggleImportant.checked;
-      renderNotifs();
-    });
-
-    // ESC close drawer
-    document.addEventListener("keydown", (e) => {
-      if(e.key === "Escape" && state.drawerOpen) closeDrawer();
-    });
-  }
-
-  // --- UI render ---
-  function renderAll(){
-    renderPages();
+// ===== Bindings =====
+function bind(){
+  // search
+  $("#q").addEventListener("input", (e) => {
+    state.query = e.target.value;
     renderFeed();
-    renderSaved();
+  });
+  $("#btnClear").addEventListener("click", () => {
+    $("#q").value = "";
+    state.query = "";
+    renderFeed();
+  });
+
+  // nav
+  $$(".navitem").forEach(btn => {
+    btn.addEventListener("click", () => setActivePage(btn.dataset.nav));
+  });
+
+  // drawer controls
+  $("#drawerScrim").addEventListener("click", closeDrawer);
+  $("#btnClose").addEventListener("click", closeDrawer);
+
+  $("#btnSave").addEventListener("click", () => {
+    const id = state.activeArticleId;
+    if(!id) return;
+    const arr = loadSaved();
+    const idx = arr.indexOf(id);
+    if(idx >= 0) arr.splice(idx, 1);
+    else arr.push(id);
+    saveSaved(arr);
+    renderSaveBtn();
+  });
+
+  // alerts toggle
+  const imp = $("#onlyImportant");
+  imp.checked = (localStorage.getItem(LS_KEY_ONLY_IMPORTANT) === "1");
+  imp.addEventListener("change", () => {
+    localStorage.setItem(LS_KEY_ONLY_IMPORTANT, imp.checked ? "1" : "0");
     renderNotifs();
-  }
+  });
 
-  function renderChips(){
-    chipRow.innerHTML = "";
-    CHANNELS.forEach(ch => {
-      const btn = document.createElement("button");
-      btn.className = "chip" + (state.channel === ch.id ? " chip--active" : "");
-      btn.dataset.channel = ch.id;
-      btn.dataset.tone = ch.tone;
-      btn.innerHTML = `<span class="chip__dot" aria-hidden="true"></span><span>${escapeHtml(ch.label)}</span>`;
-      btn.addEventListener("click", () => {
-        state.channel = ch.id;
-        // update selected
-        $$(".chip", chipRow).forEach(x => x.classList.toggle("chip--active", x.dataset.channel === ch.id));
-        renderFeed();
-      });
-      chipRow.appendChild(btn);
-    });
-  }
+  // schedule toggle
+  const upcoming = $("#onlyUpcoming");
+  upcoming.checked = (localStorage.getItem(LS_KEY_ONLY_UPCOMING) === "1");
+  upcoming.addEventListener("change", () => {
+    localStorage.setItem(LS_KEY_ONLY_UPCOMING, upcoming.checked ? "1" : "0");
+    renderScheduleUI();
+  });
 
-  function renderFeed(){
-    const items = filteredArticles();
-    cardList.innerHTML = "";
+  // help
+  $("#btnHelp").addEventListener("click", () => {
+    alert("UIサンプルです。次の段階で「コミュ限定ログイン」「投稿CMS連携（スプレッドシート等）」を追加できます。");
+  });
+}
 
-    if(state.channel === "all") feedHint.textContent = "チャンネルを選ぶと絞り込みできます";
-    else {
-      const label = CHANNELS.find(c => c.id === state.channel)?.label ?? state.channel;
-      feedHint.textContent = `「${label}」で絞り込み中`;
-    }
+// ===== Init =====
+function init(){
+  renderChips();
+  renderFeed();
+  renderNotifs();
+  bind();
+}
 
-    // pinned first
-    const pinned = items.filter(a => a.pinned);
-    const normal = items.filter(a => !a.pinned);
-
-    [...pinned, ...normal].forEach(a => {
-      const card = document.createElement("article");
-      card.className = "card";
-      card.setAttribute("role", "button");
-      card.setAttribute("tabindex", "0");
-
-      const badgeTone = a.tone || "accent";
-      card.innerHTML = `
-        <div class="card__row">
-          <div class="card__thumb" aria-hidden="true"></div>
-          <div class="card__body">
-            <div class="card__top">
-              <div class="badge" data-tone="${escapeHtml(badgeTone)}">
-                <span class="badge__dot" aria-hidden="true"></span>
-                <span>${escapeHtml(a.badge)}${a.pinned ? " · ピン" : ""}</span>
-              </div>
-              <div class="card__date">${fmtDate(a.date)}</div>
-            </div>
-            <div class="card__title">${escapeHtml(a.title)}</div>
-            <div class="card__desc">${escapeHtml(a.desc)}</div>
-            <div class="card__meta">
-              <span class="pill">⏱ ${escapeHtml(a.read)}</span>
-              <span class="pill">✍️ ${escapeHtml(a.author)}</span>
-              ${state.saved.includes(a.id) ? `<span class="pill">🔖 保存済み</span>` : ``}
-            </div>
-          </div>
-        </div>
-      `;
-
-      card.addEventListener("click", () => openArticle(a.id));
-      card.addEventListener("keydown", (e) => {
-        if(e.key === "Enter" || e.key === " "){
-          e.preventDefault();
-          openArticle(a.id);
-        }
-      });
-
-      cardList.appendChild(card);
-    });
-
-    if(items.length === 0){
-      cardList.innerHTML = `
-        <div class="empty">
-          <div class="empty__icon" aria-hidden="true">📰</div>
-          <div class="empty__title">該当する記事がありません</div>
-          <div class="empty__text">検索語やチャンネルを変えてみてください。</div>
-        </div>
-      `;
-    }
-  }
-
-  function renderSaved(){
-    const savedArticles = ARTICLES.filter(a => state.saved.includes(a.id));
-    savedList.innerHTML = "";
-    savedEmpty.style.display = savedArticles.length ? "none" : "block";
-
-    savedArticles.forEach(a => {
-      const card = document.createElement("article");
-      card.className = "card";
-      card.setAttribute("role", "button");
-      card.setAttribute("tabindex", "0");
-
-      card.innerHTML = `
-        <div class="card__row">
-          <div class="card__thumb" aria-hidden="true"></div>
-          <div class="card__body">
-            <div class="card__top">
-              <div class="badge" data-tone="${escapeHtml(a.tone || "accent")}">
-                <span class="badge__dot" aria-hidden="true"></span>
-                <span>${escapeHtml(a.badge)}</span>
-              </div>
-              <div class="card__date">${fmtDate(a.date)}</div>
-            </div>
-            <div class="card__title">${escapeHtml(a.title)}</div>
-            <div class="card__desc">${escapeHtml(a.desc)}</div>
-            <div class="card__meta">
-              <span class="pill">🔖 保存</span>
-              <span class="pill">⏱ ${escapeHtml(a.read)}</span>
-            </div>
-          </div>
-        </div>
-      `;
-      card.addEventListener("click", () => openArticle(a.id));
-      card.addEventListener("keydown", (e) => {
-        if(e.key === "Enter" || e.key === " "){
-          e.preventDefault();
-          openArticle(a.id);
-        }
-      });
-      savedList.appendChild(card);
-    });
-  }
-
-  function renderNotifs(){
-    const items = state.importantOnly ? NOTIFS.filter(n => n.important) : NOTIFS;
-    notifList.innerHTML = "";
-
-    items.forEach(n => {
-      const div = document.createElement("div");
-      div.className = "notif" + (n.important ? " notif--important" : "");
-      div.innerHTML = `
-        <div class="notif__top">
-          <div class="notif__title">${escapeHtml(n.title)}</div>
-          <div class="notif__time">${escapeHtml(n.time)}</div>
-        </div>
-        <div class="notif__text">${escapeHtml(n.text)}</div>
-      `;
-      notifList.appendChild(div);
-    });
-
-    if(items.length === 0){
-      notifList.innerHTML = `
-        <div class="empty">
-          <div class="empty__icon" aria-hidden="true">🔔</div>
-          <div class="empty__title">重要通知はありません</div>
-          <div class="empty__text">「重要のみ」を解除すると全て表示できます。</div>
-        </div>
-      `;
-    }
-  }
-
-  // --- Drawer / Article detail ---
-  function openArticle(id){
-    const a = ARTICLES.find(x => x.id === id);
-    if(!a) return;
-
-    state.currentArticleId = id;
-
-    articleBadge.textContent = a.badge;
-    articleBadge.setAttribute("data-tone", a.tone || "accent");
-    articleDate.textContent = fmtDate(a.date);
-    articleTitle.textContent = a.title;
-    articleRead.textContent = `⏱ ${a.read}`;
-    articleAuthor.textContent = `✍️ ${a.author}`;
-    articlePin.hidden = !a.pinned;
-
-    // summary
-    articleSummary.innerHTML = `<ul>${(a.summary || []).map(s => `<li>${escapeHtml(s)}</li>`).join("")}</ul>`;
-
-    // body
-    articleBody.innerHTML = (a.body || []).map(block => {
-      if(block.type === "h3") return `<h3>${escapeHtml(block.text)}</h3>`;
-      if(block.type === "p") return `<p>${linkify(escapeHtml(block.text)).replace(/\n/g, "<br>")}</p>`;
-      return "";
-    }).join("");
-
-    // CTA
-    if(a.cta && a.cta.href){
-      articleCTA.hidden = false;
-      ctaText.textContent = a.cta.text || "開く";
-      ctaLink.href = a.cta.href;
-      ctaLink.textContent = "開く";
-    }else{
-      articleCTA.hidden = true;
-    }
-
-    renderDrawerSaveState();
-
-    drawer.classList.add("drawer--open");
-    drawer.setAttribute("aria-hidden", "false");
-    state.drawerOpen = true;
-
-    // small UX: if opening from notifs/saved, return to home is not needed; drawer is overlay
-  }
-
-  function closeDrawer(){
-    drawer.classList.remove("drawer--open");
-    drawer.setAttribute("aria-hidden", "true");
-    state.drawerOpen = false;
-    state.currentArticleId = null;
-  }
-
-  function renderDrawerSaveState(){
-    const saved = state.currentArticleId && state.saved.includes(state.currentArticleId);
-    btnSave.title = saved ? "保存済み（解除）" : "保存";
-    btnSave.style.background = saved ? "rgba(34,197,94,.18)" : "rgba(255,255,255,.04)";
-    btnSave.style.borderColor = saved ? "rgba(34,197,94,.35)" : "rgba(255,255,255,.10)";
-  }
-
-  // --- Filtering ---
-  function filteredArticles(){
-    const q = state.q.toLowerCase();
-    return ARTICLES
-      .filter(a => state.channel === "all" ? true : a.channel === state.channel)
-      .filter(a => {
-        if(!q) return true;
-        const hay = (a.title + " " + a.desc + " " + (a.badge||"") + " " + (a.author||"")).toLowerCase();
-        return hay.includes(q);
-      })
-      .sort((a,b) => {
-        // pinned first, then date desc
-        if(!!a.pinned !== !!b.pinned) return a.pinned ? -1 : 1;
-        return (b.date || "").localeCompare(a.date || "");
-      });
-  }
-
-  // --- Saved (localStorage) ---
-  function loadSaved(){
-    try{
-      const raw = localStorage.getItem("cn_saved");
-      const arr = raw ? JSON.parse(raw) : [];
-      return Array.isArray(arr) ? arr : [];
-    }catch(e){
-      return [];
-    }
-  }
-  function persistSaved(){
-    localStorage.setItem("cn_saved", JSON.stringify(state.saved));
-  }
-  function toggleSaved(id){
-    const i = state.saved.indexOf(id);
-    if(i >= 0){
-      state.saved.splice(i,1);
-      showToast("保存を解除しました");
-    }else{
-      state.saved.unshift(id);
-      showToast("保存しました");
-    }
-    persistSaved();
-    renderFeed(); // update pills
-  }
-
-  // --- Utils ---
-  function fmtDate(iso){
-    // iso: YYYY-MM-DD -> YYYY/MM/DD
-    if(!iso) return "";
-    const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if(!m) return iso;
-    return `${m[1]}/${m[2]}/${m[3]}`;
-  }
-  function escapeHtml(s){
-    return String(s ?? "")
-      .replaceAll("&","&amp;")
-      .replaceAll("<","&lt;")
-      .replaceAll(">","&gt;")
-      .replaceAll('"',"&quot;")
-      .replaceAll("'","&#39;");
-  }
-  function linkify(text){
-    // very small linkify for http(s)
-    return text.replace(/(https?:\/\/[^\s<]+)/g, (m) => {
-      const safe = m.replaceAll('"', "%22");
-      return `<a href="${safe}" target="_blank" rel="noopener">${m}</a>`;
-    });
-  }
-
-  // --- Tiny toast ---
-  let toastTimer = null;
-  function showToast(msg){
-    let el = $("#toast");
-    if(!el){
-      el = document.createElement("div");
-      el.id = "toast";
-      el.style.position = "fixed";
-      el.style.left = "50%";
-      el.style.transform = "translateX(-50%)";
-      el.style.bottom = "calc(92px + env(safe-area-inset-bottom, 0px))";
-      el.style.zIndex = "50";
-      el.style.padding = "10px 12px";
-      el.style.borderRadius = "14px";
-      el.style.background = "rgba(15,23,42,.92)";
-      el.style.border = "1px solid rgba(255,255,255,.14)";
-      el.style.color = "rgba(255,255,255,.92)";
-      el.style.fontSize = "13px";
-      el.style.boxShadow = "0 14px 40px rgba(0,0,0,.28)";
-      el.style.maxWidth = "min(92vw, 520px)";
-      el.style.textAlign = "center";
-      document.body.appendChild(el);
-    }
-    el.textContent = msg;
-    el.style.opacity = "1";
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => {
-      el.style.opacity = "0";
-    }, 1500);
-  }
-})();
+init();
