@@ -332,7 +332,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
   border: 1px solid transparent;
   border-radius: 18px;
   background: transparent;
-  color: rgba(231,234,240,.75);
+  color: #6b4f3a;   /* 濃いブラウン */
   padding: 10px 10px 8px;
   display:flex;
   flex-direction: column;
@@ -345,9 +345,9 @@ svg{ width:22px; height:22px; fill: currentColor; }
 .navitem:hover{ background: rgba(255,255,255,.04); }
 .navitem:active{ transform: scale(.99); }
 .navitem--active{
-  background: rgba(124,58,237,.16);
-  border-color: rgba(124,58,237,.35);
-  color: rgba(255,255,255,.92);
+  background: rgba(176,125,79,.15);
+  border-color: #b07d4f;
+  color: #4a3728;  /* さらに濃い茶色 */
 }
 
 /* Drawer (Article Detail) */
