@@ -1,6 +1,7 @@
-/* Community News Wire Sample + Schedule Tab (Calendar)
-   - single-file vanilla JS
-   - localStorage for saved
+/* Community News Wire Sample
+   + Schedule Tab
+   + Admin: Create/Edit/Delete posts (localStorage)
+   + Export / Import JSON
 */
 
 const $ = (sel, root=document) => root.querySelector(sel);
@@ -9,6 +10,7 @@ const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
 const LS_KEY_SAVED = "community_news_saved_v1";
 const LS_KEY_ONLY_IMPORTANT = "community_news_only_important_v1";
 const LS_KEY_ONLY_UPCOMING = "community_news_only_upcoming_v1";
+const LS_KEY_POSTS = "community_news_posts_v1"; // admin-created posts
 
 const CHANNELS = [
   { key:"all", label:"All", tone:"accent" },
@@ -18,7 +20,7 @@ const CHANNELS = [
   { key:"tips", label:"Tips", tone:"accent" },
 ];
 
-const ARTICLES = [
+const BASE_ARTICLES = [
   {
     id:"a1",
     channel:"announce",
@@ -68,48 +70,16 @@ const ARTICLES = [
 
 // ==== Schedule data (sample) ====
 const SCHEDULE = [
-  {
-    id:"s1",
-    title:"オンライン交流（テスト）",
-    date:"2026-02-18",
-    time:"20:00",
-    tone:"good",
-    label:"イベント",
-    desc:"30分だけ。近況共有＋次の動き確認。"
-  },
-  {
-    id:"s2",
-    title:"募集締切：参加フォーム",
-    date:"2026-02-16",
-    time:"23:59",
-    tone:"warn",
-    label:"締切",
-    desc:"参加人数把握のため、期限までに入力お願いします。"
-  },
-  {
-    id:"s3",
-    title:"運営投稿：次月の方針共有",
-    date:"2026-03-02",
-    time:"21:00",
-    tone:"accent",
-    label:"運営",
-    desc:"来月の動きと、改善点の共有（15分）。"
-  },
-  {
-    id:"s4",
-    title:"重要：規約更新告知",
-    date:"2026-03-05",
-    time:"12:00",
-    tone:"danger",
-    label:"重要",
-    desc:"投稿ルールの追加。必読。"
-  }
+  { id:"s1", title:"オンライン交流（テスト）", date:"2026-02-18", time:"20:00", tone:"good", label:"イベント", desc:"30分だけ。近況共有＋次の動き確認。" },
+  { id:"s2", title:"募集締切：参加フォーム", date:"2026-02-16", time:"23:59", tone:"warn", label:"締切", desc:"参加人数把握のため、期限までに入力お願いします。" },
+  { id:"s3", title:"運営投稿：次月の方針共有", date:"2026-03-02", time:"21:00", tone:"accent", label:"運営", desc:"来月の動きと、改善点の共有（15分）。" },
+  { id:"s4", title:"重要：規約更新告知", date:"2026-03-05", time:"12:00", tone:"danger", label:"重要", desc:"投稿ルールの追加。必読。" }
 ];
 
 // ==== Notifications (sample) ====
 const NOTIFS = [
   { id:"n1", title:"重要：明日の締切", time:"2026-02-15 19:30", important:true, text:"参加フォームの締切は 2/16 23:59 です。" },
-  { id:"n2", title:"運営：新機能", time:"2026-02-12 10:05", important:false, text:"Scheduleタブを追加しました（UIサンプル）。" }
+  { id:"n2", title:"運営：新機能", time:"2026-02-12 10:05", important:false, text:"Schedule / Admin を追加しました（UIサンプル）。" }
 ];
 
 // ===== State =====
@@ -123,12 +93,18 @@ let state = {
   calYear: null,
   calMonth: null, // 0-11
   selectedDate: null, // YYYY-MM-DD
+
+  // admin
+  editingId: null, // post id
 };
 
 // ===== Helpers =====
+function safeJsonParse(s, fallback){
+  try { return JSON.parse(s); } catch { return fallback; }
+}
+
 function loadSaved(){
-  try { return JSON.parse(localStorage.getItem(LS_KEY_SAVED) || "[]"); }
-  catch { return []; }
+  return safeJsonParse(localStorage.getItem(LS_KEY_SAVED) || "[]", []);
 }
 function saveSaved(arr){
   localStorage.setItem(LS_KEY_SAVED, JSON.stringify(arr));
@@ -136,24 +112,40 @@ function saveSaved(arr){
 function isSaved(id){
   return loadSaved().includes(id);
 }
+
+function loadPosts(){
+  return safeJsonParse(localStorage.getItem(LS_KEY_POSTS) || "[]", []);
+}
+function savePosts(posts){
+  localStorage.setItem(LS_KEY_POSTS, JSON.stringify(posts));
+}
+
+function allArticles(){
+  // admin posts first, then base
+  const admin = loadPosts();
+  const merged = [...admin, ...BASE_ARTICLES];
+
+  // ensure unique by id (admin overrides base if same id)
+  const map = new Map();
+  for(const a of merged){
+    map.set(a.id, a);
+  }
+  return Array.from(map.values());
+}
+
 function formatDateJP(iso){
-  // iso: YYYY-MM-DD
+  if(!iso) return "-";
   const [y,m,d] = iso.split("-").map(Number);
   return `${y}/${String(m).padStart(2,"0")}/${String(d).padStart(2,"0")}`;
 }
-function clamp(n, a, b){ return Math.max(a, Math.min(b, n)); }
 function ymd(d){
   const y = d.getFullYear();
   const m = String(d.getMonth()+1).padStart(2,"0");
   const dd = String(d.getDate()).padStart(2,"0");
   return `${y}-${m}-${dd}`;
 }
-function sameYMD(a,b){ return a === b; }
 function todayYMD(){ return ymd(new Date()); }
 
-function toneDot(tone){
-  return `<span class="badge__dot" style="background:${toneColor(tone)}"></span>`;
-}
 function toneColor(tone){
   const css = getComputedStyle(document.documentElement);
   const map = {
@@ -163,6 +155,31 @@ function toneColor(tone){
     danger: css.getPropertyValue("--danger").trim() || "#c56a5c",
   };
   return map[tone] || (css.getPropertyValue("--accent2").trim() || "#d9b38c");
+}
+
+function channelLabel(key){
+  return CHANNELS.find(c=>c.key===key)?.label || key;
+}
+
+function badgeTextFromChannel(ch){
+  const map = { announce:"告知", event:"イベント", ops:"運営", tips:"Tips" };
+  return map[ch] || "Info";
+}
+
+function normalizePost(input){
+  const a = { ...input };
+  a.id = a.id || `p_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,7)}`;
+  a.channel = a.channel || "announce";
+  a.tone = a.tone || "accent";
+  a.badge = a.badge || badgeTextFromChannel(a.channel);
+  a.date = a.date || todayYMD();
+  a.title = a.title || "(no title)";
+  a.desc = a.desc || "";
+  a.tags = Array.isArray(a.tags) ? a.tags : [];
+  a.summary = Array.isArray(a.summary) ? a.summary : [];
+  a.body = Array.isArray(a.body) ? a.body : [];
+  if(a.cta && (!a.cta.url || String(a.cta.url).trim()==="")) a.cta = null;
+  return a;
 }
 
 // ===== Rendering: Chips =====
@@ -190,13 +207,13 @@ function renderChips(){
 // ===== Feed =====
 function filteredArticles(){
   const q = state.query.trim().toLowerCase();
-  return ARTICLES
+  return allArticles()
     .filter(a => state.channel === "all" ? true : a.channel === state.channel)
     .filter(a => {
       if(!q) return true;
       return (
-        a.title.toLowerCase().includes(q) ||
-        a.desc.toLowerCase().includes(q) ||
+        (a.title||"").toLowerCase().includes(q) ||
+        (a.desc||"").toLowerCase().includes(q) ||
         (a.tags||[]).join(" ").toLowerCase().includes(q) ||
         (a.badge||"").toLowerCase().includes(q)
       );
@@ -213,21 +230,21 @@ function renderFeed(){
 
   const cards = $("#cards");
   cards.innerHTML = items.map(a => {
-    const pills = (a.tags||[]).map(t => `<span class="pill">${t}</span>`).join("");
+    const pills = (a.tags||[]).map(t => `<span class="pill">${escapeHtml(t)}</span>`).join("");
     return `
-      <article class="card" data-article="${a.id}">
+      <article class="card" data-article="${escapeAttr(a.id)}">
         <div class="card__row">
           <div class="card__thumb" aria-hidden="true"></div>
           <div class="card__body">
             <div class="card__top">
-              <span class="badge" data-tone="${a.tone}">
+              <span class="badge" data-tone="${escapeAttr(a.tone||"accent")}">
                 <span class="badge__dot"></span>
-                <span>${a.badge}</span>
+                <span>${escapeHtml(a.badge||"Info")}</span>
               </span>
               <div class="card__date">${formatDateJP(a.date)}</div>
             </div>
-            <div class="card__title">${a.title}</div>
-            <div class="card__desc">${a.desc}</div>
+            <div class="card__title">${escapeHtml(a.title||"")}</div>
+            <div class="card__desc">${escapeHtml(a.desc||"")}</div>
             <div class="card__meta">${pills}</div>
           </div>
         </div>
@@ -240,9 +257,21 @@ function renderFeed(){
   });
 }
 
+function escapeHtml(s){
+  return String(s ?? "")
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;")
+    .replaceAll("'","&#039;");
+}
+function escapeAttr(s){
+  return escapeHtml(s).replaceAll("`","&#096;");
+}
+
 // ===== Drawer =====
 function openDrawer(articleId){
-  const a = ARTICLES.find(x => x.id === articleId);
+  const a = allArticles().find(x => x.id === articleId);
   if(!a) return;
 
   state.drawerOpen = true;
@@ -257,18 +286,18 @@ function openDrawer(articleId){
   $("#drawerBadgeText").textContent = a.badge || "Info";
   $("#drawerDate").textContent = formatDateJP(a.date);
 
-  $("#aTitle").textContent = a.title;
-  $("#aMeta").textContent = `#${a.channel}  /  ${a.tags?.join("・") || "-"}`;
+  $("#aTitle").textContent = a.title || "";
+  $("#aMeta").textContent = `#${a.channel}  /  ${(a.tags||[]).join("・") || "-"}`;
 
   const stats = $("#aStats");
-  stats.innerHTML = (a.tags||[]).map(t => `<span class="pill">${t}</span>`).join("");
+  stats.innerHTML = (a.tags||[]).map(t => `<span class="pill">${escapeHtml(t)}</span>`).join("");
 
   const sum = $("#aSummaryList");
-  sum.innerHTML = (a.summary||[]).map(x => `<li>${x}</li>`).join("");
+  sum.innerHTML = (a.summary||[]).map(x => `<li>${escapeHtml(x)}</li>`).join("");
   $("#aSummary").style.display = (a.summary && a.summary.length) ? "block" : "none";
 
   const body = $("#aBody");
-  body.innerHTML = (a.body||[]).map(p => `<p>${p}</p>`).join("");
+  body.innerHTML = (a.body||[]).map(p => `<p>${escapeHtml(p)}</p>`).join("");
 
   const cta = $("#cta");
   if(a.cta && a.cta.url){
@@ -302,7 +331,7 @@ function renderSaveBtn(){
 function renderSaved(){
   const saved = loadSaved();
   const list = saved
-    .map(id => ARTICLES.find(a => a.id === id))
+    .map(id => allArticles().find(a => a.id === id))
     .filter(Boolean)
     .sort((a,b)=> (a.date < b.date ? 1 : -1));
 
@@ -317,21 +346,21 @@ function renderSaved(){
   empty.style.display = "none";
 
   cards.innerHTML = list.map(a => {
-    const pills = (a.tags||[]).map(t => `<span class="pill">${t}</span>`).join("");
+    const pills = (a.tags||[]).map(t => `<span class="pill">${escapeHtml(t)}</span>`).join("");
     return `
-      <article class="card" data-article="${a.id}">
+      <article class="card" data-article="${escapeAttr(a.id)}">
         <div class="card__row">
           <div class="card__thumb" aria-hidden="true"></div>
           <div class="card__body">
             <div class="card__top">
-              <span class="badge" data-tone="${a.tone}">
+              <span class="badge" data-tone="${escapeAttr(a.tone||"accent")}">
                 <span class="badge__dot"></span>
-                <span>${a.badge}</span>
+                <span>${escapeHtml(a.badge||"Info")}</span>
               </span>
               <div class="card__date">${formatDateJP(a.date)}</div>
             </div>
-            <div class="card__title">${a.title}</div>
-            <div class="card__desc">${a.desc}</div>
+            <div class="card__title">${escapeHtml(a.title||"")}</div>
+            <div class="card__desc">${escapeHtml(a.desc||"")}</div>
             <div class="card__meta">${pills}</div>
           </div>
         </div>
@@ -352,10 +381,10 @@ function renderNotifs(){
   root.innerHTML = list.map(n => `
     <div class="notif ${n.important ? "notif--important":""}">
       <div class="notif__top">
-        <div class="notif__title">${n.title}</div>
-        <div class="notif__time">${n.time}</div>
+        <div class="notif__title">${escapeHtml(n.title)}</div>
+        <div class="notif__time">${escapeHtml(n.time)}</div>
       </div>
-      <div class="notif__text">${n.text}</div>
+      <div class="notif__text">${escapeHtml(n.text)}</div>
     </div>
   `).join("");
 }
@@ -374,9 +403,10 @@ function setActivePage(key){
   if(key === "saved") renderSaved();
   if(key === "alerts") renderNotifs();
   if(key === "schedule") renderScheduleUI();
+  if(key === "admin") renderAdmin();
 }
 
-// ===== Schedule: Calendar + list =====
+// ===== Schedule =====
 function scheduleItems(){
   const onlyUpcoming = $("#onlyUpcoming")?.checked;
   const now = new Date();
@@ -408,9 +438,8 @@ function renderLegend(){
 }
 
 function buildMonthMatrix(year, month){
-  // month: 0-11
   const first = new Date(year, month, 1);
-  const startDow = first.getDay(); // 0 Sun
+  const startDow = first.getDay();
   const start = new Date(year, month, 1 - startDow);
   const days = [];
   for(let i=0;i<42;i++){
@@ -443,7 +472,6 @@ function renderCalendar(){
 
   const y = state.calYear;
   const m = state.calMonth;
-
   const monthName = `${y}年 ${String(m+1).padStart(2,"0")}月`;
 
   const dows = ["日","月","火","水","木","金","土"];
@@ -490,22 +518,19 @@ function renderCalendar(){
   $("#calPrev").onclick = () => {
     state.calMonth -= 1;
     if(state.calMonth < 0){ state.calMonth = 11; state.calYear -= 1; }
-    renderCalendar();
-    renderScheduleList();
+    renderCalendar(); renderScheduleList();
   };
   $("#calNext").onclick = () => {
     state.calMonth += 1;
     if(state.calMonth > 11){ state.calMonth = 0; state.calYear += 1; }
-    renderCalendar();
-    renderScheduleList();
+    renderCalendar(); renderScheduleList();
   };
   $("#calToday").onclick = () => {
     const n = new Date();
     state.calYear = n.getFullYear();
     state.calMonth = n.getMonth();
     state.selectedDate = todayYMD();
-    renderCalendar();
-    renderScheduleList();
+    renderCalendar(); renderScheduleList();
   };
 
   $$(".cal__day", calRoot).forEach(el => {
@@ -523,13 +548,11 @@ function renderScheduleList(){
   const items = scheduleItems();
   const selected = state.selectedDate;
 
-  // If selected date has events, show those first; else show upcoming list for the month
   const todays = items.filter(it => it.date === selected);
   let show = [];
   if(todays.length){
     show = todays;
   }else{
-    // show month items (or upcoming)
     const y = state.calYear, m = state.calMonth;
     show = items.filter(it => {
       const d = new Date(it.date+"T00:00:00");
@@ -550,15 +573,15 @@ function renderScheduleList(){
   }
 
   listRoot.innerHTML = show.map(it => `
-    <div class="sitem" data-sid="${it.id}">
+    <div class="sitem">
       <div class="sitem__left">
-        <div class="sitem__title">${it.title}</div>
-        <div class="sitem__meta">${formatDateJP(it.date)} ${it.time || ""}</div>
-        <div class="sitem__desc">${it.desc || ""}</div>
+        <div class="sitem__title">${escapeHtml(it.title)}</div>
+        <div class="sitem__meta">${formatDateJP(it.date)} ${escapeHtml(it.time || "")}</div>
+        <div class="sitem__desc">${escapeHtml(it.desc || "")}</div>
       </div>
       <div class="sitem__tag">
-        <span class="sitem__dot" data-tone="${it.tone}"></span>
-        <span>${it.label || "予定"}</span>
+        <span class="sitem__dot" data-tone="${escapeAttr(it.tone)}"></span>
+        <span>${escapeHtml(it.label || "予定")}</span>
       </div>
     </div>
   `).join("");
@@ -568,6 +591,200 @@ function renderScheduleUI(){
   renderLegend();
   renderCalendar();
   renderScheduleList();
+}
+
+// ===== Admin: list / editor =====
+function adminArticles(){
+  return loadPosts().slice().sort((a,b)=> (a.date < b.date ? 1 : -1));
+}
+
+function renderAdmin(){
+  const items = adminArticles();
+  $("#adminCount").textContent = `${items.length}件`;
+
+  const list = $("#adminItems");
+  if(items.length === 0){
+    list.innerHTML = `
+      <div class="empty">
+        <div class="empty__icon">✍️</div>
+        <div class="empty__title">まだ記事がありません</div>
+        <div class="empty__text">「＋ 新規記事」から作成できます。</div>
+      </div>
+    `;
+  }else{
+    list.innerHTML = items.map(a => `
+      <div class="aitem" data-eid="${escapeAttr(a.id)}">
+        <div class="aitem__top">
+          <div class="aitem__title">${escapeHtml(a.title)}</div>
+          <div class="aitem__date">${formatDateJP(a.date)}</div>
+        </div>
+        <div class="aitem__sub">#${escapeHtml(channelLabel(a.channel))} / ${escapeHtml(a.badge || "")}</div>
+      </div>
+    `).join("");
+
+    $$(".aitem", list).forEach(el=>{
+      el.addEventListener("click", ()=>{
+        const id = el.dataset.eid;
+        startEdit(id);
+      });
+    });
+  }
+
+  // if currently editing, keep buttons enabled
+  syncAdminButtons();
+}
+
+function clearEditor(){
+  state.editingId = null;
+  $("#postForm").reset();
+  $("#pDate").value = todayYMD();
+  $("#pChannel").value = "announce";
+  $("#pTone").value = "accent";
+  $("#pDesc").value = "";
+  $("#pTags").value = "";
+  $("#pSummary").value = "";
+  $("#pBody").value = "";
+  $("#pCtaText").value = "";
+  $("#pCtaUrl").value = "";
+  syncAdminButtons();
+}
+
+function startEdit(id){
+  const posts = loadPosts();
+  const a = posts.find(x=>x.id===id);
+  if(!a) return;
+
+  state.editingId = a.id;
+
+  $("#pTitle").value = a.title || "";
+  $("#pDate").value = a.date || todayYMD();
+  $("#pChannel").value = a.channel || "announce";
+  $("#pTone").value = a.tone || "accent";
+  $("#pDesc").value = a.desc || "";
+  $("#pTags").value = (a.tags||[]).join(",");
+  $("#pSummary").value = (a.summary||[]).join("\n");
+  $("#pBody").value = (a.body||[]).join("\n\n");
+  $("#pCtaText").value = a.cta?.text || "";
+  $("#pCtaUrl").value = a.cta?.url || "";
+
+  syncAdminButtons();
+}
+
+function syncAdminButtons(){
+  const has = !!state.editingId || ($("#pTitle")?.value?.trim()?.length > 0);
+  $("#btnSavePost").disabled = !has;
+  $("#btnDeletePost").disabled = !state.editingId;
+}
+
+function collectForm(){
+  const title = $("#pTitle").value.trim();
+  const date = $("#pDate").value;
+  const channel = $("#pChannel").value;
+  const tone = $("#pTone").value;
+  const desc = $("#pDesc").value.trim();
+  const tags = $("#pTags").value.split(",").map(s=>s.trim()).filter(Boolean);
+  const summary = $("#pSummary").value.split("\n").map(s=>s.trim()).filter(Boolean);
+  const body = $("#pBody").value
+    .split("\n\n")
+    .map(s=>s.trim())
+    .filter(Boolean);
+
+  const ctaText = $("#pCtaText").value.trim();
+  const ctaUrl = $("#pCtaUrl").value.trim();
+
+  const a = normalizePost({
+    id: state.editingId || undefined,
+    channel,
+    tone,
+    badge: badgeTextFromChannel(channel),
+    date,
+    title,
+    desc,
+    tags,
+    summary,
+    body,
+    cta: ctaUrl ? { text: ctaText || "開く", url: ctaUrl } : null
+  });
+  return a;
+}
+
+function saveEditor(){
+  const a = collectForm();
+  if(!a.title || !a.date){
+    alert("タイトルと日付は必須です。");
+    return;
+  }
+
+  const posts = loadPosts();
+  const idx = posts.findIndex(x=>x.id===a.id);
+  if(idx >= 0) posts[idx] = a;
+  else posts.push(a);
+
+  savePosts(posts);
+
+  // refresh UI
+  renderAdmin();
+  renderFeed();
+
+  // keep editing
+  state.editingId = a.id;
+  syncAdminButtons();
+
+  alert("保存しました。Homeに反映済みです。");
+}
+
+function deleteEditor(){
+  if(!state.editingId) return;
+  const ok = confirm("この記事を削除しますか？");
+  if(!ok) return;
+
+  const posts = loadPosts().filter(x=>x.id !== state.editingId);
+  savePosts(posts);
+
+  // remove from saved if saved
+  const saved = loadSaved().filter(id => id !== state.editingId);
+  saveSaved(saved);
+
+  clearEditor();
+  renderAdmin();
+  renderFeed();
+  renderSaved();
+
+  alert("削除しました。");
+}
+
+// ===== Export / Import =====
+function buildExportObject(){
+  return {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    posts: loadPosts(),
+    schedule: SCHEDULE, // optional (sample only)
+  };
+}
+function downloadJson(obj, filename="community-news-export.json"){
+  const blob = new Blob([JSON.stringify(obj, null, 2)], { type:"application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+function importJsonFile(file){
+  return new Promise((resolve,reject)=>{
+    const r = new FileReader();
+    r.onload = () => {
+      try {
+        const data = JSON.parse(String(r.result||"{}"));
+        resolve(data);
+      } catch (e) { reject(e); }
+    };
+    r.onerror = reject;
+    r.readAsText(file);
+  });
 }
 
 // ===== Bindings =====
@@ -619,17 +836,87 @@ function bind(){
     renderScheduleUI();
   });
 
+  // admin: new/save/delete/import
+  $("#btnNewPost").addEventListener("click", () => {
+    clearEditor();
+    $("#pDate").value = todayYMD();
+    syncAdminButtons();
+  });
+
+  $("#btnSavePost").addEventListener("click", (e) => {
+    e.preventDefault();
+    saveEditor();
+  });
+
+  $("#btnDeletePost").addEventListener("click", (e) => {
+    e.preventDefault();
+    deleteEditor();
+  });
+
+  // enable save button when typing
+  ["pTitle","pDate","pChannel","pTone","pDesc","pTags","pSummary","pBody","pCtaText","pCtaUrl"].forEach(id=>{
+    const el = $("#"+id);
+    if(!el) return;
+    el.addEventListener("input", syncAdminButtons);
+    el.addEventListener("change", syncAdminButtons);
+  });
+
+  // export topbar button
+  $("#btnExport").addEventListener("click", () => {
+    const obj = buildExportObject();
+    downloadJson(obj, `community-news-export-${Date.now()}.json`);
+  });
+
+  // import button in admin
+  $("#btnImport").addEventListener("click", () => {
+    $("#fileImport").click();
+  });
+
+  $("#fileImport").addEventListener("change", async (e) => {
+    const file = e.target.files?.[0];
+    if(!file) return;
+
+    try{
+      const data = await importJsonFile(file);
+      if(!data || !Array.isArray(data.posts)){
+        alert("JSON形式が想定と違います（posts配列が必要）。");
+        return;
+      }
+      const normalized = data.posts.map(normalizePost);
+      savePosts(normalized);
+      renderAdmin();
+      renderFeed();
+      alert("Import完了。Homeに反映しました。");
+    }catch(err){
+      console.error(err);
+      alert("Importに失敗しました。JSONを確認してください。");
+    }finally{
+      $("#fileImport").value = "";
+    }
+  });
+
   // help
   $("#btnHelp").addEventListener("click", () => {
-    alert("UIサンプルです。次の段階で「コミュ限定ログイン」「投稿CMS連携（スプレッドシート等）」を追加できます。");
+    alert(
+`Adminタブで記事を投稿・編集できます（localStorage保存）。
+運用で共有する場合は Export(JSON) → 別端末で Import が最短です。
+
+次の段階：
+・コミュ限定ログイン（合言葉/招待）
+・記事データをスプレッドシート/Firestoreに移行`
+    );
   });
 }
 
 // ===== Init =====
 function init(){
+  // ensure editor date default
+  if($("#pDate")) $("#pDate").value = todayYMD();
+
   renderChips();
   renderFeed();
   renderNotifs();
+  renderAdmin();
   bind();
 }
 
