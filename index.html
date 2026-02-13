@@ -7,7 +7,7 @@
   <title>Community News</title>
 
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=6" />
+  <link rel="stylesheet" href="./styles.css?v=7" />
 </head>
 <body>
   <div class="app">
@@ -22,17 +22,26 @@
         </div>
       </div>
 
-      <button class="iconbtn" id="btnHelp" aria-label="Help">
-        <!-- info icon -->
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10
+      <div style="display:flex; gap:8px; align-items:center;">
+        <button class="iconbtn" id="btnExport" aria-label="Export JSON" title="Export">
+          <!-- download icon -->
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M5 20h14v-2H5v2zM19 9h-4V3H9v6H5l7 7 7-7z"/>
+          </svg>
+        </button>
+
+        <button class="iconbtn" id="btnHelp" aria-label="Help" title="Help">
+          <!-- info icon -->
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10
                    10-4.48 10-10S17.52 2 12 2zm0 17c-.55 0-1-.45-1-1s.45-1 1-1
                    1 .45 1 1-.45 1-1 1zm1.07-7.75-.9.92C11.45 12.9 11 13.5 11 15h2v-.5
                    c0-.55.45-1 1-1l1.2-1.2c.37-.37.6-.88.6-1.45 0-1.1-.9-2-2-2
                    -.83 0-1.54.5-1.85 1.22l-1.8-.78C10.63 7.82 12.14 6.5 14 6.5
                    c2.21 0 4 1.79 4 4 0 .88-.36 1.68-.93 2.25z"/>
-        </svg>
-      </button>
+          </svg>
+        </button>
+      </div>
     </header>
 
     <!-- Home Page -->
@@ -84,9 +93,7 @@
         <p class="pane__sub">コミュニティ内の予定（例：イベント / 募集締切 / 配信）</p>
 
         <div class="cal" id="cal"></div>
-
         <div class="cal__legend" id="calLegend"></div>
-
         <div class="sched" id="schedList"></div>
       </section>
     </main>
@@ -123,16 +130,118 @@
       </section>
     </main>
 
+    <!-- Admin Page -->
+    <main class="page" data-page="admin">
+      <section class="pane">
+        <div class="pane__head pane__head--row">
+          <h2 class="pane__title">管理（投稿・編集）</h2>
+          <button class="btn" id="btnNewPost">＋ 新規記事</button>
+        </div>
+        <p class="pane__sub">この端末のlocalStorageに保存されます。運用で共有する場合は Export/Import を使ってください。</p>
+
+        <div class="admin__row">
+          <div class="admin__list">
+            <div class="admin__listhead">
+              <div class="admin__listh">記事一覧</div>
+              <div class="admin__listhint" id="adminCount">0件</div>
+            </div>
+            <div class="admin__items" id="adminItems"></div>
+          </div>
+
+          <div class="admin__editor">
+            <div class="admin__editorhead">
+              <div class="admin__listh">編集</div>
+              <div style="display:flex; gap:8px;">
+                <button class="btn btn--ghost" id="btnImport">Import</button>
+                <button class="btn btn--danger" id="btnDeletePost" disabled>削除</button>
+                <button class="btn" id="btnSavePost" disabled>保存</button>
+              </div>
+            </div>
+
+            <form class="form" id="postForm">
+              <div class="grid2">
+                <label class="field">
+                  <div class="field__label">タイトル</div>
+                  <input class="input" id="pTitle" placeholder="例：コミュニティ限定の告知" required />
+                </label>
+
+                <label class="field">
+                  <div class="field__label">日付</div>
+                  <input class="input" id="pDate" type="date" required />
+                </label>
+              </div>
+
+              <div class="grid2">
+                <label class="field">
+                  <div class="field__label">チャンネル</div>
+                  <select class="input" id="pChannel">
+                    <option value="announce">告知</option>
+                    <option value="event">イベント</option>
+                    <option value="ops">運営</option>
+                    <option value="tips">Tips</option>
+                  </select>
+                </label>
+
+                <label class="field">
+                  <div class="field__label">トーン（色）</div>
+                  <select class="input" id="pTone">
+                    <option value="accent">accent</option>
+                    <option value="good">good</option>
+                    <option value="warn">warn</option>
+                    <option value="danger">danger</option>
+                  </select>
+                </label>
+              </div>
+
+              <label class="field">
+                <div class="field__label">短い説明（カードに表示）</div>
+                <input class="input" id="pDesc" placeholder="例：締切や参加方法などの要約" />
+              </label>
+
+              <label class="field">
+                <div class="field__label">タグ（カンマ区切り）</div>
+                <input class="input" id="pTags" placeholder="例：固定,Zoom,必読" />
+              </label>
+
+              <label class="field">
+                <div class="field__label">要点（改行区切り）</div>
+                <textarea class="textarea" id="pSummary" rows="4" placeholder="例：&#10;・日時：2/18 20:00&#10;・URLは当日掲示"></textarea>
+              </label>
+
+              <label class="field">
+                <div class="field__label">本文（改行で段落）</div>
+                <textarea class="textarea" id="pBody" rows="8" placeholder="本文を入力"></textarea>
+              </label>
+
+              <div class="grid2">
+                <label class="field">
+                  <div class="field__label">CTAテキスト（任意）</div>
+                  <input class="input" id="pCtaText" placeholder="例：参加フォームへ" />
+                </label>
+
+                <label class="field">
+                  <div class="field__label">CTA URL（任意）</div>
+                  <input class="input" id="pCtaUrl" placeholder="https://..." />
+                </label>
+              </div>
+
+              <div class="hint">
+                ※「保存」を押すと Home に即反映されます（検索/チップにも対応）。
+              </div>
+            </form>
+          </div>
+        </div>
+      </section>
+    </main>
+
     <!-- Bottom Nav -->
     <nav class="bottomnav" aria-label="Bottom Navigation">
       <button class="navitem navitem--active" data-nav="home" aria-label="Home">
-        <!-- home icon -->
         <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
         <span>Home</span>
       </button>
 
       <button class="navitem" data-nav="schedule" aria-label="Schedule">
-        <!-- calendar icon -->
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M7 2h2v2h6V2h2v2h3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h4V2zm15 8H2v10h20V10zM3 8h18V6H3v2z"/>
         </svg>
@@ -140,15 +249,21 @@
       </button>
 
       <button class="navitem" data-nav="saved" aria-label="Saved">
-        <!-- bookmark icon -->
         <svg viewBox="0 0 24 24"><path d="M6 2h12a2 2 0 0 1 2 2v18l-8-4-8 4V4a2 2 0 0 1 2-2z"/></svg>
         <span>Saved</span>
       </button>
 
       <button class="navitem" data-nav="alerts" aria-label="Alerts">
-        <!-- bell icon -->
         <svg viewBox="0 0 24 24"><path d="M12 22a2 2 0 0 0 2-2h-4a2 2 0 0 0 2 2zm6-6V11a6 6 0 1 0-12 0v5L4 18v1h16v-1l-2-2z"/></svg>
         <span>Alerts</span>
+      </button>
+
+      <button class="navitem" data-nav="admin" aria-label="Admin">
+        <!-- pencil icon -->
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zm2.92 2.83H5v-.92l9.06-9.06.92.92L5.92 20.08zM20.71 7.04a1.003 1.003 0 0 0 0-1.42l-2.34-2.34a1.003 1.003 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 1.84-1.82z"/>
+        </svg>
+        <span>Admin</span>
       </button>
     </nav>
 
@@ -198,7 +313,9 @@
 
   </div>
 
-  <script src="./app.js?v=6"></script>
+  <input id="fileImport" type="file" accept="application/json" style="display:none;" />
+
+  <script src="./app.js?v=7"></script>
   <script>
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("./sw.js");
