@@ -1,5 +1,6 @@
 # Community News – UI Sample (HTML)
 
+DEMO VERSION
 これは「特定コミュニティにのみ発信するオウンメディア・ニュースアプリ」の
 **ワイヤー（最初の1枚）**を、HTML/CSS/JSでUI化したサンプルです。
 
