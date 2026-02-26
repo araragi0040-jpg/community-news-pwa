@@ -939,7 +939,7 @@ function init(){
 
   renderChips();
   renderFeed();
-  renderNotifs();
+  renderContact();
   renderAdmin();
   bind();
 }
