@@ -875,6 +875,22 @@ function bind(){
     downloadJson(obj, `community-news-export-${Date.now()}.json`);
   });
 
+   // contact form
+   const contactForm = document.getElementById("contactForm");
+if(contactForm){
+  contactForm.addEventListener("submit", (e)=>{
+    e.preventDefault();
+
+    const name = document.getElementById("cName").value;
+    const email = document.getElementById("cEmail").value;
+    const message = document.getElementById("cMessage").value;
+
+    alert("送信ありがとうございます。\n（現在はデモ保存のみ）");
+
+    contactForm.reset();
+  });
+}
+   
   // import button in admin
   $("#btnImport").addEventListener("click", () => {
     $("#fileImport").click();
