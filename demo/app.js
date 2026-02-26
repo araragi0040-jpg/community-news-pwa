@@ -805,27 +805,43 @@ function importJsonFile(file){
 
 // ===== Bindings =====
 function bind(){
+  // helper: 要素があればイベント登録
+  const on = (sel, ev, fn, root=document) => {
+    const el = root.querySelector(sel);
+    if(!el) return null;
+    el.addEventListener(ev, fn);
+    return el;
+  };
+
   // search
-  $("#q").addEventListener("input", (e) => {
+  on("#q", "input", (e) => {
     state.query = e.target.value;
     renderFeed();
   });
-  $("#btnClear").addEventListener("click", () => {
-    $("#q").value = "";
+  on("#btnClear", "click", () => {
+    const q = $("#q");
+    if(q) q.value = "";
     state.query = "";
     renderFeed();
   });
 
-  // nav
-  $$(".navitem").forEach(btn => {
-    btn.addEventListener("click", () => setActivePage(btn.dataset.nav));
-  });
+  // nav（イベント委譲にすると最強：崩れても効く）
+  const navRoot = document.querySelector(".bottomnav");
+  if(navRoot){
+    navRoot.addEventListener("click", (e) => {
+      const btn = e.target.closest(".navitem");
+      if(!btn) return;
+      const key = btn.dataset.nav;
+      if(!key) return;
+      setActivePage(key);
+    });
+  }
 
   // drawer controls
-  $("#drawerScrim").addEventListener("click", closeDrawer);
-  $("#btnClose").addEventListener("click", closeDrawer);
+  on("#drawerScrim", "click", closeDrawer);
+  on("#btnClose", "click", closeDrawer);
 
-  $("#btnSave").addEventListener("click", () => {
+  on("#btnSave", "click", () => {
     const id = state.activeArticleId;
     if(!id) return;
     const arr = loadSaved();
@@ -836,91 +852,91 @@ function bind(){
     renderSaveBtn();
   });
 
-  // schedule toggle
+  // schedule toggle（存在する時だけ）
   const upcoming = $("#onlyUpcoming");
-  upcoming.checked = (localStorage.getItem(LS_KEY_ONLY_UPCOMING) === "1");
-  upcoming.addEventListener("change", () => {
-    localStorage.setItem(LS_KEY_ONLY_UPCOMING, upcoming.checked ? "1" : "0");
-    renderScheduleUI();
-  });
+  if(upcoming){
+    upcoming.checked = (localStorage.getItem(LS_KEY_ONLY_UPCOMING) === "1");
+    upcoming.addEventListener("change", () => {
+      localStorage.setItem(LS_KEY_ONLY_UPCOMING, upcoming.checked ? "1" : "0");
+      renderScheduleUI();
+    });
+  }
 
-  // admin: new/save/delete/import
-  $("#btnNewPost").addEventListener("click", () => {
+  // admin: new/save/delete/import（存在する時だけ）
+  on("#btnNewPost", "click", () => {
     clearEditor();
-    $("#pDate").value = todayYMD();
+    const pDate = $("#pDate");
+    if(pDate) pDate.value = todayYMD();
     syncAdminButtons();
   });
 
-  $("#btnSavePost").addEventListener("click", (e) => {
+  on("#btnSavePost", "click", (e) => {
     e.preventDefault();
     saveEditor();
   });
 
-  $("#btnDeletePost").addEventListener("click", (e) => {
+  on("#btnDeletePost", "click", (e) => {
     e.preventDefault();
     deleteEditor();
   });
 
-  // enable save button when typing
   ["pTitle","pDate","pChannel","pTone","pDesc","pTags","pSummary","pBody","pCtaText","pCtaUrl"].forEach(id=>{
-    const el = $("#"+id);
+    const el = document.getElementById(id);
     if(!el) return;
     el.addEventListener("input", syncAdminButtons);
     el.addEventListener("change", syncAdminButtons);
   });
 
   // export topbar button
-  $("#btnExport").addEventListener("click", () => {
+  on("#btnExport", "click", () => {
     const obj = buildExportObject();
     downloadJson(obj, `community-news-export-${Date.now()}.json`);
   });
 
-   // contact form
-   const contactForm = document.getElementById("contactForm");
-if(contactForm){
-  contactForm.addEventListener("submit", (e)=>{
-    e.preventDefault();
+  // contact form
+  const contactForm = document.getElementById("contactForm");
+  if(contactForm){
+    contactForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      alert("送信ありがとうございます。\n（現在はデモ保存のみ）");
+      contactForm.reset();
+    });
+  }
 
-    const name = document.getElementById("cName").value;
-    const email = document.getElementById("cEmail").value;
-    const message = document.getElementById("cMessage").value;
-
-    alert("送信ありがとうございます。\n（現在はデモ保存のみ）");
-
-    contactForm.reset();
-  });
-}
-   
-  // import button in admin
-  $("#btnImport").addEventListener("click", () => {
-    $("#fileImport").click();
+  // import（存在する時だけ）
+  on("#btnImport", "click", () => {
+    const f = $("#fileImport");
+    if(f) f.click();
   });
 
-  $("#fileImport").addEventListener("change", async (e) => {
-    const file = e.target.files?.[0];
-    if(!file) return;
+  const fileImport = $("#fileImport");
+  if(fileImport){
+    fileImport.addEventListener("change", async (e) => {
+      const file = e.target.files?.[0];
+      if(!file) return;
 
-    try{
-      const data = await importJsonFile(file);
-      if(!data || !Array.isArray(data.posts)){
-        alert("JSON形式が想定と違います（posts配列が必要）。");
-        return;
+      try{
+        const data = await importJsonFile(file);
+        if(!data || !Array.isArray(data.posts)){
+          alert("JSON形式が想定と違います（posts配列が必要）。");
+          return;
+        }
+        const normalized = data.posts.map(normalizePost);
+        savePosts(normalized);
+        renderAdmin();
+        renderFeed();
+        alert("Import完了。Homeに反映しました。");
+      }catch(err){
+        console.error(err);
+        alert("Importに失敗しました。JSONを確認してください。");
+      }finally{
+        fileImport.value = "";
       }
-      const normalized = data.posts.map(normalizePost);
-      savePosts(normalized);
-      renderAdmin();
-      renderFeed();
-      alert("Import完了。Homeに反映しました。");
-    }catch(err){
-      console.error(err);
-      alert("Importに失敗しました。JSONを確認してください。");
-    }finally{
-      $("#fileImport").value = "";
-    }
-  });
+    });
+  }
 
   // help
-  $("#btnHelp").addEventListener("click", () => {
+  on("#btnHelp", "click", () => {
     alert(
 `Adminタブで記事を投稿・編集できます（localStorage保存）。
 運用で共有する場合は Export(JSON) → 別端末で Import が最短です。
