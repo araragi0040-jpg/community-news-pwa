@@ -417,7 +417,7 @@ function setActivePage(key){
 
   // per page refresh
   if(key === "saved") renderSaved();
-  if(key === "contact") renderNotifs();
+  if(key === "contact") renderContact();
   if(key === "schedule") renderScheduleUI();
   if(key === "admin") renderAdmin();
 }
