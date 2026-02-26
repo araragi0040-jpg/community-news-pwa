@@ -684,33 +684,28 @@ svg{ width:22px; height:22px; fill: currentColor; }
   cursor:pointer;
 }
 
-/* ===== BottomNav Emergency Fix ===== */
+/* ===== BottomNav fix (正規) ===== */
 .bottomnav{
-  position: fixed !important;
-  left: 0 !important;
-  right: 0 !important;
-  bottom: 0 !important;
-  z-index: 99999 !important;
-  pointer-events: auto !important;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1200;            /* drawer(30)より上に */
+  pointer-events: auto;
 }
 
-.bottomnav *{
-  pointer-events: auto !important;
-}
-
-/* 画面全体を覆う可能性がある要素をクリック透過（閉じてる時） */
+/* drawerが閉じてるときはクリックを奪わない */
 .drawer{
-  pointer-events: none !important;
+  pointer-events: none;
 }
-
 .drawer--open{
-  pointer-events: auto !important;
+  pointer-events: auto;
 }
 
-/* もし scrim が残ってた時の保険 */
+/* scrimも閉じてるときはクリックを奪わない */
 .drawer__scrim{
-  pointer-events: none !important;
+  pointer-events: none;
 }
 .drawer--open .drawer__scrim{
-  pointer-events: auto !important;
+  pointer-events: auto;
 }
