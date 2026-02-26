@@ -68,6 +68,21 @@ const BASE_ARTICLES = [
   }
 ];
 
+// ==== Contact data ====
+const OWNERS = [
+  {
+    name: "しゅう",
+    role: "共同オーナー",
+    instagram: "https://instagram.com/xxxx",
+    x: "https://x.com/xxxx"
+  },
+  {
+    name: "◯◯",
+    role: "共同オーナー",
+    instagram: "https://instagram.com/yyyy"
+  }
+];
+
 // ==== Schedule data (sample) ====
 const SCHEDULE = [
   { id:"s1", title:"オンライン交流（テスト）", date:"2026-02-18", time:"20:00", tone:"good", label:"イベント", desc:"30分だけ。近況共有＋次の動き確認。" },
@@ -373,18 +388,19 @@ function renderSaved(){
   });
 }
 
-// ===== Alerts =====
-function renderNotifs(){
-  const onlyImp = $("#onlyImportant").checked;
-  const list = onlyImp ? NOTIFS.filter(n => n.important) : NOTIFS;
-  const root = $("#notifs");
-  root.innerHTML = list.map(n => `
-    <div class="notif ${n.important ? "notif--important":""}">
-      <div class="notif__top">
-        <div class="notif__title">${escapeHtml(n.title)}</div>
-        <div class="notif__time">${escapeHtml(n.time)}</div>
+// ===== Contact =====
+function renderContact(){
+  const root = document.getElementById("ownerList");
+  if(!root) return;
+
+  root.innerHTML = OWNERS.map(o => `
+    <div class="owner-card">
+      <div class="owner-name">${o.name}</div>
+      <div class="owner-role">${o.role}</div>
+      <div class="owner-links">
+        ${o.instagram ? `<a href="${o.instagram}" target="_blank">Instagram</a>` : ""}
+        ${o.x ? `<a href="${o.x}" target="_blank">X</a>` : ""}
       </div>
-      <div class="notif__text">${escapeHtml(n.text)}</div>
     </div>
   `).join("");
 }
@@ -401,7 +417,7 @@ function setActivePage(key){
 
   // per page refresh
   if(key === "saved") renderSaved();
-  if(key === "alerts") renderNotifs();
+  if(key === "contact") renderNotifs();
   if(key === "schedule") renderScheduleUI();
   if(key === "admin") renderAdmin();
 }
@@ -818,14 +834,6 @@ function bind(){
     else arr.push(id);
     saveSaved(arr);
     renderSaveBtn();
-  });
-
-  // alerts toggle
-  const imp = $("#onlyImportant");
-  imp.checked = (localStorage.getItem(LS_KEY_ONLY_IMPORTANT) === "1");
-  imp.addEventListener("change", () => {
-    localStorage.setItem(LS_KEY_ONLY_IMPORTANT, imp.checked ? "1" : "0");
-    renderNotifs();
   });
 
   // schedule toggle
