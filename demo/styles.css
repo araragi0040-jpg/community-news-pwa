@@ -683,3 +683,8 @@ svg{ width:22px; height:22px; fill: currentColor; }
   color:white;
   cursor:pointer;
 }
+
+.bottomnav{ pointer-events:auto; }
+.navitem{ pointer-events:auto; }
+.drawer{ pointer-events:none; }
+.drawer--open{ pointer-events:auto; }
