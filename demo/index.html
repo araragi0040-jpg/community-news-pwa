@@ -114,21 +114,25 @@
       </section>
     </main>
 
-    <!-- Alerts Page -->
-    <main class="page" data-page="alerts">
-      <section class="pane">
-        <div class="pane__head pane__head--row">
-          <h2 class="pane__title">通知</h2>
-          <div class="toggle">
-            <input id="onlyImportant" type="checkbox" />
-            <span class="toggle__ui"></span>
-            <span class="toggle__label">重要のみ</span>
-          </div>
-        </div>
-        <p class="pane__sub">運営からの連絡（UIサンプル）</p>
-        <div class="notifs" id="notifs"></div>
-      </section>
-    </main>
+    <!-- Contact Page -->
+    <div class="page" data-page="contact">
+  <div class="page__inner">
+    <h2>語り場 共同オーナー</h2>
+
+    <div id="ownerList" class="owner-list"></div>
+
+    <hr style="margin:32px 0; opacity:.2;">
+
+    <h2>お問い合わせ</h2>
+
+    <form id="contactForm" class="contact-form">
+      <input type="text" id="cName" placeholder="お名前" required>
+      <input type="email" id="cEmail" placeholder="メールアドレス" required>
+      <textarea id="cMessage" placeholder="お問い合わせ内容" rows="5" required></textarea>
+      <button type="submit">送信</button>
+    </form>
+  </div>
+</div>
 
     <!-- Admin Page -->
     <main class="page" data-page="admin">
