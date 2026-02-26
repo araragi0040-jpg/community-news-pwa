@@ -644,3 +644,42 @@ svg{ width:22px; height:22px; fill: currentColor; }
   .grid2{ grid-template-columns: 1fr 1fr; }
   .admin__row{ grid-template-columns: 1fr 1.3fr; align-items:start; }
 }
+
+.owner-card{
+  padding:16px;
+  border:1px solid rgba(255,255,255,.1);
+  border-radius:12px;
+  margin-bottom:16px;
+}
+
+.owner-name{
+  font-weight:600;
+  font-size:16px;
+}
+
+.owner-links a{
+  margin-right:12px;
+  font-size:14px;
+  color:var(--accent);
+  text-decoration:none;
+}
+
+.contact-form input,
+.contact-form textarea{
+  width:100%;
+  margin-bottom:12px;
+  padding:10px;
+  border-radius:8px;
+  border:1px solid rgba(255,255,255,.1);
+  background:#111827;
+  color:white;
+}
+
+.contact-form button{
+  padding:10px 16px;
+  border:none;
+  border-radius:8px;
+  background:var(--accent);
+  color:white;
+  cursor:pointer;
+}
