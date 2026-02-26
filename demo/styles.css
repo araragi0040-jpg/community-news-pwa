@@ -684,7 +684,33 @@ svg{ width:22px; height:22px; fill: currentColor; }
   cursor:pointer;
 }
 
-.bottomnav{ pointer-events:auto; }
-.navitem{ pointer-events:auto; }
-.drawer{ pointer-events:none; }
-.drawer--open{ pointer-events:auto; }
+/* ===== BottomNav Emergency Fix ===== */
+.bottomnav{
+  position: fixed !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  z-index: 99999 !important;
+  pointer-events: auto !important;
+}
+
+.bottomnav *{
+  pointer-events: auto !important;
+}
+
+/* 画面全体を覆う可能性がある要素をクリック透過（閉じてる時） */
+.drawer{
+  pointer-events: none !important;
+}
+
+.drawer--open{
+  pointer-events: auto !important;
+}
+
+/* もし scrim が残ってた時の保険 */
+.drawer__scrim{
+  pointer-events: none !important;
+}
+.drawer--open .drawer__scrim{
+  pointer-events: auto !important;
+}
