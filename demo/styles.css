@@ -782,8 +782,10 @@ svg{ width:22px; height:22px; fill: currentColor; }
 
 .media__img img{
   width:100%;
+  max-width:680px;   /* ← サイズ制限 */
   height:auto;
   display:block;
+  margin: 0 auto;    /* ← 中央寄せ */
   border-radius:16px;
   border:1px solid rgba(0,0,0,.06);
 }
@@ -791,14 +793,20 @@ svg{ width:22px; height:22px; fill: currentColor; }
 .media__video iframe,
 .media__video video{
   width:100%;
+  max-width:680px;   /* ← サイズ制限 */
   aspect-ratio:16/9;
+  margin: 0 auto;    /* ← 中央寄せ */
   border:0;
   border-radius:16px;
   background:#000;
   display:block;
 }
 
-.media{ display:grid; gap:10px; }
+.media{
+  display:grid;
+  gap:14px;
+  margin:20px 0;
+}
 .media--images{ grid-template-columns: 1fr; }
 .media__img{
   width:100%;
