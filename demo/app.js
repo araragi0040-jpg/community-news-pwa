@@ -194,6 +194,9 @@ function normalizePost(input){
   a.summary = Array.isArray(a.summary) ? a.summary : [];
   a.body = Array.isArray(a.body) ? a.body : [];
   if(a.cta && (!a.cta.url || String(a.cta.url).trim()==="")) a.cta = null;
+  a.media = a.media || {};
+  a.media.images = Array.isArray(a.media.images) ? a.media.images : [];
+  a.media.video = a.media.video || "";
   return a;
 }
 
@@ -662,6 +665,8 @@ function clearEditor(){
   $("#pBody").value = "";
   $("#pCtaText").value = "";
   $("#pCtaUrl").value = "";
+  $("#pImages").value = "";
+  $("#pVideo").value = "";
   syncAdminButtons();
 }
 
@@ -682,7 +687,8 @@ function startEdit(id){
   $("#pBody").value = (a.body||[]).join("\n\n");
   $("#pCtaText").value = a.cta?.text || "";
   $("#pCtaUrl").value = a.cta?.url || "";
-
+  $("#pImages").value = (a.media?.images || []).join("\n");
+  $("#pVideo").value = a.media?.video || "";
   syncAdminButtons();
 }
 
@@ -708,6 +714,11 @@ function collectForm(){
   const ctaText = $("#pCtaText").value.trim();
   const ctaUrl = $("#pCtaUrl").value.trim();
 
+  // ★ここを追加（画像URLと動画URLを読む）
+  const images = ($("#pImages").value || "")
+    .split("\n").map(s=>s.trim()).filter(Boolean);
+  const video = ($("#pVideo").value || "").trim();
+
   const a = normalizePost({
     id: state.editingId || undefined,
     channel,
@@ -719,8 +730,12 @@ function collectForm(){
     tags,
     summary,
     body,
-    cta: ctaUrl ? { text: ctaText || "開く", url: ctaUrl } : null
+    cta: ctaUrl ? { text: ctaText || "開く", url: ctaUrl } : null,
+
+    // ★ここを追加（a の中に media を入れる）
+    media: { images, video }
   });
+
   return a;
 }
 
