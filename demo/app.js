@@ -314,8 +314,53 @@ function openDrawer(articleId){
   sum.innerHTML = (a.summary||[]).map(x => `<li>${escapeHtml(x)}</li>`).join("");
   $("#aSummary").style.display = (a.summary && a.summary.length) ? "block" : "none";
 
-  const body = $("#aBody");
-  body.innerHTML = (a.body||[]).map(p => `<p>${escapeHtml(p)}</p>`).join("");
+const body = $("#aBody");
+body.innerHTML =
+  mediaHtml(a) +
+  (a.body||[]).map(p => `<p>${escapeHtml(p)}</p>`).join("");
+
+   function mediaHtml(a){
+  const imgs = (a.media?.images || [])
+    .map(url => `
+      <div class="media__img">
+        <img src="${escapeAttr(url)}" alt="" loading="lazy" />
+      </div>
+    `).join("");
+
+  const videoUrl = a.media?.video || "";
+  const video = videoUrl ? renderVideoEmbed(videoUrl) : "";
+
+  if(!imgs && !video) return "";
+  return `<div class="media">${imgs}${video}</div>`;
+}
+
+function renderVideoEmbed(url){
+  // YouTube
+  const yt = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([A-Za-z0-9_-]{6,})/);
+  if(yt){
+    const id = yt[1];
+    return `
+      <div class="media__video">
+        <iframe
+          src="https://www.youtube-nocookie.com/embed/${id}"
+          title="YouTube video"
+          frameborder="0"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowfullscreen></iframe>
+      </div>`;
+  }
+
+  // mp4直リンク
+  if(url.toLowerCase().endsWith(".mp4")){
+    return `
+      <div class="media__video">
+        <video controls playsinline preload="metadata" src="${escapeAttr(url)}"></video>
+      </div>`;
+  }
+
+  // それ以外はリンク表示
+  return `<div class="media__link"><a href="${escapeAttr(url)}" target="_blank" rel="noopener">動画を開く</a></div>`;
+}
 
   const cta = $("#cta");
   if(a.cta && a.cta.url){
