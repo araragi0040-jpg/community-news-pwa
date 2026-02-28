@@ -4,10 +4,10 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <meta name="theme-color" content="#111827" />
-  <title>Community News</title>
+  <title>語り場ニュース</title>
 
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=7" />
+  <link rel="stylesheet" href="./styles.css?v=11" />
 </head>
 <body>
   <div class="app">
@@ -17,8 +17,8 @@
       <div class="brand">
         <div class="brand__dot" aria-hidden="true"></div>
         <div>
-          <div class="brand__name">Community News</div>
-          <div class="brand__sub">private feed</div>
+          <div class="brand__name">語り場ニュース</div>
+          <div class="brand__sub">限定配信</div>
         </div>
       </div>
 
@@ -114,21 +114,25 @@
       </section>
     </main>
 
-    <!-- Alerts Page -->
-    <main class="page" data-page="alerts">
-      <section class="pane">
-        <div class="pane__head pane__head--row">
-          <h2 class="pane__title">通知</h2>
-          <div class="toggle">
-            <input id="onlyImportant" type="checkbox" />
-            <span class="toggle__ui"></span>
-            <span class="toggle__label">重要のみ</span>
-          </div>
-        </div>
-        <p class="pane__sub">運営からの連絡（UIサンプル）</p>
-        <div class="notifs" id="notifs"></div>
-      </section>
-    </main>
+    <!-- Contact Page -->
+    <div class="page" data-page="contact">
+  <div class="page__inner">
+    <h2>語り場 共同オーナー</h2>
+
+    <div id="ownerList" class="owner-list"></div>
+
+    <hr style="margin:32px 0; opacity:.2;">
+
+    <h2>お問い合わせ</h2>
+
+    <form id="contactForm" class="contact-form">
+      <input type="text" id="cName" placeholder="お名前" required>
+      <input type="email" id="cEmail" placeholder="メールアドレス" required>
+      <textarea id="cMessage" placeholder="お問い合わせ内容" rows="5" required></textarea>
+      <button type="submit">送信</button>
+    </form>
+  </div>
+</div>
 
     <!-- Admin Page -->
     <main class="page" data-page="admin">
@@ -213,6 +217,16 @@
                 <textarea class="textarea" id="pBody" rows="8" placeholder="本文を入力"></textarea>
               </label>
 
+              <label class="field">
+  <div class="field__label">画像URL（改行で複数）</div>
+  <textarea class="textarea" id="pImages" rows="3" placeholder="https://..."></textarea>
+</label>
+
+<label class="field">
+  <div class="field__label">動画URL（YouTube等 / mp4直リンク）</div>
+  <input class="input" id="pVideo" placeholder="https://..." />
+</label>
+
               <div class="grid2">
                 <label class="field">
                   <div class="field__label">CTAテキスト（任意）</div>
@@ -253,10 +267,12 @@
         <span>Saved</span>
       </button>
 
-      <button class="navitem" data-nav="alerts" aria-label="Alerts">
-        <svg viewBox="0 0 24 24"><path d="M12 22a2 2 0 0 0 2-2h-4a2 2 0 0 0 2 2zm6-6V11a6 6 0 1 0-12 0v5L4 18v1h16v-1l-2-2z"/></svg>
-        <span>Alerts</span>
-      </button>
+      <button class="navitem" data-nav="contact" aria-label="Contact">
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4zm0 2c-4.42 0-8 2-8 4v2h16v-2c0-2-3.58-4-8-4z"/>
+    </svg>
+    <span>Contact</span>
+  </button>
 
       <button class="navitem" data-nav="admin" aria-label="Admin">
         <!-- pencil icon -->
@@ -289,7 +305,6 @@
         </div>
 
         <div class="article">
-          <div class="article__hero" id="hero"></div>
           <h2 class="article__title" id="aTitle">-</h2>
 
           <div class="article__stats" id="aStats"></div>
@@ -316,11 +331,14 @@
   <input id="fileImport" type="file" accept="application/json" style="display:none;" />
 
   <script src="config.js"></script>
-  <script src="./app.js?v=7"></script>
+  <script src="./app.js?v=11"></script>
+  <!-- serviceWorker 一旦停止（キャッシュ切り分け） -->
+<!--
   <script>
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("./sw.js");
     }
   </script>
+  -->
 </body>
 </html>
