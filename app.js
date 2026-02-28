@@ -68,6 +68,21 @@ const BASE_ARTICLES = [
   }
 ];
 
+// ==== Contact data ====
+const OWNERS = [
+  {
+    name: "しゅう",
+    role: "共同オーナー",
+    instagram: "https://instagram.com/xxxx",
+    x: "https://x.com/xxxx"
+  },
+  {
+    name: "◯◯",
+    role: "共同オーナー",
+    instagram: "https://instagram.com/yyyy"
+  }
+];
+
 // ==== Schedule data (sample) ====
 const SCHEDULE = [
   { id:"s1", title:"オンライン交流（テスト）", date:"2026-02-18", time:"20:00", tone:"good", label:"イベント", desc:"30分だけ。近況共有＋次の動き確認。" },
@@ -179,6 +194,9 @@ function normalizePost(input){
   a.summary = Array.isArray(a.summary) ? a.summary : [];
   a.body = Array.isArray(a.body) ? a.body : [];
   if(a.cta && (!a.cta.url || String(a.cta.url).trim()==="")) a.cta = null;
+  a.media = a.media || {};
+  a.media.images = Array.isArray(a.media.images) ? a.media.images : [];
+  a.media.video = a.media.video || "";
   return a;
 }
 
@@ -223,18 +241,28 @@ function filteredArticles(){
 
 function renderFeed(){
   const items = filteredArticles();
-  $("#feedHint").textContent = `${items.length}件`;
-  $("#feedTitle").textContent = state.channel === "all"
-    ? "Latest"
-    : (CHANNELS.find(c=>c.key===state.channel)?.label || "Latest");
+  const hint = $("#feedHint");
+  const title = $("#feedTitle");
+  if(hint) hint.textContent = `${items.length}件`;
+  if(title){
+    title.textContent = state.channel === "all"
+      ? "Latest"
+      : (CHANNELS.find(c=>c.key===state.channel)?.label || "Latest");
+  }
 
   const cards = $("#cards");
+  if(!cards) return;
+
   cards.innerHTML = items.map(a => {
     const pills = (a.tags||[]).map(t => `<span class="pill">${escapeHtml(t)}</span>`).join("");
+
+const thumb = (a.media?.images && a.media.images.length) ? a.media.images[0] : "";
+const thumbStyle = thumb ? `style="background-image:url('${escapeAttr(thumb)}')"` : "";
+
     return `
       <article class="card" data-article="${escapeAttr(a.id)}">
         <div class="card__row">
-          <div class="card__thumb" aria-hidden="true"></div>
+          <div class="card__thumb" aria-hidden="true" ${thumbStyle}></div>
           <div class="card__body">
             <div class="card__top">
               <span class="badge" data-tone="${escapeAttr(a.tone||"accent")}">
@@ -296,8 +324,53 @@ function openDrawer(articleId){
   sum.innerHTML = (a.summary||[]).map(x => `<li>${escapeHtml(x)}</li>`).join("");
   $("#aSummary").style.display = (a.summary && a.summary.length) ? "block" : "none";
 
-  const body = $("#aBody");
-  body.innerHTML = (a.body||[]).map(p => `<p>${escapeHtml(p)}</p>`).join("");
+const body = $("#aBody");
+body.innerHTML =
+  mediaHtml(a) +
+  (a.body||[]).map(p => `<p>${escapeHtml(p)}</p>`).join("");
+
+   function mediaHtml(a){
+  const imgs = (a.media?.images || [])
+    .map(url => `
+      <div class="media__img">
+        <img src="${escapeAttr(url)}" alt="" loading="lazy" />
+      </div>
+    `).join("");
+
+  const videoUrl = a.media?.video || "";
+  const video = videoUrl ? renderVideoEmbed(videoUrl) : "";
+
+  if(!imgs && !video) return "";
+  return `<div class="media">${imgs}${video}</div>`;
+}
+
+function renderVideoEmbed(url){
+  // YouTube
+  const yt = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([A-Za-z0-9_-]{6,})/);
+  if(yt){
+    const id = yt[1];
+    return `
+      <div class="media__video">
+        <iframe
+          src="https://www.youtube-nocookie.com/embed/${id}"
+          title="YouTube video"
+          frameborder="0"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowfullscreen></iframe>
+      </div>`;
+  }
+
+  // mp4直リンク
+  if(url.toLowerCase().endsWith(".mp4")){
+    return `
+      <div class="media__video">
+        <video controls playsinline preload="metadata" src="${escapeAttr(url)}"></video>
+      </div>`;
+  }
+
+  // それ以外はリンク表示
+  return `<div class="media__link"><a href="${escapeAttr(url)}" target="_blank" rel="noopener">動画を開く</a></div>`;
+}
 
   const cta = $("#cta");
   if(a.cta && a.cta.url){
@@ -307,7 +380,6 @@ function openDrawer(articleId){
   }else{
     cta.style.display = "none";
   }
-
   renderSaveBtn();
 }
 
@@ -373,18 +445,19 @@ function renderSaved(){
   });
 }
 
-// ===== Alerts =====
-function renderNotifs(){
-  const onlyImp = $("#onlyImportant").checked;
-  const list = onlyImp ? NOTIFS.filter(n => n.important) : NOTIFS;
-  const root = $("#notifs");
-  root.innerHTML = list.map(n => `
-    <div class="notif ${n.important ? "notif--important":""}">
-      <div class="notif__top">
-        <div class="notif__title">${escapeHtml(n.title)}</div>
-        <div class="notif__time">${escapeHtml(n.time)}</div>
+// ===== Contact =====
+function renderContact(){
+  const root = document.getElementById("ownerList");
+  if(!root) return;
+
+  root.innerHTML = OWNERS.map(o => `
+    <div class="owner-card">
+      <div class="owner-name">${o.name}</div>
+      <div class="owner-role">${o.role}</div>
+      <div class="owner-links">
+        ${o.instagram ? `<a href="${o.instagram}" target="_blank">Instagram</a>` : ""}
+        ${o.x ? `<a href="${o.x}" target="_blank">X</a>` : ""}
       </div>
-      <div class="notif__text">${escapeHtml(n.text)}</div>
     </div>
   `).join("");
 }
@@ -401,7 +474,7 @@ function setActivePage(key){
 
   // per page refresh
   if(key === "saved") renderSaved();
-  if(key === "alerts") renderNotifs();
+  if(key === "contact") renderContact();
   if(key === "schedule") renderScheduleUI();
   if(key === "admin") renderAdmin();
 }
@@ -646,6 +719,8 @@ function clearEditor(){
   $("#pBody").value = "";
   $("#pCtaText").value = "";
   $("#pCtaUrl").value = "";
+  $("#pImages").value = "";
+  $("#pVideo").value = "";
   syncAdminButtons();
 }
 
@@ -666,7 +741,8 @@ function startEdit(id){
   $("#pBody").value = (a.body||[]).join("\n\n");
   $("#pCtaText").value = a.cta?.text || "";
   $("#pCtaUrl").value = a.cta?.url || "";
-
+  $("#pImages").value = (a.media?.images || []).join("\n");
+  $("#pVideo").value = a.media?.video || "";
   syncAdminButtons();
 }
 
@@ -692,6 +768,11 @@ function collectForm(){
   const ctaText = $("#pCtaText").value.trim();
   const ctaUrl = $("#pCtaUrl").value.trim();
 
+  // ★ここを追加（画像URLと動画URLを読む）
+  const images = ($("#pImages").value || "")
+    .split("\n").map(s=>s.trim()).filter(Boolean);
+  const video = ($("#pVideo").value || "").trim();
+
   const a = normalizePost({
     id: state.editingId || undefined,
     channel,
@@ -703,8 +784,12 @@ function collectForm(){
     tags,
     summary,
     body,
-    cta: ctaUrl ? { text: ctaText || "開く", url: ctaUrl } : null
+    cta: ctaUrl ? { text: ctaText || "開く", url: ctaUrl } : null,
+
+    // ★ここを追加（a の中に media を入れる）
+    media: { images, video }
   });
+
   return a;
 }
 
@@ -789,27 +874,43 @@ function importJsonFile(file){
 
 // ===== Bindings =====
 function bind(){
+  // helper: 要素があればイベント登録
+  const on = (sel, ev, fn, root=document) => {
+    const el = root.querySelector(sel);
+    if(!el) return null;
+    el.addEventListener(ev, fn);
+    return el;
+  };
+
   // search
-  $("#q").addEventListener("input", (e) => {
+  on("#q", "input", (e) => {
     state.query = e.target.value;
     renderFeed();
   });
-  $("#btnClear").addEventListener("click", () => {
-    $("#q").value = "";
+  on("#btnClear", "click", () => {
+    const q = $("#q");
+    if(q) q.value = "";
     state.query = "";
     renderFeed();
   });
 
-  // nav
-  $$(".navitem").forEach(btn => {
-    btn.addEventListener("click", () => setActivePage(btn.dataset.nav));
-  });
+  // nav（イベント委譲にすると最強：崩れても効く）
+  const navRoot = document.querySelector(".bottomnav");
+  if(navRoot){
+    navRoot.addEventListener("click", (e) => {
+      const btn = e.target.closest(".navitem");
+      if(!btn) return;
+      const key = btn.dataset.nav;
+      if(!key) return;
+      setActivePage(key);
+    });
+  }
 
   // drawer controls
-  $("#drawerScrim").addEventListener("click", closeDrawer);
-  $("#btnClose").addEventListener("click", closeDrawer);
+  on("#drawerScrim", "click", closeDrawer);
+  on("#btnClose", "click", closeDrawer);
 
-  $("#btnSave").addEventListener("click", () => {
+  on("#btnSave", "click", () => {
     const id = state.activeArticleId;
     if(!id) return;
     const arr = loadSaved();
@@ -820,83 +921,91 @@ function bind(){
     renderSaveBtn();
   });
 
-  // alerts toggle
-  const imp = $("#onlyImportant");
-  imp.checked = (localStorage.getItem(LS_KEY_ONLY_IMPORTANT) === "1");
-  imp.addEventListener("change", () => {
-    localStorage.setItem(LS_KEY_ONLY_IMPORTANT, imp.checked ? "1" : "0");
-    renderNotifs();
-  });
-
-  // schedule toggle
+  // schedule toggle（存在する時だけ）
   const upcoming = $("#onlyUpcoming");
-  upcoming.checked = (localStorage.getItem(LS_KEY_ONLY_UPCOMING) === "1");
-  upcoming.addEventListener("change", () => {
-    localStorage.setItem(LS_KEY_ONLY_UPCOMING, upcoming.checked ? "1" : "0");
-    renderScheduleUI();
-  });
+  if(upcoming){
+    upcoming.checked = (localStorage.getItem(LS_KEY_ONLY_UPCOMING) === "1");
+    upcoming.addEventListener("change", () => {
+      localStorage.setItem(LS_KEY_ONLY_UPCOMING, upcoming.checked ? "1" : "0");
+      renderScheduleUI();
+    });
+  }
 
-  // admin: new/save/delete/import
-  $("#btnNewPost").addEventListener("click", () => {
+  // admin: new/save/delete/import（存在する時だけ）
+  on("#btnNewPost", "click", () => {
     clearEditor();
-    $("#pDate").value = todayYMD();
+    const pDate = $("#pDate");
+    if(pDate) pDate.value = todayYMD();
     syncAdminButtons();
   });
 
-  $("#btnSavePost").addEventListener("click", (e) => {
+  on("#btnSavePost", "click", (e) => {
     e.preventDefault();
     saveEditor();
   });
 
-  $("#btnDeletePost").addEventListener("click", (e) => {
+  on("#btnDeletePost", "click", (e) => {
     e.preventDefault();
     deleteEditor();
   });
 
-  // enable save button when typing
   ["pTitle","pDate","pChannel","pTone","pDesc","pTags","pSummary","pBody","pCtaText","pCtaUrl"].forEach(id=>{
-    const el = $("#"+id);
+    const el = document.getElementById(id);
     if(!el) return;
     el.addEventListener("input", syncAdminButtons);
     el.addEventListener("change", syncAdminButtons);
   });
 
   // export topbar button
-  $("#btnExport").addEventListener("click", () => {
+  on("#btnExport", "click", () => {
     const obj = buildExportObject();
     downloadJson(obj, `community-news-export-${Date.now()}.json`);
   });
 
-  // import button in admin
-  $("#btnImport").addEventListener("click", () => {
-    $("#fileImport").click();
+  // contact form
+  const contactForm = document.getElementById("contactForm");
+  if(contactForm){
+    contactForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      alert("送信ありがとうございます。\n（現在はデモ保存のみ）");
+      contactForm.reset();
+    });
+  }
+
+  // import（存在する時だけ）
+  on("#btnImport", "click", () => {
+    const f = $("#fileImport");
+    if(f) f.click();
   });
 
-  $("#fileImport").addEventListener("change", async (e) => {
-    const file = e.target.files?.[0];
-    if(!file) return;
+  const fileImport = $("#fileImport");
+  if(fileImport){
+    fileImport.addEventListener("change", async (e) => {
+      const file = e.target.files?.[0];
+      if(!file) return;
 
-    try{
-      const data = await importJsonFile(file);
-      if(!data || !Array.isArray(data.posts)){
-        alert("JSON形式が想定と違います（posts配列が必要）。");
-        return;
+      try{
+        const data = await importJsonFile(file);
+        if(!data || !Array.isArray(data.posts)){
+          alert("JSON形式が想定と違います（posts配列が必要）。");
+          return;
+        }
+        const normalized = data.posts.map(normalizePost);
+        savePosts(normalized);
+        renderAdmin();
+        renderFeed();
+        alert("Import完了。Homeに反映しました。");
+      }catch(err){
+        console.error(err);
+        alert("Importに失敗しました。JSONを確認してください。");
+      }finally{
+        fileImport.value = "";
       }
-      const normalized = data.posts.map(normalizePost);
-      savePosts(normalized);
-      renderAdmin();
-      renderFeed();
-      alert("Import完了。Homeに反映しました。");
-    }catch(err){
-      console.error(err);
-      alert("Importに失敗しました。JSONを確認してください。");
-    }finally{
-      $("#fileImport").value = "";
-    }
-  });
+    });
+  }
 
   // help
-  $("#btnHelp").addEventListener("click", () => {
+  on("#btnHelp", "click", () => {
     alert(
 `Adminタブで記事を投稿・編集できます（localStorage保存）。
 運用で共有する場合は Export(JSON) → 別端末で Import が最短です。
@@ -915,7 +1024,7 @@ function init(){
 
   renderChips();
   renderFeed();
-  renderNotifs();
+  renderContact();
   renderAdmin();
   bind();
 }
