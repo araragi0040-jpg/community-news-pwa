@@ -241,30 +241,28 @@ function filteredArticles(){
 
 function renderFeed(){
   const items = filteredArticles();
-  $("#feedHint").textContent = `${items.length}件`;
-  $("#feedTitle").textContent = state.channel === "all"
-    ? "Latest"
-    : (CHANNELS.find(c=>c.key===state.channel)?.label || "Latest");
+  const hint = $("#feedHint");
+  const title = $("#feedTitle");
+  if(hint) hint.textContent = `${items.length}件`;
+  if(title){
+    title.textContent = state.channel === "all"
+      ? "Latest"
+      : (CHANNELS.find(c=>c.key===state.channel)?.label || "Latest");
+  }
 
   const cards = $("#cards");
+  if(!cards) return;
+
   cards.innerHTML = items.map(a => {
     const pills = (a.tags||[]).map(t => `<span class="pill">${escapeHtml(t)}</span>`).join("");
+
+const thumb = (a.media?.images && a.media.images.length) ? a.media.images[0] : "";
+const thumbStyle = thumb ? `style="background-image:url('${escapeAttr(thumb)}')"` : "";
+
     return `
       <article class="card" data-article="${escapeAttr(a.id)}">
         <div class="card__row">
-          const thumb = (a.media?.images && a.media.images.length) ? a.media.images[0] : "";
-const thumbStyle = thumb ? `style="background-image:url('${escapeAttr(thumb)}')"` : "";
-
-return `
-  <article class="card" data-article="${escapeAttr(a.id)}">
-    <div class="card__row">
-      <div class="card__thumb" aria-hidden="true" ${thumbStyle}></div>
-      <div class="card__body">
-        ...
-      </div>
-    </div>
-  </article>
-`;</div>
+          <div class="card__thumb" aria-hidden="true" ${thumbStyle}></div>
           <div class="card__body">
             <div class="card__top">
               <span class="badge" data-tone="${escapeAttr(a.tone||"accent")}">
