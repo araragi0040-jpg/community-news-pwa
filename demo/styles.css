@@ -815,3 +815,20 @@ svg{ width:22px; height:22px; fill: currentColor; }
   border-radius:16px;
   display:block;
 }
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+  font-size: 18px;
+}
+
+.brand__logo {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+
+.brand__text {
+  line-height: 1;
+}
