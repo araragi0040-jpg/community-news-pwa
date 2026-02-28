@@ -629,7 +629,10 @@ svg{ width:22px; height:22px; fill: currentColor; }
 }
 
 /* Desktop tweaks */
-@media (min-width: 920px){
+@media (min-width: 480px){
+  .brand__logo {
+   width: 24px;
+   height: 24px;
   .page{ padding: 18px 18px 30px; }
   .bottomnav{ padding-left: 18px; padding-right: 18px; }
   .navitem{ width: 92px; }
