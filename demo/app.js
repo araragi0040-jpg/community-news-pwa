@@ -252,7 +252,19 @@ function renderFeed(){
     return `
       <article class="card" data-article="${escapeAttr(a.id)}">
         <div class="card__row">
-          <div class="card__thumb" aria-hidden="true"></div>
+          const thumb = (a.media?.images && a.media.images.length) ? a.media.images[0] : "";
+const thumbStyle = thumb ? `style="background-image:url('${escapeAttr(thumb)}')"` : "";
+
+return `
+  <article class="card" data-article="${escapeAttr(a.id)}">
+    <div class="card__row">
+      <div class="card__thumb" aria-hidden="true" ${thumbStyle}></div>
+      <div class="card__body">
+        ...
+      </div>
+    </div>
+  </article>
+`;</div>
           <div class="card__body">
             <div class="card__top">
               <span class="badge" data-tone="${escapeAttr(a.tone||"accent")}">
