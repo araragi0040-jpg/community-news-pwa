@@ -794,3 +794,23 @@ svg{ width:22px; height:22px; fill: currentColor; }
   background:#000;
   display:block;
 }
+
+.media{ display:grid; gap:10px; }
+.media--images{ grid-template-columns: 1fr; }
+.media__img{
+  width:100%;
+  height:auto;
+  border-radius:16px;
+  display:block;
+}
+.media__iframe{
+  width:100%;
+  aspect-ratio: 16 / 9;
+  border:0;
+  border-radius:16px;
+}
+.media__video{
+  width:100%;
+  border-radius:16px;
+  display:block;
+}
