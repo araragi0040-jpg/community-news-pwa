@@ -370,6 +370,47 @@ function renderVideoEmbed(url){
   }else{
     cta.style.display = "none";
   }
+     // ===== media render (images / video) =====
+  const hero = $("#hero");
+  const imgs = a.media?.images || [];
+  const video = (a.media?.video || "").trim();
+
+  let html = "";
+
+  // images
+  if(imgs.length){
+    html += `<div class="media media--images">
+      ${imgs.map(url => `
+        <img class="media__img" src="${escapeAttr(url)}" alt="">
+      `).join("")}
+    </div>`;
+  }
+
+  // video (YouTube or direct mp4)
+  if(video){
+    const yt = video.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([A-Za-z0-9_-]{6,})/);
+    if(yt){
+      const id = yt[1];
+      html += `
+        <div class="media media--video">
+          <iframe
+            class="media__iframe"
+            src="https://www.youtube-nocookie.com/embed/${id}"
+            title="video"
+            frameborder="0"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            allowfullscreen></iframe>
+        </div>`;
+    }else{
+      html += `
+        <div class="media media--video">
+          <video class="media__video" controls playsinline src="${escapeAttr(video)}"></video>
+        </div>`;
+    }
+  }
+
+  hero.innerHTML = html;
+  hero.style.display = html ? "block" : "none";
 
   renderSaveBtn();
 }
