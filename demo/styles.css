@@ -709,3 +709,68 @@ svg{ width:22px; height:22px; fill: currentColor; }
 .drawer--open .drawer__scrim{
   pointer-events: auto;
 }
+
+/* ===== Contact (theme aligned) ===== */
+.page[data-page="contact"] .pane{
+  /* 既存のpaneと馴染ませる（必要なら微調整） */
+}
+
+#contactForm{
+  display: grid;
+  gap: 12px;
+}
+
+#contactForm input,
+#contactForm textarea{
+  width: 100%;
+  background: rgba(255,255,255,0.75);  /* クリーム寄り */
+  color: var(--text, #1f2937);
+  border: 1px solid rgba(176,125,79,0.22); /* アクセントの薄い線 */
+  border-radius: 14px;
+  padding: 12px 14px;
+  outline: none;
+  box-shadow: 0 1px 0 rgba(0,0,0,0.02);
+}
+
+#contactForm textarea{
+  min-height: 140px;
+  resize: vertical;
+}
+
+#contactForm input::placeholder,
+#contactForm textarea::placeholder{
+  color: rgba(31,41,55,0.45);
+}
+
+#contactForm input:focus,
+#contactForm textarea:focus{
+  border-color: rgba(176,125,79,0.55);
+  box-shadow: 0 0 0 4px rgba(176,125,79,0.14);
+  background: rgba(255,255,255,0.92);
+}
+
+#contactForm button[type="submit"]{
+  justify-self: start;
+  background: var(--accent, #b07d4f);
+  color: #fff;
+  border: 0;
+  border-radius: 14px;
+  padding: 10px 18px;
+  font-weight: 700;
+  box-shadow: 0 8px 20px rgba(176,125,79,0.18);
+  cursor: pointer;
+}
+
+#contactForm button[type="submit"]:hover{
+  filter: brightness(0.98);
+}
+
+#contactForm button[type="submit"]:active{
+  transform: translateY(1px);
+}
+
+#contactForm button[type="submit"]:disabled{
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
