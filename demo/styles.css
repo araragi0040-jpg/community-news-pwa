@@ -774,3 +774,23 @@ svg{ width:22px; height:22px; fill: currentColor; }
   cursor: not-allowed;
   transform: none;
 }
+
+.media{ display:grid; gap:12px; margin:12px 0; }
+
+.media__img img{
+  width:100%;
+  height:auto;
+  display:block;
+  border-radius:16px;
+  border:1px solid rgba(0,0,0,.06);
+}
+
+.media__video iframe,
+.media__video video{
+  width:100%;
+  aspect-ratio:16/9;
+  border:0;
+  border-radius:16px;
+  background:#000;
+  display:block;
+}
