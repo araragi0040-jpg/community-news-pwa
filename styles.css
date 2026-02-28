@@ -192,6 +192,9 @@ svg{ width:22px; height:22px; fill: currentColor; }
 .card__thumb{
   width: 88px; min-width: 88px; height: 88px;
   border-radius: 16px;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
   background:
     radial-gradient(90px 70px at 10% 10%, rgba(217,179,140,.35), transparent 60%),
     radial-gradient(90px 70px at 90% 80%, rgba(176,125,79,.25), transparent 60%),
@@ -396,17 +399,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
 .article{
   height: calc(100% - 58px);
   overflow:auto;
-  padding: 14px 16px 24px;
-}
-.article__hero{
-  width: 100%;
-  height: 160px;
-  border-radius: 20px;
-  background:
-    radial-gradient(200px 140px at 15% 30%, rgba(217,179,140,.30), transparent 60%),
-    radial-gradient(260px 180px at 85% 70%, rgba(176,125,79,.22), transparent 60%),
-    linear-gradient(180deg, rgba(255,255,255,.55), rgba(255,255,255,.25));
-  border: 1px solid rgba(176,125,79,.18);
+  padding: 14px 16px calc(24px + var(--bottomnav) + var(--safe));
 }
 .article__title{
   margin: 14px 0 10px;
@@ -643,4 +636,182 @@ svg{ width:22px; height:22px; fill: currentColor; }
   .card__thumb{ width: 110px; min-width: 110px; height: 90px; }
   .grid2{ grid-template-columns: 1fr 1fr; }
   .admin__row{ grid-template-columns: 1fr 1.3fr; align-items:start; }
+}
+
+.owner-card{
+  padding:16px;
+  border:1px solid rgba(255,255,255,.1);
+  border-radius:12px;
+  margin-bottom:16px;
+}
+
+.owner-name{
+  font-weight:600;
+  font-size:16px;
+}
+
+.owner-links a{
+  margin-right:12px;
+  font-size:14px;
+  color:var(--accent);
+  text-decoration:none;
+}
+
+.contact-form input,
+.contact-form textarea{
+  width:100%;
+  margin-bottom:12px;
+  padding:10px;
+  border-radius:8px;
+  border:1px solid rgba(255,255,255,.1);
+  background:#111827;
+  color:white;
+}
+
+.contact-form button{
+  padding:10px 16px;
+  border:none;
+  border-radius:8px;
+  background:var(--accent);
+  color:white;
+  cursor:pointer;
+}
+
+/* ===== BottomNav fix (正規) ===== */
+.bottomnav{
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1200;            /* drawer(30)より上に */
+  pointer-events: auto;
+}
+
+/* drawerが閉じてるときはクリックを奪わない */
+.drawer{
+  pointer-events: none;
+}
+.drawer--open{
+  pointer-events: auto;
+}
+
+/* scrimも閉じてるときはクリックを奪わない */
+.drawer__scrim{
+  pointer-events: none;
+}
+.drawer--open .drawer__scrim{
+  pointer-events: auto;
+}
+
+/* ===== Contact (theme aligned) ===== */
+.page[data-page="contact"] .pane{
+  /* 既存のpaneと馴染ませる（必要なら微調整） */
+}
+
+#contactForm{
+  display: grid;
+  gap: 12px;
+}
+
+#contactForm input,
+#contactForm textarea{
+  width: 100%;
+  background: rgba(255,255,255,0.75);  /* クリーム寄り */
+  color: var(--text, #1f2937);
+  border: 1px solid rgba(176,125,79,0.22); /* アクセントの薄い線 */
+  border-radius: 14px;
+  padding: 12px 14px;
+  outline: none;
+  box-shadow: 0 1px 0 rgba(0,0,0,0.02);
+}
+
+#contactForm textarea{
+  min-height: 140px;
+  resize: vertical;
+}
+
+#contactForm input::placeholder,
+#contactForm textarea::placeholder{
+  color: rgba(31,41,55,0.45);
+}
+
+#contactForm input:focus,
+#contactForm textarea:focus{
+  border-color: rgba(176,125,79,0.55);
+  box-shadow: 0 0 0 4px rgba(176,125,79,0.14);
+  background: rgba(255,255,255,0.92);
+}
+
+#contactForm button[type="submit"]{
+  justify-self: start;
+  background: var(--accent, #b07d4f);
+  color: #fff;
+  border: 0;
+  border-radius: 14px;
+  padding: 10px 18px;
+  font-weight: 700;
+  box-shadow: 0 8px 20px rgba(176,125,79,0.18);
+  cursor: pointer;
+}
+
+#contactForm button[type="submit"]:hover{
+  filter: brightness(0.98);
+}
+
+#contactForm button[type="submit"]:active{
+  transform: translateY(1px);
+}
+
+#contactForm button[type="submit"]:disabled{
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.media{ display:grid; gap:12px; margin:12px 0; }
+
+.media__img img{
+  width:100%;
+  max-width:680px;   /* ← サイズ制限 */
+  height:auto;
+  display:block;
+  margin: 0 auto;    /* ← 中央寄せ */
+  border-radius:16px;
+  border:1px solid rgba(0,0,0,.06);
+}
+
+.media__video iframe,
+.media__video video{
+  width:100%;
+  max-width:680px;   /* ← サイズ制限 */
+  aspect-ratio:16/9;
+  margin: 0 auto;    /* ← 中央寄せ */
+  border:0;
+  border-radius:16px;
+  background:#000;
+  display:block;
+}
+
+.media{
+  display:grid;
+  gap:14px;
+  margin:20px 0;
+}
+.media--images{ grid-template-columns: 1fr; }
+.media__img{
+  width:100%;
+  height:auto;
+  border-radius:16px;
+  display:block;
+}
+.media__iframe{
+  width:100%;
+  aspect-ratio: 16 / 9;
+  border:0;
+  border-radius:16px;
+}
+.media__video{
+  width:100%;
+  border-radius:16px;
+  display:block;
 }
