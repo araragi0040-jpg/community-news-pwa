@@ -86,12 +86,8 @@ svg{ width:22px; height:22px; fill: currentColor; }
 .iconbtn:hover{ background: rgba(255,255,255,.72); }
 
 /* Pages */
-.page{
-  display: none;
-}
-.page.page--active{
-  display: block;
-}
+.page{ display:none !important; }
+.page.page--active{ display:block !important; }
 
 /* Search */
 .search{ margin-top: 8px; }
