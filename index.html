@@ -7,7 +7,7 @@
   <title>語り場ニュース</title>
 
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=12" />
+  <link rel="stylesheet" href="./styles.css?v=13" />
 </head>
 <body>
   <div class="app">
@@ -15,12 +15,12 @@
     <!-- Topbar -->
     <header class="topbar">
       <div class="brand">
-        <div class="brand__dot" aria-hidden="true"></div>
-        <div>
-          <div class="brand__name">語り場ニュース</div>
-          <div class="brand__sub">限定配信</div>
-        </div>
-      </div>
+        <img src="./logo.png" alt="語り場ロゴ" class="brand__logo">
+        <div class="brand__texts">
+      <div class="brand__name">語り場ニュース</div>
+      <div class="brand__sub">限定配信</div>
+    </div>
+  </div>
 
       <div style="display:flex; gap:8px; align-items:center;">
         <button class="iconbtn" id="btnExport" aria-label="Export JSON" title="Export">
@@ -331,7 +331,7 @@
   <input id="fileImport" type="file" accept="application/json" style="display:none;" />
 
   <script src="config.js"></script>
-  <script src="./app.js?v=12"></script>
+  <script src="./app.js?v=13"></script>
   <!-- serviceWorker 一旦停止（キャッシュ切り分け） -->
 <!--
   <script>
