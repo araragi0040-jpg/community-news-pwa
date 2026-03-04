@@ -79,31 +79,31 @@
       </section>
     </main>
 
-    <!-- Schedule Page -->
-    <main class="page" data-page="schedule">
+<!-- Schedule Page -->
+<main class="page" data-page="schedule">
   <section class="pane">
     <div class="pane__head pane__head--row">
-      <h2 class="pane__title">スケジュール</h2>
-    </div>
-    <p class="pane__sub">コミュニティ内の予定（イベントのみ表示）</p>
+      <h2 class="pane__title">イベントカレンダー</h2>
 
-    <!-- Schedule View Switch -->
-    <div class="schedview">
-      <div class="seg" id="schedViewSeg">
-        <button type="button" class="seg__btn seg__btn--active" data-view="month">1カ月</button>
-        <button type="button" class="seg__btn" data-view="2w">2週間</button>
-        <button type="button" class="seg__btn" data-view="1w">1週間</button>
-      </div>
-
-      <div class="schednav">
-        <button type="button" class="cal__btn" id="schedPrev">←</button>
-        <button type="button" class="cal__btn" id="schedToday">今日</button>
-        <button type="button" class="cal__btn" id="schedNext">→</button>
+      <div class="calview" role="tablist" aria-label="表示切替">
+        <button class="calview__btn calview__btn--active" data-view="month" type="button">1カ月</button>
+        <button class="calview__btn" data-view="2w" type="button">2週間</button>
+        <button class="calview__btn" data-view="1w" type="button">1週間</button>
       </div>
     </div>
 
-    <!-- grid -->
-    <div class="schedgrid" id="schedGrid"></div>
+    <div class="cal" id="cal">
+      <div class="cal__head">
+        <div class="cal__left">
+          <button class="cal__nav" id="calPrev" type="button" aria-label="前へ">‹</button>
+          <button class="cal__nav" id="calToday" type="button">今月</button>
+          <button class="cal__nav" id="calNext" type="button" aria-label="次へ">›</button>
+          <div class="cal__month" id="calMonth">-</div>
+        </div>
+      </div>
+
+      <div class="cal__grid" id="calGrid"></div>
+    </div>
   </section>
 </main>
 
