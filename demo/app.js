@@ -1208,6 +1208,4 @@ function init(){
 // ✅ 起動時に表示ページを強制（これで他ページに残る系が消える）
   setActivePage("home");
 }
-
 init();
-console.log("app.js loaded");
