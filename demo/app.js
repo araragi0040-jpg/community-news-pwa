@@ -253,32 +253,33 @@ function renderFeed(){
   const cards = $("#cards");
   if(!cards) return;
 
-  cards.innerHTML = items.map(a => {
-    const pills = (a.tags||[]).map(t => `<span class="pill">${escapeHtml(t)}</span>`).join("");
+cards.innerHTML = items.map(a => {
+  const pills = (a.tags||[]).map(t => `<span class="pill">${escapeHtml(t)}</span>`).join("");
 
-const thumb = (a.media?.images && a.media.images.length) ? a.media.images[0] : "";
-const thumbStyle = thumb ? `style="background-image:url('${escapeAttr(thumb)}')"` : "";
+  const thumb = (a.media?.images && a.media.images.length) ? a.media.images[0] : "";
+  const mediaHtml = thumb
+    ? `<div class="card__media"><img src="${escapeAttr(thumb)}" alt="" loading="lazy"></div>`
+    : ``; // 画像なしなら上部を出さない（出したいならプレースホルダを入れる）
 
-    return `
-      <article class="card" data-article="${escapeAttr(a.id)}">
-        <div class="card__row">
-          <div class="card__thumb" aria-hidden="true" ${thumbStyle}></div>
-          <div class="card__body">
-            <div class="card__top">
-              <span class="badge" data-tone="${escapeAttr(a.tone||"accent")}">
-                <span class="badge__dot"></span>
-                <span>${escapeHtml(a.badge||"Info")}</span>
-              </span>
-              <div class="card__date">${formatDateJP(a.date)}</div>
-            </div>
-            <div class="card__title">${escapeHtml(a.title||"")}</div>
-            <div class="card__desc">${escapeHtml(a.desc||"")}</div>
-            <div class="card__meta">${pills}</div>
-          </div>
+  return `
+    <article class="card" data-article="${escapeAttr(a.id)}">
+      ${mediaHtml}
+      <div class="card__content">
+        <div class="card__top">
+          <span class="badge" data-tone="${escapeAttr(a.tone||"accent")}">
+            <span class="badge__dot"></span>
+            <span>${escapeHtml(a.badge||"Info")}</span>
+          </span>
+          <div class="card__date">${formatDateJP(a.date)}</div>
         </div>
-      </article>
-    `;
-  }).join("");
+
+        <div class="card__title">${escapeHtml(a.title||"")}</div>
+        <div class="card__desc">${escapeHtml(a.desc||"")}</div>
+        <div class="card__meta">${pills}</div>
+      </div>
+    </article>
+  `;
+}).join("");
 
   $$(".card", cards).forEach(el => {
     el.addEventListener("click", () => openDrawer(el.dataset.article));
@@ -417,28 +418,33 @@ function renderSaved(){
   }
   empty.style.display = "none";
 
-  cards.innerHTML = list.map(a => {
-    const pills = (a.tags||[]).map(t => `<span class="pill">${escapeHtml(t)}</span>`).join("");
-    return `
-      <article class="card" data-article="${escapeAttr(a.id)}">
-        <div class="card__row">
-          <div class="card__thumb" aria-hidden="true"></div>
-          <div class="card__body">
-            <div class="card__top">
-              <span class="badge" data-tone="${escapeAttr(a.tone||"accent")}">
-                <span class="badge__dot"></span>
-                <span>${escapeHtml(a.badge||"Info")}</span>
-              </span>
-              <div class="card__date">${formatDateJP(a.date)}</div>
-            </div>
-            <div class="card__title">${escapeHtml(a.title||"")}</div>
-            <div class="card__desc">${escapeHtml(a.desc||"")}</div>
-            <div class="card__meta">${pills}</div>
-          </div>
+cards.innerHTML = list.map(a => {
+  const pills = (a.tags||[]).map(t => `<span class="pill">${escapeHtml(t)}</span>`).join("");
+
+  const thumb = (a.media?.images && a.media.images.length) ? a.media.images[0] : "";
+  const mediaHtml = thumb
+    ? `<div class="card__media"><img src="${escapeAttr(thumb)}" alt="" loading="lazy"></div>`
+    : ``;
+
+  return `
+    <article class="card" data-article="${escapeAttr(a.id)}">
+      ${mediaHtml}
+      <div class="card__content">
+        <div class="card__top">
+          <span class="badge" data-tone="${escapeAttr(a.tone||"accent")}">
+            <span class="badge__dot"></span>
+            <span>${escapeHtml(a.badge||"Info")}</span>
+          </span>
+          <div class="card__date">${formatDateJP(a.date)}</div>
         </div>
-      </article>
-    `;
-  }).join("");
+
+        <div class="card__title">${escapeHtml(a.title||"")}</div>
+        <div class="card__desc">${escapeHtml(a.desc||"")}</div>
+        <div class="card__meta">${pills}</div>
+      </div>
+    </article>
+  `;
+}).join("");
 
   $$(".card", cards).forEach(el => {
     el.addEventListener("click", () => openDrawer(el.dataset.article));
