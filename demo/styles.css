@@ -87,12 +87,11 @@ svg{ width:22px; height:22px; fill: currentColor; }
 
 /* Pages */
 .page{
-  max-width: var(--maxw);
-  margin: 0 auto;
-  padding:  0 16px 24px;
-  display:none;
+  display: none;
 }
-.page--active{ display:block; }
+.page.page--active{
+  display: block;
+}
 
 /* Search */
 .search{ margin-top: 8px; }
