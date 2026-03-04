@@ -81,33 +81,35 @@
 
     <!-- Schedule Page -->
     <main class="page" data-page="schedule">
-      <section class="pane">
-        <div class="pane__head pane__head--row">
+  <section class="pane">
+    <div class="pane__head pane__head--row">
+      <h2 class="pane__title">スケジュール</h2>
+    </div>
+    <p class="pane__sub">コミュニティ内の予定（イベントのみ表示）</p>
 
-          <!-- Schedule View Switch -->
-<div class="schedview">
-  <div class="seg" id="schedViewSeg">
-    <button class="seg__btn seg__btn--active" data-view="month">1カ月</button>
-    <button class="seg__btn" data-view="2w">2週間</button>
-    <button class="seg__btn" data-view="1w">1週間</button>
-  </div>
+    <!-- Schedule View Switch -->
+    <div class="schedview">
+      <div class="seg" id="schedViewSeg">
+        <button type="button" class="seg__btn seg__btn--active" data-view="month">1カ月</button>
+        <button type="button" class="seg__btn" data-view="2w">2週間</button>
+        <button type="button" class="seg__btn" data-view="1w">1週間</button>
+      </div>
 
-  <div class="schednav">
-    <button class="cal__btn" id="schedPrev">←</button>
-    <button class="cal__btn" id="schedToday">今日</button>
-    <button class="cal__btn" id="schedNext">→</button>
-  </div>
-</div>
+      <div class="schednav">
+        <button type="button" class="cal__btn" id="schedPrev">←</button>
+        <button type="button" class="cal__btn" id="schedToday">今日</button>
+        <button type="button" class="cal__btn" id="schedNext">→</button>
+      </div>
+    </div>
+
+    <!-- grid -->
+    <div class="schedgrid" id="schedGrid"></div>
+  </section>
+</main>
 
 <!-- ここに表示される（既存の #cal は使わない方針） -->
-<div class="schedgrid" id="schedGrid"></div>
-          
+<div class="pane__head pane__head--row">
           <h2 class="pane__title">スケジュール</h2>
-          <div class="toggle">
-            <input id="onlyUpcoming" type="checkbox" />
-            <span class="toggle__ui"></span>
-            <span class="toggle__label">今後のみ</span>
-          </div>
         </div>
         <p class="pane__sub">コミュニティ内の予定（例：イベント / 募集締切 / 配信）</p>
 
