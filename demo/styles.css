@@ -60,7 +60,6 @@ svg{ width:22px; height:22px; fill: currentColor; }
   gap: 10px;
 }
 
-.brand{ display:flex; align-items:center; gap:12px; }
 .brand__logo{
   width: 28px;
   height: 28px;
@@ -651,6 +650,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
   color:var(--accent);
   text-decoration:none;
 }
+ } 
 
 .contact-form input,
 .contact-form textarea{
