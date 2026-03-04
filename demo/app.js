@@ -797,6 +797,7 @@ function renderScheduleControls(){
 }
 
 function renderScheduleGrid(){
+  console.log("renderScheduleGrid called"); // ★
   const root = $("#schedGrid");
   if(!root) return;
 
