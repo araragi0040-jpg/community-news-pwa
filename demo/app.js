@@ -256,10 +256,10 @@ function renderFeed(){
 cards.innerHTML = items.map(a => {
   const pills = (a.tags||[]).map(t => `<span class="pill">${escapeHtml(t)}</span>`).join("");
 
-  const thumb = (a.media?.images && a.media.images.length) ? a.media.images[0] : "";
-  const mediaHtml = thumb
-    ? `<div class="card__media"><img src="${escapeAttr(thumb)}" alt="" loading="lazy"></div>`
-    : ``; // 画像なしなら上部を出さない（出したいならプレースホルダを入れる）
+const thumb = (a.media?.images && a.media.images.length) ? a.media.images[0] : "";
+const mediaHtml = thumb
+  ? `<div class="card__media"><img src="${escapeAttr(thumb)}" alt="" loading="lazy"></div>`
+  : `<div class="card__media card__media--placeholder" aria-hidden="true"></div>`;
 
   return `
     <article class="card" data-article="${escapeAttr(a.id)}">
