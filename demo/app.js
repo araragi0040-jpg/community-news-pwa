@@ -523,21 +523,10 @@ function setActivePage(key){
 
 // ===== Schedule =====
 function scheduleItems(){
-  const onlyUpcoming = $("#onlyUpcoming")?.checked;
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   // ✅ イベントのみ（label が "イベント" のものだけ）
   let list = [...SCHEDULE]
     .filter(it => (it.label || "") === "イベント")
     .sort((a,b)=> (a.date < b.date ? -1 : 1));
-
-  if(onlyUpcoming){
-    list = list.filter(it => {
-      const d = new Date(it.date + "T00:00:00");
-      return d >= today;
-    });
-  }
-  return list;
 }
 
 function renderLegend(){
