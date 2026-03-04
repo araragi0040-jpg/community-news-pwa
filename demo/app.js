@@ -523,10 +523,10 @@ function setActivePage(key){
 
 // ===== Schedule =====
 function scheduleItems(){
-  // ✅ イベントのみ（label が "イベント" のものだけ）
-  return [...SCHEDULE]
+  const list = [...SCHEDULE]
     .filter(it => (it.label || "") === "イベント")
     .sort((a,b)=> (a.date < b.date ? -1 : 1));
+  return list;
 }
 
 function renderLegend(){
