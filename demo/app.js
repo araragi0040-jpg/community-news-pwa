@@ -524,7 +524,7 @@ function setActivePage(key){
 // ===== Schedule =====
 function scheduleItems(){
   // ✅ イベントのみ（label が "イベント" のものだけ）
-  let list = [...SCHEDULE]
+  const list = [...SCHEDULE]
     .filter(it => (it.label || "") === "イベント")
     .sort((a,b)=> (a.date < b.date ? -1 : 1));
 
