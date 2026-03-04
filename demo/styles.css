@@ -166,7 +166,9 @@ svg{ width:22px; height:22px; fill: currentColor; }
 .chip[data-tone="warn"] .chip__dot{ background: var(--warn); }
 
 /* Feed */
-.feed{ margin-top: 16px; }
+.feed{ margin-top: 16px; 
+       padding: 16px;
+     }
 .feed__meta{
   display:flex;
   align-items: baseline;
@@ -176,6 +178,18 @@ svg{ width:22px; height:22px; fill: currentColor; }
 }
 .feed__title{ font-weight: 800; letter-spacing:.2px; color: var(--text-strong); }
 .feed__hint{ font-size: 12px; color: var(--muted); }
+
+/* ===== Card Base ===== */
+.card{
+  background: #fff;
+  border: 1px solid rgba(176,125,79,.25);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0,0,0,.04);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;   /* ← ここが記事間の余白 */
+}
 
 /* ===== Card Media (always shown) ===== */
 .card__media{
