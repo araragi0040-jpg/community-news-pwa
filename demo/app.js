@@ -725,52 +725,6 @@ function renderCalendar(){
   });
 }
 
-function renderScheduleList(){
-  const listRoot = $("#schedList");
-  if(!listRoot) return;
-
-  const items = scheduleItems();
-  const selected = state.selectedDate;
-
-  const todays = items.filter(it => it.date === selected);
-  let show = [];
-  if(todays.length){
-    show = todays;
-  }else{
-    const y = state.calYear, m = state.calMonth;
-    show = items.filter(it => {
-      const d = new Date(it.date+"T00:00:00");
-      return d.getFullYear() === y && d.getMonth() === m;
-    });
-    if(show.length === 0) show = items.slice(0, 10);
-  }
-
-  if(show.length === 0){
-    listRoot.innerHTML = `
-      <div class="empty">
-        <div class="empty__icon">📅</div>
-        <div class="empty__title">予定がありません</div>
-        <div class="empty__text">この月の予定がまだ登録されていません。</div>
-      </div>
-    `;
-    return;
-  }
-
-  listRoot.innerHTML = show.map(it => `
-    <div class="sitem">
-      <div class="sitem__left">
-        <div class="sitem__title">${escapeHtml(it.title)}</div>
-        <div class="sitem__meta">${formatDateJP(it.date)} ${escapeHtml(it.time || "")}</div>
-        <div class="sitem__desc">${escapeHtml(it.desc || "")}</div>
-      </div>
-      <div class="sitem__tag">
-        <span class="sitem__dot" data-tone="${escapeAttr(it.tone)}"></span>
-        <span>${escapeHtml(it.label || "予定")}</span>
-      </div>
-    </div>
-  `).join("");
-}
-
 function renderScheduleUI(){
   renderScheduleControls();
   renderScheduleGrid();
