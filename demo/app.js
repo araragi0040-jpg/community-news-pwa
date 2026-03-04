@@ -1210,3 +1210,4 @@ function init(){
 }
 
 init();
+console.log("app.js loaded");
