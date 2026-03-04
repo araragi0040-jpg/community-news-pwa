@@ -78,43 +78,43 @@ const OWNERS = [
   {
     name: "しゅう",
     role: "共同オーナー",
-    instagram: "https://x.gd/2a58h"
-  }
+    instagram: "https://x.gd/2a58h",
+  },
   {
     name: "◯◯",
     role: "共同オーナー",
-    instagram: "https://instagram.com/yyyy"
-  }
+    instagram: "https://instagram.com/yyyy",
+  },
   {
     name: "◯◯",
     role: "共同オーナー",
-    instagram: "https://instagram.com/yyyy"
-  }
+    instagram: "https://instagram.com/yyyy",
+  },
   {
     name: "◯◯",
     role: "共同オーナー",
-    instagram: "https://instagram.com/yyyy"
-  }
+    instagram: "https://instagram.com/yyyy",
+  },
   {
     name: "◯◯",
     role: "共同オーナー",
-    instagram: "https://instagram.com/yyyy"
-  }
+    instagram: "https://instagram.com/yyyy",
+  },
   {
     name: "◯◯",
     role: "共同オーナー",
-    instagram: "https://instagram.com/yyyy"
-  }
+    instagram: "https://instagram.com/yyyy",
+  },
   {
     name: "◯◯",
     role: "共同オーナー",
-    instagram: "https://instagram.com/yyyy"
-  }
+    instagram: "https://instagram.com/yyyy",
+  },
   {
     name: "◯◯",
     role: "共同オーナー",
-    instagram: "https://instagram.com/yyyy"
-  }
+    instagram: "https://instagram.com/yyyy",
+  },
 ];
 
 // ==== Schedule data (sample) ====
