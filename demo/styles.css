@@ -50,7 +50,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
   position: sticky;
   top: 0;
   z-index: 10;
-  padding: calc(14px + var(--safeTop)) 16px 14px;
+  padding: 14px 16px 14px; /* safeTopを外す */
   background: rgba(255, 250, 245, 0.92);
   backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--stroke);
