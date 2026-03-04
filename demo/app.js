@@ -248,6 +248,7 @@ function renderFeed(){
     title.textContent = state.channel === "all"
       ? "Latest"
       : (CHANNELS.find(c=>c.key===state.channel)?.label || "Latest");
+     <div class="card__author">${escapeHtml(a.author || "運営")}</div>
   }
 
   const cards = $("#cards");
