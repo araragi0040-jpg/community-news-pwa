@@ -517,7 +517,7 @@ function setActivePage(key){
   // per page refresh
   if(key === "saved") renderSaved();
   if(key === "contact") renderContact();
-  if(key === "schedule") renderScheduleUI();
+  if(key === "schedule") requestAnimationFrame(renderScheduleUI);
   if(key === "admin") renderAdmin();
 }
 
@@ -830,17 +830,16 @@ function renderScheduleGrid(){
         </div>`
       : `<div class="sempty">イベントなし</div>`;
 
-    // month表示のときは“当月以外”を薄くする
-    const isMonthView = (state.scheduleView === "month");
-    const inMonth = (d.getMonth() === cursor.getMonth());
-    const mutedStyle = (isMonthView && !inMonth) ? `style="opacity:.55;"` : "";
+// month表示のときは“当月以外”を薄くする
+const isMonthView = (state.scheduleView === "month");
+const inMonth = (d.getMonth() === cursor.getMonth());
 
-    // 今日にうっすら強調
-    const todayStyle = (dateStr === todayStr)
-      ? `style="outline:2px solid rgba(176,125,79,.35); outline-offset:2px;"`
-      : "";
+// styleは1つにまとめる（style属性の二重付与を防ぐ）
+let style = "";
+if (isMonthView && !inMonth) style += "opacity:.55;";
+if (dateStr === todayStr) style += "outline:2px solid rgba(176,125,79,.35);outline-offset:2px;";
 
-    return `<div class="sday" ${mutedStyle} ${todayStyle}>${head}${body}</div>`;
+return `<div class="sday"${style ? ` style="${style}"` : ""}>${head}${body}</div>`;
   }).join("");
 }
 
