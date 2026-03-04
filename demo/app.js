@@ -517,7 +517,7 @@ function setActivePage(key){
   // per page refresh
   if(key === "saved") renderSaved();
   if(key === "contact") renderContact();
-  if(key === "schedule") renderScheduleUI();
+  if(key === "schedule") renderCalendar();
   if(key === "admin") renderAdmin();
 }
 
@@ -605,81 +605,123 @@ function renderCalendar(){
   const calRoot = $("#cal");
   if(!calRoot) return;
 
+  // 初期化
   const now = new Date();
-  if(state.calYear == null){
-    state.calYear = now.getFullYear();
-    state.calMonth = now.getMonth();
-    state.selectedDate = todayYMD();
+  if(!state.scheduleCursor){
+    state.scheduleCursor = new Date(now);
+    state.scheduleCursor.setHours(0,0,0,0);
+  }
+  if(!state.scheduleView) state.scheduleView = "month";
+
+  const cursor = new Date(state.scheduleCursor);
+  const y = cursor.getFullYear();
+  const m = cursor.getMonth();
+
+  const map = eventsByDate(); // key: YYYY-MM-DD -> items[]
+  const dows = ["月","火","水","木","金","土","日"];
+
+  // 表示日配列
+  const days = buildRangeDays(state.scheduleView, cursor);
+
+  // ヘッダ文言
+  let title = "";
+  if(state.scheduleView === "month"){
+    title = `${y}年 ${String(m+1).padStart(2,"0")}月`;
+  }else if(state.scheduleView === "2w"){
+    title = `直近2週間`;
+  }else{
+    title = `直近1週間`;
   }
 
-  const y = state.calYear;
-  const m = state.calMonth;
-  const monthName = `${y}年 ${String(m+1).padStart(2,"0")}月`;
-
-  const dows = ["日","月","火","水","木","金","土"];
-  const matrix = buildMonthMatrix(y, m);
-  const map = eventsByDate();
-
-  const head = `
-    <div class="cal__head">
-      <div class="cal__month">${monthName}</div>
-      <div class="cal__ctrl">
-        <button class="cal__btn" id="calPrev" aria-label="Prev month">←</button>
-        <button class="cal__btn" id="calToday" aria-label="Today">今日</button>
-        <button class="cal__btn" id="calNext" aria-label="Next month">→</button>
-      </div>
+  // view切替ボタン
+  const viewBtns = `
+    <div class="calview" role="tablist" aria-label="表示切替">
+      <button class="calview__btn ${state.scheduleView==="month"?"calview__btn--active":""}" data-view="month" type="button">1カ月</button>
+      <button class="calview__btn ${state.scheduleView==="2w"?"calview__btn--active":""}" data-view="2w" type="button">2週間</button>
+      <button class="calview__btn ${state.scheduleView==="1w"?"calview__btn--active":""}" data-view="1w" type="button">1週間</button>
     </div>
   `;
 
-  const dowRow = dows.map(d => `<div class="cal__dow">${d}</div>`).join("");
+  const head = `
+    <div class="cal__head">
+      <div class="cal__left">
+        <button class="cal__nav" id="calPrev" type="button" aria-label="前へ">‹</button>
+        <button class="cal__nav" id="calToday" type="button">今月</button>
+        <button class="cal__nav" id="calNext" type="button" aria-label="次へ">›</button>
+        <div class="cal__month" id="calMonth">${title}</div>
+      </div>
+      ${viewBtns}
+    </div>
+  `;
 
-  const cells = matrix.map(d => {
+  // 曜日行
+  const dowRow = dows.map(w => `<div class="cal__cell cal__dow">${w}</div>`).join("");
+
+  // セル
+  const cells = days.map(d=>{
     const dateStr = ymd(d);
-    const inMonth = (d.getMonth() === m);
-    const isToday = (dateStr === todayYMD());
-    const muted = inMonth ? "" : " cal__day--muted";
-    const todayCls = isToday ? " cal__day--today" : "";
-    const evs = map.get(dateStr) || [];
-    const dots = evs.slice(0,4).map(ev => `<span class="cal__dot" data-tone="${ev.tone}"></span>`).join("");
+    const inMonth = (d.getFullYear() === y && d.getMonth() === m);
+
+    // 「来月分が下に薄く表示」は不要 → 月表示で当月以外は “数字を出さない”
+    const outCls = (state.scheduleView==="month" && !inMonth) ? " is-out" : "";
+
+    const evs = (map.get(dateStr) || []).slice(0,2); // 多すぎると潰れるので2件まで
+
+    const evHtml = evs.map(ev => `
+      <span class="cal__ev">
+        <span class="cal__evtitle">${escapeHtml(ev.title || "")}</span>
+        <span class="cal__evdesc">${escapeHtml(ev.desc || "")}</span>
+      </span>
+    `).join("");
+
     return `
-      <div class="cal__day${muted}${todayCls}" data-date="${dateStr}">
+      <div class="cal__cell${outCls}">
         <div class="cal__daynum">${d.getDate()}</div>
-        <div class="cal__dots">${dots}</div>
+        ${evHtml}
       </div>
     `;
   }).join("");
 
   calRoot.innerHTML = `
     ${head}
-    <div class="cal__grid">
+    <div class="cal__grid" id="calGrid">
       ${dowRow}
       ${cells}
     </div>
   `;
 
-  $("#calPrev").onclick = () => {
-    state.calMonth -= 1;
-    if(state.calMonth < 0){ state.calMonth = 11; state.calYear -= 1; }
-    renderCalendar(); renderScheduleList();
-  };
-  $("#calNext").onclick = () => {
-    state.calMonth += 1;
-    if(state.calMonth > 11){ state.calMonth = 0; state.calYear += 1; }
-    renderCalendar(); renderScheduleList();
-  };
-  $("#calToday").onclick = () => {
-    const n = new Date();
-    state.calYear = n.getFullYear();
-    state.calMonth = n.getMonth();
-    state.selectedDate = todayYMD();
-    renderCalendar(); renderScheduleList();
-  };
-
-  $$(".cal__day", calRoot).forEach(el => {
-    el.addEventListener("click", () => {
-      state.selectedDate = el.dataset.date;
-      renderScheduleList();
+  // === bind UI ===
+  $$(".calview__btn", calRoot).forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      state.scheduleView = btn.dataset.view;
+      // 2w/1w は “直近” 表示にしたいので cursor を今日に寄せる
+      if(state.scheduleView !== "month"){
+        state.scheduleCursor = new Date();
+        state.scheduleCursor.setHours(0,0,0,0);
+      }
+      renderCalendar();
     });
+  });
+
+  // prev/next/today（monthだけ有効）
+  $("#calPrev")?.addEventListener("click", ()=>{
+    if(state.scheduleView !== "month") return;
+    const c = new Date(state.scheduleCursor);
+    c.setMonth(c.getMonth()-1);
+    state.scheduleCursor = c;
+    renderCalendar();
+  });
+  $("#calNext")?.addEventListener("click", ()=>{
+    if(state.scheduleView !== "month") return;
+    const c = new Date(state.scheduleCursor);
+    c.setMonth(c.getMonth()+1);
+    state.scheduleCursor = c;
+    renderCalendar();
+  });
+  $("#calToday")?.addEventListener("click", ()=>{
+    state.scheduleCursor = new Date();
+    state.scheduleCursor.setHours(0,0,0,0);
+    renderCalendar();
   });
 }
 
@@ -1208,6 +1250,7 @@ function init(){
   renderContact();
   renderAdmin();
   bind();
+  renderCalendar();
 }
 
 init();
