@@ -188,7 +188,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
   box-shadow: 0 4px 12px rgba(0,0,0,.04);
   display: flex;
   flex-direction: column;
-  gap: 16px;   /* ← ここが記事間の余白 */
+  gap: 32px;   /* ← ここが記事間の余白 */
 }
 
 /* ===== Card Media (always shown) ===== */
