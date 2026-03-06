@@ -634,14 +634,6 @@ function renderCalendar(){
   }
 
   // view切替ボタン
-  const viewBtns = `
-    <div class="calview" role="tablist" aria-label="表示切替">
-      <button class="calview__btn ${state.scheduleView==="month"?"calview__btn--active":""}" data-view="month" type="button">1カ月</button>
-      <button class="calview__btn ${state.scheduleView==="2w"?"calview__btn--active":""}" data-view="2w" type="button">2週間</button>
-      <button class="calview__btn ${state.scheduleView==="1w"?"calview__btn--active":""}" data-view="1w" type="button">1週間</button>
-    </div>
-  `;
-
   const head = `
     <div class="cal__head">
       <div class="cal__left">
@@ -650,7 +642,6 @@ function renderCalendar(){
         <button class="cal__nav" id="calNext" type="button" aria-label="次へ">›</button>
         <div class="cal__month" id="calMonth">${title}</div>
       </div>
-      ${viewBtns}
     </div>
   `;
 
@@ -689,19 +680,6 @@ function renderCalendar(){
       ${cells}
     </div>
   `;
-
-  // === bind UI ===
-  $$(".calview__btn", calRoot).forEach(btn=>{
-    btn.addEventListener("click", ()=>{
-      state.scheduleView = btn.dataset.view;
-      // 2w/1w は “直近” 表示にしたいので cursor を今日に寄せる
-      if(state.scheduleView !== "month"){
-        state.scheduleCursor = new Date();
-        state.scheduleCursor.setHours(0,0,0,0);
-      }
-      renderCalendar();
-    });
-  });
 
   // prev/next/today（monthだけ有効）
   $("#calPrev")?.addEventListener("click", ()=>{
