@@ -725,124 +725,6 @@ function renderCalendar(){
   });
 }
 
-function renderScheduleUI(){
-  renderScheduleControls();
-  renderScheduleGrid();
-}
-
-function renderScheduleControls(){
-  // 初期化
-  if(!state.scheduleCursor){
-    state.scheduleCursor = new Date();
-    state.scheduleCursor.setHours(0,0,0,0);
-  }
-
-  const seg = $("#schedViewSeg");
-  if(seg && !seg.dataset.bound){
-    seg.dataset.bound = "1";
-    seg.addEventListener("click", (e)=>{
-      const btn = e.target.closest(".seg__btn");
-      if(!btn) return;
-      state.scheduleView = btn.dataset.view;
-      // active UI
-      $$(".seg__btn", seg).forEach(b=>b.classList.remove("seg__btn--active"));
-      btn.classList.add("seg__btn--active");
-      renderScheduleGrid();
-    });
-  }
-
-  const prev = $("#schedPrev");
-  const next = $("#schedNext");
-  const today = $("#schedToday");
-
-  if(prev && !prev.dataset.bound){
-    prev.dataset.bound="1";
-    prev.onclick = () => {
-      const c = state.scheduleCursor || new Date();
-      if(state.scheduleView === "month") c.setMonth(c.getMonth()-1);
-      else if(state.scheduleView === "2w") c.setDate(c.getDate()-14);
-      else c.setDate(c.getDate()-7);
-      state.scheduleCursor = c;
-      renderScheduleGrid();
-    };
-  }
-
-  if(next && !next.dataset.bound){
-    next.dataset.bound="1";
-    next.onclick = () => {
-      const c = state.scheduleCursor || new Date();
-      if(state.scheduleView === "month") c.setMonth(c.getMonth()+1);
-      else if(state.scheduleView === "2w") c.setDate(c.getDate()+14);
-      else c.setDate(c.getDate()+7);
-      state.scheduleCursor = c;
-      renderScheduleGrid();
-    };
-  }
-
-  if(today && !today.dataset.bound){
-    today.dataset.bound="1";
-    today.onclick = () => {
-      state.scheduleCursor = new Date();
-      state.scheduleCursor.setHours(0,0,0,0);
-      renderScheduleGrid();
-    };
-  }
-
-  // 初期 active 反映
-  if(seg){
-    $$(".seg__btn", seg).forEach(b=>{
-      b.classList.toggle("seg__btn--active", b.dataset.view === state.scheduleView);
-    });
-  }
-}
-
-function renderScheduleGrid(){
-  console.log("renderScheduleGrid called"); // ★
-  const root = $("#schedGrid");
-  if(!root) return;
-
-  const cursor = state.scheduleCursor || new Date();
-  const days = buildRangeDays(state.scheduleView, cursor);
-  const map = eventsByDate(); // scheduleItems()がイベントのみになってる
-
-  const dows = ["日","月","火","水","木","金","土"];
-  const todayStr = todayYMD();
-
-  root.innerHTML = days.map(d=>{
-    const dateStr = ymd(d);
-    const evs = (map.get(dateStr) || []);
-
-    const head = `
-      <div class="sday__head">
-        <div class="sday__date">${formatDateJP(dateStr)}</div>
-        <div class="sday__dow">${dows[d.getDay()]}</div>
-      </div>
-    `;
-
-    const body = evs.length
-      ? `<div class="sday__body">
-          ${evs.map(ev=>`
-            <div class="sev">
-              <div class="sev__title">${escapeHtml(ev.title || "")}</div>
-              <div class="sev__desc">${escapeHtml(ev.desc || "")}</div>
-            </div>
-          `).join("")}
-        </div>`
-      : `<div class="sempty">イベントなし</div>`;
-
-// month表示のときは“当月以外”を薄くする
-const isMonthView = (state.scheduleView === "month");
-const inMonth = (d.getMonth() === cursor.getMonth());
-
-// styleは1つにまとめる（style属性の二重付与を防ぐ）
-let style = "";
-if (isMonthView && !inMonth) style += "opacity:.55;";
-if (dateStr === todayStr) style += "outline:2px solid rgba(176,125,79,.35);outline-offset:2px;";
-
-return `<div class="sday"${style ? ` style="${style}"` : ""}>${head}${body}</div>`;
-  }).join("");
-}
-
 // ===== Admin: list / editor =====
 function adminArticles(){
   return loadPosts().slice().sort((a,b)=> (a.date < b.date ? 1 : -1));
@@ -1104,7 +986,6 @@ function bind(){
     upcoming.checked = (localStorage.getItem(LS_KEY_ONLY_UPCOMING) === "1");
     upcoming.addEventListener("change", () => {
       localStorage.setItem(LS_KEY_ONLY_UPCOMING, upcoming.checked ? "1" : "0");
-      renderScheduleUI();
     });
   }
 
