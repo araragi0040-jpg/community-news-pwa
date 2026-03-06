@@ -71,16 +71,50 @@ const BASE_ARTICLES = [
 // ==== Contact data ====
 const OWNERS = [
   {
+    name: "東",
+    role: "共同オーナー",
+    instagram: "https://x.gd/tLcAs",
+  },
+  {
     name: "しゅう",
     role: "共同オーナー",
-    instagram: "https://instagram.com/xxxx",
-    x: "https://x.com/xxxx"
+    instagram: "https://x.gd/2a58h",
   },
   {
     name: "◯◯",
     role: "共同オーナー",
-    instagram: "https://instagram.com/yyyy"
-  }
+    instagram: "https://instagram.com/yyyy",
+  },
+  {
+    name: "◯◯",
+    role: "共同オーナー",
+    instagram: "https://instagram.com/yyyy",
+  },
+  {
+    name: "◯◯",
+    role: "共同オーナー",
+    instagram: "https://instagram.com/yyyy",
+  },
+  {
+    name: "◯◯",
+    role: "共同オーナー",
+    instagram: "https://instagram.com/yyyy",
+  },
+  {
+    name: "◯◯",
+    role: "共同オーナー",
+    instagram: "https://instagram.com/yyyy",
+  },
+  {
+    name: "◯◯",
+    role: "共同オーナー",
+    instagram: "https://instagram.com/yyyy",
+  },
+  {
+    name: "◯◯",
+    role: "共同オーナー",
+    instagram: "https://instagram.com/yyyy",
+  },
 ];
 
 // ==== Schedule data (sample) ====
@@ -108,6 +142,8 @@ let state = {
   calYear: null,
   calMonth: null, // 0-11
   selectedDate: null, // YYYY-MM-DD
+  scheduleView: "month", // "month" | "2w" | "1w"
+  scheduleCursor: null,  // Date
 
   // admin
   editingId: null, // post id
@@ -481,22 +517,15 @@ function setActivePage(key){
   // per page refresh
   if(key === "saved") renderSaved();
   if(key === "contact") renderContact();
-  if(key === "schedule") renderScheduleUI();
+  if(key === "schedule") renderCalendar();
   if(key === "admin") renderAdmin();
 }
 
 // ===== Schedule =====
 function scheduleItems(){
-  const onlyUpcoming = $("#onlyUpcoming")?.checked;
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  let list = [...SCHEDULE].sort((a,b)=> (a.date < b.date ? -1 : 1));
-  if(onlyUpcoming){
-    list = list.filter(it => {
-      const d = new Date(it.date + "T00:00:00");
-      return d >= today;
-    });
-  }
+  const list = [...SCHEDULE]
+    .filter(it => (it.label || "") === "イベント")
+    .sort((a,b)=> (a.date < b.date ? -1 : 1));
   return list;
 }
 
@@ -514,6 +543,40 @@ function renderLegend(){
       <span>${t.label}</span>
     </div>
   `).join("");
+}
+
+function addDays(date, n){
+  const d = new Date(date);
+  d.setDate(d.getDate() + n);
+  return d;
+}
+
+function startOfWeek(date){
+  const d = new Date(date);
+  const dow = d.getDay(); // 0=Sun
+  d.setHours(0,0,0,0);
+  d.setDate(d.getDate() - dow);
+  return d;
+}
+
+function buildRangeDays(view, cursor){
+  // cursor: Date
+  const base = cursor ? new Date(cursor) : new Date();
+  base.setHours(0,0,0,0);
+
+  if(view === "month"){
+    const y = base.getFullYear();
+    const m = base.getMonth();
+    // 月表示は “月の全日 + 前後埋め” を42マスで作る（見栄え安定）
+    return buildMonthMatrix(y, m);
+  }
+
+  // 2w / 1w は週始まりから並べる
+  const start = startOfWeek(base);
+  const len = (view === "2w") ? 14 : 7;
+  const days = [];
+  for(let i=0;i<len;i++) days.push(addDays(start, i));
+  return days;
 }
 
 function buildMonthMatrix(year, month){
@@ -542,134 +605,102 @@ function renderCalendar(){
   const calRoot = $("#cal");
   if(!calRoot) return;
 
+  // 初期化
   const now = new Date();
-  if(state.calYear == null){
-    state.calYear = now.getFullYear();
-    state.calMonth = now.getMonth();
-    state.selectedDate = todayYMD();
+  if(!state.scheduleCursor){
+    state.scheduleCursor = new Date(now);
+    state.scheduleCursor.setHours(0,0,0,0);
+  }
+  if(!state.scheduleView) state.scheduleView = "month";
+
+  const cursor = new Date(state.scheduleCursor);
+  const y = cursor.getFullYear();
+  const m = cursor.getMonth();
+
+  const map = eventsByDate(); // key: YYYY-MM-DD -> items[]
+  const dows = ["月","火","水","木","金","土","日"];
+
+  // 表示日配列
+  const days = buildRangeDays(state.scheduleView, cursor);
+
+  // ヘッダ文言
+  let title = "";
+  if(state.scheduleView === "month"){
+    title = `${y}年 ${String(m+1).padStart(2,"0")}月`;
+  }else if(state.scheduleView === "2w"){
+    title = `直近2週間`;
+  }else{
+    title = `直近1週間`;
   }
 
-  const y = state.calYear;
-  const m = state.calMonth;
-  const monthName = `${y}年 ${String(m+1).padStart(2,"0")}月`;
-
-  const dows = ["日","月","火","水","木","金","土"];
-  const matrix = buildMonthMatrix(y, m);
-  const map = eventsByDate();
-
+  // view切替ボタン
   const head = `
     <div class="cal__head">
-      <div class="cal__month">${monthName}</div>
-      <div class="cal__ctrl">
-        <button class="cal__btn" id="calPrev" aria-label="Prev month">←</button>
-        <button class="cal__btn" id="calToday" aria-label="Today">今日</button>
-        <button class="cal__btn" id="calNext" aria-label="Next month">→</button>
+      <div class="cal__left">
+        <button class="cal__nav" id="calPrev" type="button" aria-label="前へ">‹</button>
+        <button class="cal__nav" id="calToday" type="button">今月</button>
+        <button class="cal__nav" id="calNext" type="button" aria-label="次へ">›</button>
+        <div class="cal__month" id="calMonth">${title}</div>
       </div>
     </div>
   `;
 
-  const dowRow = dows.map(d => `<div class="cal__dow">${d}</div>`).join("");
+  // 曜日行
+  const dowRow = dows.map(w => `<div class="cal__cell cal__dow">${w}</div>`).join("");
 
-  const cells = matrix.map(d => {
+  // セル
+  const cells = days.map(d=>{
     const dateStr = ymd(d);
-    const inMonth = (d.getMonth() === m);
-    const isToday = (dateStr === todayYMD());
-    const muted = inMonth ? "" : " cal__day--muted";
-    const todayCls = isToday ? " cal__day--today" : "";
-    const evs = map.get(dateStr) || [];
-    const dots = evs.slice(0,4).map(ev => `<span class="cal__dot" data-tone="${ev.tone}"></span>`).join("");
+    const inMonth = (d.getFullYear() === y && d.getMonth() === m);
+
+    // 「来月分が下に薄く表示」は不要 → 月表示で当月以外は “数字を出さない”
+    const outCls = (state.scheduleView==="month" && !inMonth) ? " is-out" : "";
+
+    const evs = (map.get(dateStr) || []).slice(0,2); // 多すぎると潰れるので2件まで
+
+    const evHtml = evs.map(ev => `
+      <span class="cal__ev">
+        <span class="cal__evtitle">${escapeHtml(ev.title || "")}</span>
+        <span class="cal__evdesc">${escapeHtml(ev.desc || "")}</span>
+      </span>
+    `).join("");
+
     return `
-      <div class="cal__day${muted}${todayCls}" data-date="${dateStr}">
+      <div class="cal__cell${outCls}">
         <div class="cal__daynum">${d.getDate()}</div>
-        <div class="cal__dots">${dots}</div>
+        ${evHtml}
       </div>
     `;
   }).join("");
 
   calRoot.innerHTML = `
     ${head}
-    <div class="cal__grid">
+    <div class="cal__grid" id="calGrid">
       ${dowRow}
       ${cells}
     </div>
   `;
 
-  $("#calPrev").onclick = () => {
-    state.calMonth -= 1;
-    if(state.calMonth < 0){ state.calMonth = 11; state.calYear -= 1; }
-    renderCalendar(); renderScheduleList();
-  };
-  $("#calNext").onclick = () => {
-    state.calMonth += 1;
-    if(state.calMonth > 11){ state.calMonth = 0; state.calYear += 1; }
-    renderCalendar(); renderScheduleList();
-  };
-  $("#calToday").onclick = () => {
-    const n = new Date();
-    state.calYear = n.getFullYear();
-    state.calMonth = n.getMonth();
-    state.selectedDate = todayYMD();
-    renderCalendar(); renderScheduleList();
-  };
-
-  $$(".cal__day", calRoot).forEach(el => {
-    el.addEventListener("click", () => {
-      state.selectedDate = el.dataset.date;
-      renderScheduleList();
-    });
+  // prev/next/today（monthだけ有効）
+  $("#calPrev")?.addEventListener("click", ()=>{
+    if(state.scheduleView !== "month") return;
+    const c = new Date(state.scheduleCursor);
+    c.setMonth(c.getMonth()-1);
+    state.scheduleCursor = c;
+    renderCalendar();
   });
-}
-
-function renderScheduleList(){
-  const listRoot = $("#schedList");
-  if(!listRoot) return;
-
-  const items = scheduleItems();
-  const selected = state.selectedDate;
-
-  const todays = items.filter(it => it.date === selected);
-  let show = [];
-  if(todays.length){
-    show = todays;
-  }else{
-    const y = state.calYear, m = state.calMonth;
-    show = items.filter(it => {
-      const d = new Date(it.date+"T00:00:00");
-      return d.getFullYear() === y && d.getMonth() === m;
-    });
-    if(show.length === 0) show = items.slice(0, 10);
-  }
-
-  if(show.length === 0){
-    listRoot.innerHTML = `
-      <div class="empty">
-        <div class="empty__icon">📅</div>
-        <div class="empty__title">予定がありません</div>
-        <div class="empty__text">この月の予定がまだ登録されていません。</div>
-      </div>
-    `;
-    return;
-  }
-
-  listRoot.innerHTML = show.map(it => `
-    <div class="sitem">
-      <div class="sitem__left">
-        <div class="sitem__title">${escapeHtml(it.title)}</div>
-        <div class="sitem__meta">${formatDateJP(it.date)} ${escapeHtml(it.time || "")}</div>
-        <div class="sitem__desc">${escapeHtml(it.desc || "")}</div>
-      </div>
-      <div class="sitem__tag">
-        <span class="sitem__dot" data-tone="${escapeAttr(it.tone)}"></span>
-        <span>${escapeHtml(it.label || "予定")}</span>
-      </div>
-    </div>
-  `).join("");
-}
-
-function renderScheduleUI(){
-  renderLegend();
-  renderCalendar();
-  renderScheduleList();
+  $("#calNext")?.addEventListener("click", ()=>{
+    if(state.scheduleView !== "month") return;
+    const c = new Date(state.scheduleCursor);
+    c.setMonth(c.getMonth()+1);
+    state.scheduleCursor = c;
+    renderCalendar();
+  });
+  $("#calToday")?.addEventListener("click", ()=>{
+    state.scheduleCursor = new Date();
+    state.scheduleCursor.setHours(0,0,0,0);
+    renderCalendar();
+  });
 }
 
 // ===== Admin: list / editor =====
@@ -933,7 +964,6 @@ function bind(){
     upcoming.checked = (localStorage.getItem(LS_KEY_ONLY_UPCOMING) === "1");
     upcoming.addEventListener("change", () => {
       localStorage.setItem(LS_KEY_ONLY_UPCOMING, upcoming.checked ? "1" : "0");
-      renderScheduleUI();
     });
   }
 
@@ -1033,6 +1063,8 @@ function init(){
   renderContact();
   renderAdmin();
   bind();
-}
 
+// ✅ 起動時に表示ページを強制（これで他ページに残る系が消える）
+  setActivePage("home");
+}
 init();
