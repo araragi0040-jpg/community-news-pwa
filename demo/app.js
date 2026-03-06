@@ -517,7 +517,7 @@ function setActivePage(key){
   // per page refresh
   if(key === "saved") renderSaved();
   if(key === "contact") renderContact();
-  if(key === "schedule") requestAnimationFrame(renderScheduleUI);
+  if(key === "schedule") renderCalendar();
   if(key === "admin") renderAdmin();
 }
 
