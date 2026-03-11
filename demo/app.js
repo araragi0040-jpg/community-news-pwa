@@ -1240,12 +1240,13 @@ function bind(){
   // helper: 要素があればイベント登録
   const on = (sel, ev, fn, root=document) => {
     const el = root.querySelector(sel);
-    on("#eventModalScrim", "click", closeEventModal);
-    on("#eventModalClose", "click", closeEventModal);
     if(!el) return null;
     el.addEventListener(ev, fn);
     return el;
   };
+
+    on("#eventModalScrim", "click", closeEventModal);
+    on("#eventModalClose", "click", closeEventModal);
 
   // search
   on("#q", "input", (e) => {
