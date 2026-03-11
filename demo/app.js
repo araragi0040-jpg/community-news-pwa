@@ -888,18 +888,6 @@ function renderCalendar(){
     });
   });
 
-  // 表示切替
-  $$(".seg__btn", calRoot).forEach(btn => {
-    btn.addEventListener("click", () => {
-      state.scheduleView = btn.dataset.view;
-      if(state.scheduleView === "2w"){
-        state.scheduleCursor = new Date();
-        state.scheduleCursor.setHours(0,0,0,0);
-      }
-      renderCalendar();
-    });
-  });
-
   // イベント詳細ポップアップ
   $$(".cal__ev, .cal2w__event", calRoot).forEach(btn => {
     btn.addEventListener("click", (e) => {
@@ -1244,7 +1232,8 @@ function bind(){
     el.addEventListener(ev, fn);
     return el;
   };
-
+   
+ // event modal
     on("#eventModalScrim", "click", closeEventModal);
     on("#eventModalClose", "click", closeEventModal);
 
