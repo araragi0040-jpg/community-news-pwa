@@ -185,12 +185,40 @@ function allArticles(){
 
   return Array.from(map.values());
 }
-
+/**
 function formatDateJP(iso){
   if(!iso) return "-";
   const [y,m,d] = iso.split("-").map(Number);
   return `${y}/${String(m).padStart(2,"0")}/${String(d).padStart(2,"0")}`;
 }
+**/
+function formatDateJP(value){
+  if(!value) return "-";
+
+  // すでに YYYY-MM-DD 形式
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [y, m, d] = value.split("-");
+    return `${y}/${m}/${d}`;
+  }
+
+  // YYYY/MM/DD 形式
+  if (typeof value === "string" && /^\d{4}\/\d{1,2}\/\d{1,2}$/.test(value)) {
+    const [y, m, d] = value.split("/");
+    return `${y}/${String(m).padStart(2,"0")}/${String(d).padStart(2,"0")}`;
+  }
+
+  // Dateとして解釈して整形
+  const dt = new Date(value);
+  if (!isNaN(dt.getTime())) {
+    const y = dt.getFullYear();
+    const m = String(dt.getMonth() + 1).padStart(2, "0");
+    const d = String(dt.getDate()).padStart(2, "0");
+    return `${y}/${m}/${d}`;
+  }
+
+  return String(value);
+}
+
 function ymd(d){
   const y = d.getFullYear();
   const m = String(d.getMonth()+1).padStart(2,"0");
@@ -604,10 +632,42 @@ function setActivePage(key){
 
 // ===== Schedule =====
 function scheduleItems(){
-  const list = [...SCHEDULE]
-    .filter(it => (it.label || "") === "イベント")
-    .sort((a,b)=> (a.date < b.date ? -1 : 1));
-  return list;
+  return allArticles()
+    .filter(a => a.channel === "event")
+    .map(a => ({
+      id: a.id,
+      title: a.title || "",
+      date: normalizeDateForCalendar(a.date),
+      time: "",
+      tone: a.tone || "good",
+      label: a.badge || "イベント",
+      desc: a.desc || ""
+    }))
+    .filter(it => !!it.date)
+    .sort((a,b) => (a.date < b.date ? -1 : 1));
+}
+
+function normalizeDateForCalendar(value){
+  if(!value) return "";
+
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return value;
+  }
+
+  if (typeof value === "string" && /^\d{4}\/\d{1,2}\/\d{1,2}$/.test(value)) {
+    const [y, m, d] = value.split("/");
+    return `${y}-${String(m).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+  }
+
+  const dt = new Date(value);
+  if (!isNaN(dt.getTime())) {
+    const y = dt.getFullYear();
+    const m = String(dt.getMonth() + 1).padStart(2, "0");
+    const d = String(dt.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+
+  return "";
 }
 
 function renderLegend(){
