@@ -1043,6 +1043,8 @@ svg{ width:22px; height:22px; fill: currentColor; }
 /* その日のイベント（1〜2件くらい見える想定） */
 .cal__ev{
   display:block;
+  width: 100%;
+  text-align: left;
   font-size: 11px;
   line-height: 1.25;
   color: var(--text);
@@ -1051,6 +1053,10 @@ svg{ width:22px; height:22px; fill: currentColor; }
   border-radius: 10px;
   padding: 6px 6px;
   margin-top: 6px;
+  cursor: pointer;
+}
+.cal__ev:hover{
+  background: rgba(176,125,79,.16);
 }
 .cal__evtitle{
   font-weight: 820;
