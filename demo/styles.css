@@ -195,7 +195,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
   box-shadow: 0 4px 12px rgba(0,0,0,.04);
   display: flex;
   flex-direction: column;
-  gap: 32px;   /* ← ここが記事間の余白 */
+  gap: 0px;   /* ← ここが記事間の余白 */
 }
 
 /* ===== Card Media (always shown) ===== */
@@ -248,7 +248,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
 
 /* 記事内の余白調整 */
 .card__content{
-  padding: 10px 12px;
+  padding: 4px 12px 8px;
   margin-top:0;
   height:40px;        /* 記事の白枠高さ */
   overflow:hidden;
