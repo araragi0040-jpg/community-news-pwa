@@ -232,15 +232,14 @@ svg{ width:22px; height:22px; fill: currentColor; }
 
 /* 本文表示制御（2行固定） */
 .card__desc{
-  font-size: 13px;
-  line-height: 1.4;
-  color: #6b5b4d;
-  margin: 0 0 4px;
+  font-size:13px;
+  line-height:1.4;
+  margin-top:4px;
 
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  display:-webkit-box;
+  -webkit-line-clamp:2;
+  -webkit-box-orient:vertical;
+  overflow:hidden;
 }
 
 /* 投稿者表示制御（1行左寄せ） */
