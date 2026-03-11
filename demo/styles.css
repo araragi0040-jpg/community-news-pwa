@@ -219,10 +219,10 @@ svg{ width:22px; height:22px; fill: currentColor; }
 
 /* タイトル表示制御（1行固定） */
 .card__title{
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
   line-height: 1.4;
-  margin: 0 0 6px;
+  margin: 2 0 4px;
 
   display: -webkit-box;
   -webkit-line-clamp: 1;
@@ -232,10 +232,10 @@ svg{ width:22px; height:22px; fill: currentColor; }
 
 /* 本文表示制御（2行固定） */
 .card__desc{
-  font-size: 14px;
-  line-height: 1.5;
+  font-size: 13px;
+  line-height: 1.4;
   color: #6b5b4d;
-  margin: 0 0 8px;
+  margin: 0 0 4px;
 
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -252,7 +252,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
 
 /* 記事内の余白調整 */
 .card__content{
-  padding: 12px 14px;
+  padding: 10px 12px;
 }
 
 /* 画像が無い記事用のテンプレ（ダミー） */
