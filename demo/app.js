@@ -1139,10 +1139,6 @@ function importJsonFile(file){
 
 // ===== Bindings =====
 function bind(){
-
-   on("#eventModalScrim", "click", closeEventModal);
-   on("#eventModalClose", "click", closeEventModal);
-   
   // helper: 要素があればイベント登録
   const on = (sel, ev, fn, root=document) => {
     const el = root.querySelector(sel);
@@ -1151,11 +1147,15 @@ function bind(){
     return el;
   };
 
+  on("#eventModalScrim", "click", closeEventModal);
+  on("#eventModalClose", "click", closeEventModal);
+
   // search
   on("#q", "input", (e) => {
     state.query = e.target.value;
     renderFeed();
   });
+
   on("#btnClear", "click", () => {
     const q = $("#q");
     if(q) q.value = "";
@@ -1163,7 +1163,7 @@ function bind(){
     renderFeed();
   });
 
-  // nav（イベント委譲にすると最強：崩れても効く）
+  // nav
   const navRoot = document.querySelector(".bottomnav");
   if(navRoot){
     navRoot.addEventListener("click", (e) => {
@@ -1190,7 +1190,6 @@ function bind(){
     renderSaveBtn();
   });
 
-  // schedule toggle（存在する時だけ）
   const upcoming = $("#onlyUpcoming");
   if(upcoming){
     upcoming.checked = (localStorage.getItem(LS_KEY_ONLY_UPCOMING) === "1");
@@ -1199,7 +1198,6 @@ function bind(){
     });
   }
 
-  // admin: new/save/delete/import（存在する時だけ）
   on("#btnNewPost", "click", () => {
     clearEditor();
     const pDate = $("#pDate");
@@ -1224,13 +1222,11 @@ function bind(){
     el.addEventListener("change", syncAdminButtons);
   });
 
-  // export topbar button
   on("#btnExport", "click", () => {
     const obj = buildExportObject();
     downloadJson(obj, `community-news-export-${Date.now()}.json`);
   });
 
-  // contact form
   const contactForm = document.getElementById("contactForm");
   if(contactForm){
     contactForm.addEventListener("submit", (e) => {
@@ -1240,7 +1236,6 @@ function bind(){
     });
   }
 
-  // import（存在する時だけ）
   on("#btnImport", "click", () => {
     const f = $("#fileImport");
     if(f) f.click();
@@ -1272,7 +1267,6 @@ function bind(){
     });
   }
 
-  // help
   on("#btnHelp", "click", () => {
     alert(
 `Adminタブで記事を投稿・編集できます（localStorage保存）。
