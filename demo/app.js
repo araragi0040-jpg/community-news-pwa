@@ -879,6 +879,15 @@ function renderCalendar(){
     ${gridHtml}
   `;
 
+     $$(".cal__ev", calRoot).forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const dateStr = btn.dataset.eventDate;
+      const events = map.get(dateStr) || [];
+      openEventModal(dateStr, events);
+    });
+  });
+
   // 表示切替
   $$(".seg__btn", calRoot).forEach(btn => {
     btn.addEventListener("click", () => {
@@ -1231,13 +1240,12 @@ function bind(){
   // helper: 要素があればイベント登録
   const on = (sel, ev, fn, root=document) => {
     const el = root.querySelector(sel);
+    on("#eventModalScrim", "click", closeEventModal);
+    on("#eventModalClose", "click", closeEventModal);
     if(!el) return null;
     el.addEventListener(ev, fn);
     return el;
   };
-
-  on("#eventModalScrim", "click", closeEventModal);
-  on("#eventModalClose", "click", closeEventModal);
 
   // search
   on("#q", "input", (e) => {
