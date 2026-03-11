@@ -1392,7 +1392,6 @@ function bind(){
 
 // ===== Init =====
 async function init(){
-  // 先に最低限の表示を出す
   bind();
   setActivePage("home");
 
