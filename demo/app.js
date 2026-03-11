@@ -1262,6 +1262,23 @@ function bind(){
     });
   }
 
+   const schedViewSeg = $("#schedViewSeg");
+if (schedViewSeg) {
+  schedViewSeg.addEventListener("click", (e) => {
+    const btn = e.target.closest(".seg__btn");
+    if (!btn) return;
+
+    state.scheduleView = btn.dataset.view;
+
+    if (state.scheduleView === "2w") {
+      state.scheduleCursor = new Date();
+      state.scheduleCursor.setHours(0,0,0,0);
+    }
+
+    renderCalendar();
+  });
+}
+
   on("#btnNewPost", "click", () => {
     clearEditor();
     const pDate = $("#pDate");
