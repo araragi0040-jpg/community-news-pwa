@@ -1398,15 +1398,26 @@ async function init(){
 
   if($("#pDate")) $("#pDate").value = todayYMD();
 
-  try {
-    cloudPosts = await fetchPostsFromApi();
-  } catch (err) {
-    console.error("Failed to load posts from GAS:", err);
-  }
-
+  // まずは即表示
   try { renderChips(); } catch (e) { console.error("renderChips error:", e); }
   try { renderFeed(); } catch (e) { console.error("renderFeed error:", e); }
   try { renderContact(); } catch (e) { console.error("renderContact error:", e); }
   try { renderAdmin(); } catch (e) { console.error("renderAdmin error:", e); }
+
+  // クラウドは裏で取得
+  fetchPostsFromApi()
+    .then(posts => {
+      cloudPosts = posts;
+      renderFeed();
+      renderSaved();
+      renderAdmin();
+
+      if ($(`.page[data-page="schedule"]`)?.classList.contains("page--active")) {
+        renderCalendar();
+      }
+    })
+    .catch(err => {
+      console.error("Failed to load posts from GAS:", err);
+    });
 }
 init();
