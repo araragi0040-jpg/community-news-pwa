@@ -1392,18 +1392,17 @@ function bind(){
 
 // ===== Init =====
 async function init(){
-  bind();
-  setActivePage("home");
-
   if($("#pDate")) $("#pDate").value = todayYMD();
 
-  // まずは即表示
   try { renderChips(); } catch (e) { console.error("renderChips error:", e); }
   try { renderFeed(); } catch (e) { console.error("renderFeed error:", e); }
   try { renderContact(); } catch (e) { console.error("renderContact error:", e); }
   try { renderAdmin(); } catch (e) { console.error("renderAdmin error:", e); }
 
-  // クラウドは裏で取得
+  try { bind(); } catch (e) { console.error("bind error:", e); }
+
+  setActivePage("home");
+
   fetchPostsFromApi()
     .then(posts => {
       cloudPosts = posts;
