@@ -788,7 +788,7 @@ function renderCalendar(){
   const m = cursor.getMonth();
 
   const map = eventsByDate(); // key: YYYY-MM-DD -> items[]
-  const dows = ["月","火","水","木","金","土","日"];
+  const dows = ["日","月","火","水","木","金","土"];
 
   // 表示日配列
   const days = buildRangeDays(state.scheduleView, cursor);
