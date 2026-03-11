@@ -304,22 +304,7 @@
           </div>
         </div>
 
-<!-- Event Modal -->
-<div class="eventmodal" id="eventModal" aria-hidden="true">
-  <div class="eventmodal__scrim" id="eventModalScrim"></div>
 
-  <div class="eventmodal__panel" role="dialog" aria-modal="true" aria-label="Event detail">
-    <div class="eventmodal__head">
-      <div class="eventmodal__title" id="eventModalTitle">イベント詳細</div>
-      <button class="iconbtn" id="eventModalClose" aria-label="Close" type="button">
-        <svg viewBox="0 0 24 24">
-          <path d="M18.3 5.71 12 12l6.3 6.29-1.41 1.42L12 13.41l-6.89 6.3-1.41-1.42L10.59 12 3.7 5.71 5.11 4.29 12 10.59l6.89-6.3z"/>
-        </svg>
-      </button>
-    </div>
-    <div class="eventmodal__body" id="eventModalBody"></div>
-  </div>
-</div>
 
         <div class="article">
           <h2 class="article__title" id="aTitle">-</h2>
@@ -345,17 +330,26 @@
 
   </div>
 
+  <!-- Event Modal -->
+<div class="eventmodal" id="eventModal" aria-hidden="true">
+  <div class="eventmodal__scrim" id="eventModalScrim"></div>
+
+  <div class="eventmodal__panel" role="dialog" aria-modal="true" aria-label="Event detail">
+    <div class="eventmodal__head">
+      <div class="eventmodal__title" id="eventModalTitle">イベント詳細</div>
+      <button class="iconbtn" id="eventModalClose" aria-label="Close" type="button">
+        <svg viewBox="0 0 24 24">
+          <path d="M18.3 5.71 12 12l6.3 6.29-1.41 1.42L12 13.41l-6.89 6.3-1.41-1.42L10.59 12 3.7 5.71 5.11 4.29 12 10.59l6.89-6.3z"/>
+        </svg>
+      </button>
+    </div>
+    <div class="eventmodal__body" id="eventModalBody"></div>
+  </div>
+</div>
+
   <input id="fileImport" type="file" accept="application/json" style="display:none;" />
 
   <script src="config.js"></script>
   <script src="./app.js?v=24"></script>
-  <!-- serviceWorker 一旦停止（キャッシュ切り分け） -->
-<!--
-  <script>
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("./sw.js");
-    }
-  </script>
-  -->
 </body>
 </html>
