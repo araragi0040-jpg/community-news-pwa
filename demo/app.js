@@ -263,6 +263,48 @@ async function fetchPostsFromApi() {
     return [];
   }
 
+   async function savePostToApi(post) {
+  const base = window.APP_CONFIG?.GAS_API_URL;
+  if (!base) {
+    throw new Error("GAS_API_URL is not set");
+  }
+
+  const res = await fetch(base, {
+    method: "POST",
+    headers: {
+      "Content-Type": "text/plain;charset=utf-8"
+    },
+    body: JSON.stringify({
+      action: "savePost",
+      post: {
+        id: post.id || "",
+        date: post.date || "",
+        channel: post.channel || "announce",
+        tone: post.tone || "accent",
+        badge: post.badge || "",
+        title: post.title || "",
+        desc: post.desc || "",
+        tags: post.tags || [],
+        summary: post.summary || [],
+        body: post.body || [],
+        ctaText: post.cta?.text || "",
+        ctaUrl: post.cta?.url || "",
+        images: post.media?.images || [],
+        video: post.media?.video || "",
+        status: "public"
+      }
+    })
+  });
+
+  const data = await res.json();
+
+  if (!data.ok) {
+    throw new Error(data.message || "Failed to save post");
+  }
+
+  return data.post;
+}
+
   const url = `${base}?action=listPosts`;
   const res = await fetch(url);
   const data = await res.json();
