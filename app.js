@@ -149,6 +149,8 @@ let state = {
   editingId: null, // post id
 };
 
+let cloudPosts = [];
+
 // ===== Helpers =====
 function safeJsonParse(s, fallback){
   try { return JSON.parse(s); } catch { return fallback; }
@@ -172,23 +174,51 @@ function savePosts(posts){
 }
 
 function allArticles(){
-  // admin posts first, then base
-  const admin = loadPosts();
-  const merged = [...admin, ...BASE_ARTICLES];
+  const localAdmin = loadPosts();   // いままで通り localStorage の記事
+  const merged = [...localAdmin, ...cloudPosts, ...BASE_ARTICLES];
 
-  // ensure unique by id (admin overrides base if same id)
+  // 同じidがあれば後勝ちで上書き
   const map = new Map();
   for(const a of merged){
     map.set(a.id, a);
   }
+
   return Array.from(map.values());
 }
-
+/**
 function formatDateJP(iso){
   if(!iso) return "-";
   const [y,m,d] = iso.split("-").map(Number);
   return `${y}/${String(m).padStart(2,"0")}/${String(d).padStart(2,"0")}`;
 }
+**/
+function formatDateJP(value){
+  if(!value) return "-";
+
+  // すでに YYYY-MM-DD 形式
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [y, m, d] = value.split("-");
+    return `${y}/${m}/${d}`;
+  }
+
+  // YYYY/MM/DD 形式
+  if (typeof value === "string" && /^\d{4}\/\d{1,2}\/\d{1,2}$/.test(value)) {
+    const [y, m, d] = value.split("/");
+    return `${y}/${String(m).padStart(2,"0")}/${String(d).padStart(2,"0")}`;
+  }
+
+  // Dateとして解釈して整形
+  const dt = new Date(value);
+  if (!isNaN(dt.getTime())) {
+    const y = dt.getFullYear();
+    const m = String(dt.getMonth() + 1).padStart(2, "0");
+    const d = String(dt.getDate()).padStart(2, "0");
+    return `${y}/${m}/${d}`;
+  }
+
+  return String(value);
+}
+
 function ymd(d){
   const y = d.getFullYear();
   const m = String(d.getMonth()+1).padStart(2,"0");
@@ -234,6 +264,85 @@ function normalizePost(input){
   a.media.images = Array.isArray(a.media.images) ? a.media.images : [];
   a.media.video = a.media.video || "";
   return a;
+}
+
+async function fetchPostsFromApi() {
+  const base = window.APP_CONFIG?.GAS_API_URL;
+  if (!base) {
+    console.warn("GAS_API_URL is not set");
+    return [];
+  }
+
+  const url = `${base}?action=listPosts`;
+  const res = await fetch(url);
+  const data = await res.json();
+
+  if (!data.ok) {
+    throw new Error(data.message || "Failed to fetch posts");
+  }
+
+  return (data.posts || []).map(post => ({
+    id: post.id,
+    channel: post.channel,
+    tone: post.tone,
+    badge: post.badge,
+    date: post.date,
+    title: post.title,
+    desc: post.desc,
+    tags: post.tags || [],
+    summary: post.summary || [],
+    body: post.body || [],
+    cta: post.ctaUrl ? {
+      text: post.ctaText || "開く",
+      url: post.ctaUrl
+    } : null,
+    media: {
+      images: post.images || [],
+      video: post.video || ""
+    }
+  }));
+}
+
+async function savePostToApi(post) {
+  const base = window.APP_CONFIG?.GAS_API_URL;
+  if (!base) {
+    throw new Error("GAS_API_URL is not set");
+  }
+
+  const res = await fetch(base, {
+    method: "POST",
+    headers: {
+      "Content-Type": "text/plain;charset=utf-8"
+    },
+    body: JSON.stringify({
+      action: "savePost",
+      post: {
+        id: post.id || "",
+        date: post.date || "",
+        channel: post.channel || "announce",
+        tone: post.tone || "accent",
+        badge: post.badge || "",
+        title: post.title || "",
+        desc: post.desc || "",
+        tags: post.tags || [],
+        summary: post.summary || [],
+        body: post.body || [],
+        ctaText: post.cta?.text || "",
+        ctaUrl: post.cta?.url || "",
+        images: post.media?.images || [],
+        video: post.media?.video || "",
+        status: "public"
+      }
+    })
+  });
+
+  const data = await res.json();
+
+  if (!data.ok) {
+    throw new Error(data.message || "Failed to save post");
+  }
+
+  return data.post;
 }
 
 // ===== Rendering: Chips =====
@@ -523,10 +632,42 @@ function setActivePage(key){
 
 // ===== Schedule =====
 function scheduleItems(){
-  const list = [...SCHEDULE]
-    .filter(it => (it.label || "") === "イベント")
-    .sort((a,b)=> (a.date < b.date ? -1 : 1));
-  return list;
+  return allArticles()
+    .filter(a => a.channel === "event")
+    .map(a => ({
+      id: a.id,
+      title: a.title || "",
+      date: normalizeDateForCalendar(a.date),
+      time: "",
+      tone: a.tone || "good",
+      label: a.badge || "イベント",
+      desc: a.desc || ""
+    }))
+    .filter(it => !!it.date)
+    .sort((a,b) => (a.date < b.date ? -1 : 1));
+}
+
+function normalizeDateForCalendar(value){
+  if(!value) return "";
+
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return value;
+  }
+
+  if (typeof value === "string" && /^\d{4}\/\d{1,2}\/\d{1,2}$/.test(value)) {
+    const [y, m, d] = value.split("/");
+    return `${y}-${String(m).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+  }
+
+  const dt = new Date(value);
+  if (!isNaN(dt.getTime())) {
+    const y = dt.getFullYear();
+    const m = String(dt.getMonth() + 1).padStart(2, "0");
+    const d = String(dt.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+
+  return "";
 }
 
 function renderLegend(){
@@ -601,6 +742,35 @@ function eventsByDate(){
   return map;
 }
 
+function openEventModal(dateStr, events){
+  const modal = $("#eventModal");
+  const title = $("#eventModalTitle");
+  const body = $("#eventModalBody");
+
+  if(!modal || !title || !body) return;
+
+  title.textContent = `${formatDateJP(dateStr)} のイベント`;
+
+  body.innerHTML = events.map(ev => `
+    <div class="eventdetail">
+      <div class="eventdetail__date">${formatDateJP(ev.date)}</div>
+      <div class="eventdetail__name">${escapeHtml(ev.title || "")}</div>
+      <div class="eventdetail__desc">${escapeHtml(ev.desc || "")}</div>
+      <div class="eventdetail__meta">${escapeHtml(ev.label || "イベント")}</div>
+    </div>
+  `).join("");
+
+  modal.classList.add("eventmodal--open");
+  modal.setAttribute("aria-hidden", "false");
+}
+
+function closeEventModal(){
+  const modal = $("#eventModal");
+  if(!modal) return;
+  modal.classList.remove("eventmodal--open");
+  modal.setAttribute("aria-hidden", "true");
+}
+
 function renderCalendar(){
   const calRoot = $("#cal");
   if(!calRoot) return;
@@ -618,7 +788,7 @@ function renderCalendar(){
   const m = cursor.getMonth();
 
   const map = eventsByDate(); // key: YYYY-MM-DD -> items[]
-  const dows = ["月","火","水","木","金","土","日"];
+  const dows = ["日","月","火","水","木","金","土"];
 
   // 表示日配列
   const days = buildRangeDays(state.scheduleView, cursor);
@@ -659,11 +829,11 @@ function renderCalendar(){
     const evs = (map.get(dateStr) || []).slice(0,2); // 多すぎると潰れるので2件まで
 
     const evHtml = evs.map(ev => `
-      <span class="cal__ev">
-        <span class="cal__evtitle">${escapeHtml(ev.title || "")}</span>
-        <span class="cal__evdesc">${escapeHtml(ev.desc || "")}</span>
-      </span>
-    `).join("");
+  <button class="cal__ev" type="button" data-event-date="${dateStr}">
+    <span class="cal__evtitle">${escapeHtml(ev.title || "")}</span>
+    <span class="cal__evdesc">${escapeHtml(ev.desc || "")}</span>
+  </button>
+`).join("");
 
     return `
       <div class="cal__cell${outCls}">
@@ -680,6 +850,15 @@ function renderCalendar(){
       ${cells}
     </div>
   `;
+
+   $$(".cal__ev", calRoot).forEach(btn => {
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const dateStr = btn.dataset.eventDate;
+    const events = map.get(dateStr) || [];
+    openEventModal(dateStr, events);
+  });
+});
 
   // prev/next/today（monthだけ有効）
   $("#calPrev")?.addEventListener("click", ()=>{
@@ -709,10 +888,14 @@ function adminArticles(){
 }
 
 function renderAdmin(){
-  const items = adminArticles();
-  $("#adminCount").textContent = `${items.length}件`;
-
+  const adminCount = $("#adminCount");
   const list = $("#adminItems");
+
+  if(!adminCount || !list) return;
+
+  const items = adminArticles();
+  adminCount.textContent = `${items.length}件`;
+
   if(items.length === 0){
     list.innerHTML = `
       <div class="empty">
@@ -740,7 +923,6 @@ function renderAdmin(){
     });
   }
 
-  // if currently editing, keep buttons enabled
   syncAdminButtons();
 }
 
@@ -784,9 +966,15 @@ function startEdit(id){
 }
 
 function syncAdminButtons(){
-  const has = !!state.editingId || ($("#pTitle")?.value?.trim()?.length > 0);
-  $("#btnSavePost").disabled = !has;
-  $("#btnDeletePost").disabled = !state.editingId;
+  const btnSave = $("#btnSavePost");
+  const btnDelete = $("#btnDeletePost");
+  const titleInput = $("#pTitle");
+
+  if(!btnSave || !btnDelete) return;
+
+  const has = !!state.editingId || ((titleInput?.value || "").trim().length > 0);
+  btnSave.disabled = !has;
+  btnDelete.disabled = !state.editingId;
 }
 
 function collectForm(){
@@ -830,29 +1018,77 @@ function collectForm(){
   return a;
 }
 
-function saveEditor(){
+async function saveEditor(){
   const a = collectForm();
   if(!a.title || !a.date){
     alert("タイトルと日付は必須です。");
     return;
   }
 
-  const posts = loadPosts();
-  const idx = posts.findIndex(x=>x.id===a.id);
-  if(idx >= 0) posts[idx] = a;
-  else posts.push(a);
+  try {
+    // ① GASに保存
+    const saved = await savePostToApi(a);
 
-  savePosts(posts);
+    // ② 返却データを画面用データに変換
+    const normalized = normalizePost({
+      id: saved.id,
+      channel: saved.channel,
+      tone: saved.tone,
+      badge: saved.badge,
+      date: saved.date,
+      title: saved.title,
+      desc: saved.desc,
+      tags: saved.tags || [],
+      summary: saved.summary || [],
+      body: saved.body || [],
+      cta: saved.ctaUrl ? {
+        text: saved.ctaText || "開く",
+        url: saved.ctaUrl
+      } : null,
+      media: {
+        images: saved.images || [],
+        video: saved.video || ""
+      }
+    });
 
-  // refresh UI
-  renderAdmin();
-  renderFeed();
+    // ③ cloudPosts を即更新（ここが即時反映ポイント）
+    const cidx = cloudPosts.findIndex(x => x.id === normalized.id);
+    if(cidx >= 0) cloudPosts[cidx] = normalized;
+    else cloudPosts.unshift(normalized);
 
-  // keep editing
-  state.editingId = a.id;
-  syncAdminButtons();
+    // ④ localStorage 側も一応合わせる
+    const posts = loadPosts();
+    const lidx = posts.findIndex(x => x.id === normalized.id);
+    if(lidx >= 0) posts[lidx] = normalized;
+    else posts.unshift(normalized);
+    savePosts(posts);
 
-  alert("保存しました。Homeに反映済みです。");
+    // ⑤ 先に画面更新
+    renderAdmin();
+    renderFeed();
+    renderSaved();
+
+    state.editingId = normalized.id;
+    syncAdminButtons();
+
+    alert("保存しました。");
+
+    // ⑥ 裏で再同期（待たない）
+    fetchPostsFromApi()
+      .then(posts => {
+        cloudPosts = posts;
+        renderFeed();
+        renderSaved();
+        renderAdmin();
+      })
+      .catch(err => {
+        console.warn("Cloud resync failed:", err);
+      });
+
+  } catch (err) {
+    console.error(err);
+    alert("保存に失敗しました。\n" + (err.message || err));
+  }
 }
 
 function deleteEditor(){
@@ -919,11 +1155,15 @@ function bind(){
     return el;
   };
 
+  on("#eventModalScrim", "click", closeEventModal);
+  on("#eventModalClose", "click", closeEventModal);
+
   // search
   on("#q", "input", (e) => {
     state.query = e.target.value;
     renderFeed();
   });
+
   on("#btnClear", "click", () => {
     const q = $("#q");
     if(q) q.value = "";
@@ -931,7 +1171,7 @@ function bind(){
     renderFeed();
   });
 
-  // nav（イベント委譲にすると最強：崩れても効く）
+  // nav
   const navRoot = document.querySelector(".bottomnav");
   if(navRoot){
     navRoot.addEventListener("click", (e) => {
@@ -958,7 +1198,6 @@ function bind(){
     renderSaveBtn();
   });
 
-  // schedule toggle（存在する時だけ）
   const upcoming = $("#onlyUpcoming");
   if(upcoming){
     upcoming.checked = (localStorage.getItem(LS_KEY_ONLY_UPCOMING) === "1");
@@ -967,7 +1206,6 @@ function bind(){
     });
   }
 
-  // admin: new/save/delete/import（存在する時だけ）
   on("#btnNewPost", "click", () => {
     clearEditor();
     const pDate = $("#pDate");
@@ -992,13 +1230,11 @@ function bind(){
     el.addEventListener("change", syncAdminButtons);
   });
 
-  // export topbar button
   on("#btnExport", "click", () => {
     const obj = buildExportObject();
     downloadJson(obj, `community-news-export-${Date.now()}.json`);
   });
 
-  // contact form
   const contactForm = document.getElementById("contactForm");
   if(contactForm){
     contactForm.addEventListener("submit", (e) => {
@@ -1008,7 +1244,6 @@ function bind(){
     });
   }
 
-  // import（存在する時だけ）
   on("#btnImport", "click", () => {
     const f = $("#fileImport");
     if(f) f.click();
@@ -1040,7 +1275,6 @@ function bind(){
     });
   }
 
-  // help
   on("#btnHelp", "click", () => {
     alert(
 `Adminタブで記事を投稿・編集できます（localStorage保存）。
@@ -1054,17 +1288,22 @@ function bind(){
 }
 
 // ===== Init =====
-function init(){
-  // ensure editor date default
+async function init(){
+  // 先に最低限の表示を出す
+  bind();
+  setActivePage("home");
+
   if($("#pDate")) $("#pDate").value = todayYMD();
 
-  renderChips();
-  renderFeed();
-  renderContact();
-  renderAdmin();
-  bind();
+  try {
+    cloudPosts = await fetchPostsFromApi();
+  } catch (err) {
+    console.error("Failed to load posts from GAS:", err);
+  }
 
-// ✅ 起動時に表示ページを強制（これで他ページに残る系が消える）
-  setActivePage("home");
+  try { renderChips(); } catch (e) { console.error("renderChips error:", e); }
+  try { renderFeed(); } catch (e) { console.error("renderFeed error:", e); }
+  try { renderContact(); } catch (e) { console.error("renderContact error:", e); }
+  try { renderAdmin(); } catch (e) { console.error("renderAdmin error:", e); }
 }
 init();
