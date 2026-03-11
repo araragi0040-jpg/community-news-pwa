@@ -936,6 +936,12 @@ if (schedViewSeg) {
     state.scheduleCursor.setHours(0,0,0,0);
     renderCalendar();
   });
+const schedViewSeg = $("#schedViewSeg");
+if (schedViewSeg) {
+  $$(".seg__btn", schedViewSeg).forEach(btn => {
+    btn.classList.toggle("seg__btn--active", btn.dataset.view === state.scheduleView);
+  });
+}   
 }
 
 // ===== Admin: list / editor =====
@@ -1238,6 +1244,33 @@ function bind(){
       setActivePage(key);
     });
   }
+
+  const schedViewSeg = $("#schedViewSeg");
+if (schedViewSeg) {
+  schedViewSeg.addEventListener("click", (e) => {
+    const btn = e.target.closest(".seg__btn");
+    if (!btn) return;
+
+    const view = btn.dataset.view;
+    if (!view) return;
+
+    state.scheduleView = view;
+
+    // 2週間表示に切り替えたときは今日基準にする
+    if (view === "2w") {
+      state.scheduleCursor = new Date();
+      state.scheduleCursor.setHours(0,0,0,0);
+    }
+
+    // 1カ月表示に戻したときも一応現在月基準に寄せる
+    if (view === "month" && !state.scheduleCursor) {
+      state.scheduleCursor = new Date();
+      state.scheduleCursor.setHours(0,0,0,0);
+    }
+
+    renderCalendar();
+  });
+} 
 
   // drawer controls
   on("#drawerScrim", "click", closeDrawer);
