@@ -150,24 +150,6 @@ let state = {
 };
 
 let cloudPosts = [];
-let state = {
-  channel: "all",
-  query: "",
-  drawerOpen: false,
-  activeArticleId: null,
-
-  // schedule
-  calYear: null,
-  calMonth: null,
-  selectedDate: null,
-  scheduleView: "month",
-  scheduleCursor: null,
-
-  // admin
-  editingId: null,
-};
-
-let cloudPosts = [];
 
 // ===== Helpers =====
 function safeJsonParse(s, fallback){
@@ -263,7 +245,37 @@ async function fetchPostsFromApi() {
     return [];
   }
 
-   async function savePostToApi(post) {
+  const url = `${base}?action=listPosts`;
+  const res = await fetch(url);
+  const data = await res.json();
+
+  if (!data.ok) {
+    throw new Error(data.message || "Failed to fetch posts");
+  }
+
+  return (data.posts || []).map(post => ({
+    id: post.id,
+    channel: post.channel,
+    tone: post.tone,
+    badge: post.badge,
+    date: post.date,
+    title: post.title,
+    desc: post.desc,
+    tags: post.tags || [],
+    summary: post.summary || [],
+    body: post.body || [],
+    cta: post.ctaUrl ? {
+      text: post.ctaText || "開く",
+      url: post.ctaUrl
+    } : null,
+    media: {
+      images: post.images || [],
+      video: post.video || ""
+    }
+  }));
+}
+
+async function savePostToApi(post) {
   const base = window.APP_CONFIG?.GAS_API_URL;
   if (!base) {
     throw new Error("GAS_API_URL is not set");
@@ -303,36 +315,6 @@ async function fetchPostsFromApi() {
   }
 
   return data.post;
-}
-
-  const url = `${base}?action=listPosts`;
-  const res = await fetch(url);
-  const data = await res.json();
-
-  if (!data.ok) {
-    throw new Error(data.message || "Failed to fetch posts");
-  }
-
-  return (data.posts || []).map(post => ({
-    id: post.id,
-    channel: post.channel,
-    tone: post.tone,
-    badge: post.badge,
-    date: post.date,
-    title: post.title,
-    desc: post.desc,
-    tags: post.tags || [],
-    summary: post.summary || [],
-    body: post.body || [],
-    cta: post.ctaUrl ? {
-      text: post.ctaText || "開く",
-      url: post.ctaUrl
-    } : null,
-    media: {
-      images: post.images || [],
-      video: post.video || ""
-    }
-  }));
 }
 
 // ===== Rendering: Chips =====
