@@ -790,10 +790,14 @@ function adminArticles(){
 }
 
 function renderAdmin(){
-  const items = adminArticles();
-  $("#adminCount").textContent = `${items.length}件`;
-
+  const adminCount = $("#adminCount");
   const list = $("#adminItems");
+
+  if(!adminCount || !list) return;
+
+  const items = adminArticles();
+  adminCount.textContent = `${items.length}件`;
+
   if(items.length === 0){
     list.innerHTML = `
       <div class="empty">
@@ -821,7 +825,6 @@ function renderAdmin(){
     });
   }
 
-  // if currently editing, keep buttons enabled
   syncAdminButtons();
 }
 
@@ -865,9 +868,15 @@ function startEdit(id){
 }
 
 function syncAdminButtons(){
-  const has = !!state.editingId || ($("#pTitle")?.value?.trim()?.length > 0);
-  $("#btnSavePost").disabled = !has;
-  $("#btnDeletePost").disabled = !state.editingId;
+  const btnSave = $("#btnSavePost");
+  const btnDelete = $("#btnDeletePost");
+  const titleInput = $("#pTitle");
+
+  if(!btnSave || !btnDelete) return;
+
+  const has = !!state.editingId || ((titleInput?.value || "").trim().length > 0);
+  btnSave.disabled = !has;
+  btnDelete.disabled = !state.editingId;
 }
 
 function collectForm(){
@@ -1176,6 +1185,10 @@ function bind(){
 
 // ===== Init =====
 async function init(){
+  // 先に最低限の表示を出す
+  bind();
+  setActivePage("home");
+
   if($("#pDate")) $("#pDate").value = todayYMD();
 
   try {
@@ -1184,13 +1197,9 @@ async function init(){
     console.error("Failed to load posts from GAS:", err);
   }
 
-  renderChips();
-  renderFeed();
-  renderContact();
-  renderAdmin();
-  bind();
-
-// ✅ 起動時に表示ページを強制（これで他ページに残る系が消える）
-  setActivePage("home");
+  try { renderChips(); } catch (e) { console.error("renderChips error:", e); }
+  try { renderFeed(); } catch (e) { console.error("renderFeed error:", e); }
+  try { renderContact(); } catch (e) { console.error("renderContact error:", e); }
+  try { renderAdmin(); } catch (e) { console.error("renderAdmin error:", e); }
 }
 init();
