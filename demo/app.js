@@ -149,6 +149,26 @@ let state = {
   editingId: null, // post id
 };
 
+let cloudPosts = [];
+let state = {
+  channel: "all",
+  query: "",
+  drawerOpen: false,
+  activeArticleId: null,
+
+  // schedule
+  calYear: null,
+  calMonth: null,
+  selectedDate: null,
+  scheduleView: "month",
+  scheduleCursor: null,
+
+  // admin
+  editingId: null,
+};
+
+let cloudPosts = [];
+
 // ===== Helpers =====
 function safeJsonParse(s, fallback){
   try { return JSON.parse(s); } catch { return fallback; }
@@ -172,15 +192,15 @@ function savePosts(posts){
 }
 
 function allArticles(){
-  // admin posts first, then base
-  const admin = loadPosts();
-  const merged = [...admin, ...BASE_ARTICLES];
+  const localAdmin = loadPosts();   // いままで通り localStorage の記事
+  const merged = [...localAdmin, ...cloudPosts, ...BASE_ARTICLES];
 
-  // ensure unique by id (admin overrides base if same id)
+  // 同じidがあれば後勝ちで上書き
   const map = new Map();
   for(const a of merged){
     map.set(a.id, a);
   }
+
   return Array.from(map.values());
 }
 
@@ -234,6 +254,43 @@ function normalizePost(input){
   a.media.images = Array.isArray(a.media.images) ? a.media.images : [];
   a.media.video = a.media.video || "";
   return a;
+}
+
+async function fetchPostsFromApi() {
+  const base = window.APP_CONFIG?.GAS_API_URL;
+  if (!base) {
+    console.warn("GAS_API_URL is not set");
+    return [];
+  }
+
+  const url = `${base}?action=listPosts`;
+  const res = await fetch(url);
+  const data = await res.json();
+
+  if (!data.ok) {
+    throw new Error(data.message || "Failed to fetch posts");
+  }
+
+  return (data.posts || []).map(post => ({
+    id: post.id,
+    channel: post.channel,
+    tone: post.tone,
+    badge: post.badge,
+    date: post.date,
+    title: post.title,
+    desc: post.desc,
+    tags: post.tags || [],
+    summary: post.summary || [],
+    body: post.body || [],
+    cta: post.ctaUrl ? {
+      text: post.ctaText || "開く",
+      url: post.ctaUrl
+    } : null,
+    media: {
+      images: post.images || [],
+      video: post.video || ""
+    }
+  }));
 }
 
 // ===== Rendering: Chips =====
@@ -1054,9 +1111,14 @@ function bind(){
 }
 
 // ===== Init =====
-function init(){
-  // ensure editor date default
+async function init(){
   if($("#pDate")) $("#pDate").value = todayYMD();
+
+  try {
+    cloudPosts = await fetchPostsFromApi();
+  } catch (err) {
+    console.error("Failed to load posts from GAS:", err);
+  }
 
   renderChips();
   renderFeed();
