@@ -1081,11 +1081,17 @@ async function saveEditor(){
     return;
   }
 
+  const btnSave = $("#btnSavePost");
+  const oldText = btnSave ? btnSave.textContent : "";
+
   try {
-    // ① GASに保存
+    if (btnSave) {
+      btnSave.disabled = true;
+      btnSave.textContent = "保存中...";
+    }
+
     const saved = await savePostToApi(a);
 
-    // ② 返却データを画面用データに変換
     const normalized = normalizePost({
       id: saved.id,
       channel: saved.channel,
@@ -1107,36 +1113,44 @@ async function saveEditor(){
       }
     });
 
-    // ③ cloudPosts を即更新（ここが即時反映ポイント）
+    // cloudPosts を即更新
     const cidx = cloudPosts.findIndex(x => x.id === normalized.id);
     if(cidx >= 0) cloudPosts[cidx] = normalized;
     else cloudPosts.unshift(normalized);
 
-    // ④ localStorage 側も一応合わせる
+    // localStorage も更新
     const posts = loadPosts();
     const lidx = posts.findIndex(x => x.id === normalized.id);
     if(lidx >= 0) posts[lidx] = normalized;
     else posts.unshift(normalized);
     savePosts(posts);
 
-    // ⑤ 先に画面更新
+    // 先に画面反映
     renderAdmin();
     renderFeed();
     renderSaved();
+    if ($(`.page[data-page="schedule"]`)?.classList.contains("page--active")) {
+      renderCalendar();
+    }
 
     state.editingId = normalized.id;
     syncAdminButtons();
 
-    alert("保存しました。");
+    if (btnSave) {
+      btnSave.textContent = "保存済み";
+    }
 
-    // ⑥ 裏で再同期（待たない）
-    fetchPostsFromApi()
-      .then(posts => {
-        cloudPosts = posts;
-        renderFeed();
-        renderSaved();
-        renderAdmin();
-      })
+    setTimeout(() => {
+      if (btnSave) btnSave.textContent = oldText || "保存";
+    }, 1000);
+
+    // 先に画面反映
+renderAdmin();
+renderFeed();
+renderSaved();
+if ($(`.page[data-page="schedule"]`)?.classList.contains("page--active")) {
+  renderCalendar();
+}
       .catch(err => {
         console.warn("Cloud resync failed:", err);
       });
@@ -1144,6 +1158,13 @@ async function saveEditor(){
   } catch (err) {
     console.error(err);
     alert("保存に失敗しました。\n" + (err.message || err));
+  } finally {
+    if (btnSave) {
+      btnSave.disabled = false;
+      if (btnSave.textContent === "保存中...") {
+        btnSave.textContent = oldText || "保存";
+      }
+    }
   }
 }
 
