@@ -249,9 +249,17 @@ svg{ width:22px; height:22px; fill: currentColor; }
 
 /* 記事内の余白調整 */
 .card__content{
-  padding: 8px 12px;
+  padding: 10px 12px;
   height:40px;        /* 記事の白枠高さ */
   overflow:hidden;
+}
+
+.card__content > *:first-child{
+  margin-top:0;
+}
+
+.card__content > *:last-child{
+  margin-bottom:0;
 }
 
 .card__top{
