@@ -1144,13 +1144,16 @@ async function saveEditor(){
       if (btnSave) btnSave.textContent = oldText || "保存";
     }, 1000);
 
+fetchPostsFromApi()
+  .then(posts => {
+    cloudPosts = posts;
     // 先に画面反映
 renderAdmin();
 renderFeed();
 renderSaved();
 if ($(`.page[data-page="schedule"]`)?.classList.contains("page--active")) {
   renderCalendar();
-}
+}})
       .catch(err => {
         console.warn("Cloud resync failed:", err);
       });
@@ -1392,17 +1395,18 @@ function bind(){
 
 // ===== Init =====
 async function init(){
+  bind();
+  setActivePage("home");
+
   if($("#pDate")) $("#pDate").value = todayYMD();
 
+  // まずは即表示
   try { renderChips(); } catch (e) { console.error("renderChips error:", e); }
   try { renderFeed(); } catch (e) { console.error("renderFeed error:", e); }
   try { renderContact(); } catch (e) { console.error("renderContact error:", e); }
   try { renderAdmin(); } catch (e) { console.error("renderAdmin error:", e); }
 
-  try { bind(); } catch (e) { console.error("bind error:", e); }
-
-  setActivePage("home");
-
+  // クラウドは裏で取得
   fetchPostsFromApi()
     .then(posts => {
       cloudPosts = posts;
