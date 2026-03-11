@@ -1029,10 +1029,7 @@ async function saveEditor(){
     // ① GASに保存
     const saved = await savePostToApi(a);
 
-    // ② ローカルにも一時反映（すぐ画面に出すため）
-    const posts = loadPosts();
-    const idx = posts.findIndex(x => x.id === saved.id);
-
+    // ② 返却データを画面用データに変換
     const normalized = normalizePost({
       id: saved.id,
       channel: saved.channel,
@@ -1054,28 +1051,39 @@ async function saveEditor(){
       }
     });
 
-    if(idx >= 0) posts[idx] = normalized;
-    else posts.push(normalized);
+    // ③ cloudPosts を即更新（ここが即時反映ポイント）
+    const cidx = cloudPosts.findIndex(x => x.id === normalized.id);
+    if(cidx >= 0) cloudPosts[cidx] = normalized;
+    else cloudPosts.unshift(normalized);
 
+    // ④ localStorage 側も一応合わせる
+    const posts = loadPosts();
+    const lidx = posts.findIndex(x => x.id === normalized.id);
+    if(lidx >= 0) posts[lidx] = normalized;
+    else posts.unshift(normalized);
     savePosts(posts);
 
-    // ③ クラウドデータも再取得して同期
-    try {
-      cloudPosts = await fetchPostsFromApi();
-    } catch (syncErr) {
-      console.warn("Cloud sync failed:", syncErr);
-    }
-
-    // ④ UI更新
+    // ⑤ 先に画面更新
     renderAdmin();
     renderFeed();
     renderSaved();
 
-    // ⑤ 編集状態更新
     state.editingId = normalized.id;
     syncAdminButtons();
 
-    alert("保存しました。スプレッドシートにも反映済みです。");
+    alert("保存しました。");
+
+    // ⑥ 裏で再同期（待たない）
+    fetchPostsFromApi()
+      .then(posts => {
+        cloudPosts = posts;
+        renderFeed();
+        renderSaved();
+        renderAdmin();
+      })
+      .catch(err => {
+        console.warn("Cloud resync failed:", err);
+      });
 
   } catch (err) {
     console.error(err);
