@@ -1144,16 +1144,17 @@ async function saveEditor(){
       if (btnSave) btnSave.textContent = oldText || "保存";
     }, 1000);
 
-fetchPostsFromApi()
-  .then(posts => {
-    cloudPosts = posts;
-    // 先に画面反映
-renderAdmin();
-renderFeed();
-renderSaved();
-if ($(`.page[data-page="schedule"]`)?.classList.contains("page--active")) {
-  renderCalendar();
-}})
+    // 裏で再同期
+    fetchPostsFromApi()
+      .then(posts => {
+        cloudPosts = posts;
+        renderAdmin();
+        renderFeed();
+        renderSaved();
+        if ($(`.page[data-page="schedule"]`)?.classList.contains("page--active")) {
+          renderCalendar();
+        }
+      })
       .catch(err => {
         console.warn("Cloud resync failed:", err);
       });
