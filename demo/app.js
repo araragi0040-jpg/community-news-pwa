@@ -743,9 +743,13 @@ function eventsByDate(){
 }
 
 function openEventModal(dateStr, events){
+  console.log("openEventModal fired", dateStr, events);
+
   const modal = $("#eventModal");
   const title = $("#eventModalTitle");
   const body = $("#eventModalBody");
+
+  console.log("modal parts", modal, title, body);
 
   if(!modal || !title || !body) return;
 
@@ -888,15 +892,17 @@ function renderCalendar(){
     });
   });
 
-  // イベント詳細ポップアップ
-  $$(".cal__ev, .cal2w__event", calRoot).forEach(btn => {
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const dateStr = btn.dataset.eventDate;
-      const events = map.get(dateStr) || [];
-      openEventModal(dateStr, events);
-    });
-  });
+calRoot.addEventListener("click", (e) => {
+  const btn = e.target.closest(".cal__ev, .cal2w__event");
+  if (!btn) return;
+
+  e.preventDefault();
+  e.stopPropagation();
+
+  const dateStr = btn.dataset.eventDate;
+  const events = map.get(dateStr) || [];
+  openEventModal(dateStr, events);
+});
 
   // 前後移動
   $("#calPrev")?.addEventListener("click", () => {
