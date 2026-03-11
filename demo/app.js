@@ -742,6 +742,35 @@ function eventsByDate(){
   return map;
 }
 
+function openEventModal(dateStr, events){
+  const modal = $("#eventModal");
+  const title = $("#eventModalTitle");
+  const body = $("#eventModalBody");
+
+  if(!modal || !title || !body) return;
+
+  title.textContent = `${formatDateJP(dateStr)} のイベント`;
+
+  body.innerHTML = events.map(ev => `
+    <div class="eventdetail">
+      <div class="eventdetail__date">${formatDateJP(ev.date)}</div>
+      <div class="eventdetail__name">${escapeHtml(ev.title || "")}</div>
+      <div class="eventdetail__desc">${escapeHtml(ev.desc || "")}</div>
+      <div class="eventdetail__meta">${escapeHtml(ev.label || "イベント")}</div>
+    </div>
+  `).join("");
+
+  modal.classList.add("eventmodal--open");
+  modal.setAttribute("aria-hidden", "false");
+}
+
+function closeEventModal(){
+  const modal = $("#eventModal");
+  if(!modal) return;
+  modal.classList.remove("eventmodal--open");
+  modal.setAttribute("aria-hidden", "true");
+}
+
 function renderCalendar(){
   const calRoot = $("#cal");
   if(!calRoot) return;
@@ -800,11 +829,11 @@ function renderCalendar(){
     const evs = (map.get(dateStr) || []).slice(0,2); // 多すぎると潰れるので2件まで
 
     const evHtml = evs.map(ev => `
-      <span class="cal__ev">
-        <span class="cal__evtitle">${escapeHtml(ev.title || "")}</span>
-        <span class="cal__evdesc">${escapeHtml(ev.desc || "")}</span>
-      </span>
-    `).join("");
+  <button class="cal__ev" type="button" data-event-date="${dateStr}">
+    <span class="cal__evtitle">${escapeHtml(ev.title || "")}</span>
+    <span class="cal__evdesc">${escapeHtml(ev.desc || "")}</span>
+  </button>
+`).join("");
 
     return `
       <div class="cal__cell${outCls}">
@@ -821,6 +850,15 @@ function renderCalendar(){
       ${cells}
     </div>
   `;
+
+   $$(".cal__ev", calRoot).forEach(btn => {
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const dateStr = btn.dataset.eventDate;
+    const events = map.get(dateStr) || [];
+    openEventModal(dateStr, events);
+  });
+});
 
   // prev/next/today（monthだけ有効）
   $("#calPrev")?.addEventListener("click", ()=>{
@@ -1101,6 +1139,10 @@ function importJsonFile(file){
 
 // ===== Bindings =====
 function bind(){
+
+   on("#eventModalScrim", "click", closeEventModal);
+   on("#eventModalClose", "click", closeEventModal);
+   
   // helper: 要素があればイベント登録
   const on = (sel, ev, fn, root=document) => {
     const el = root.querySelector(sel);
