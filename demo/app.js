@@ -899,7 +899,13 @@ function saveEditor(){
   if(idx >= 0) posts[idx] = a;
   else posts.push(a);
 
-  savePosts(posts);
+  fetch(GAS_API_URL, {
+  method: "POST",
+  body: JSON.stringify({
+    action: "savePost",
+    post: a
+  })
+})
 
   // refresh UI
   renderAdmin();
