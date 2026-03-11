@@ -775,7 +775,6 @@ function renderCalendar(){
   const calRoot = $("#cal");
   if(!calRoot) return;
 
-  // 初期化
   const now = new Date();
   if(!state.scheduleCursor){
     state.scheduleCursor = new Date(now);
@@ -784,98 +783,155 @@ function renderCalendar(){
   if(!state.scheduleView) state.scheduleView = "month";
 
   const cursor = new Date(state.scheduleCursor);
-  const y = cursor.getFullYear();
-  const m = cursor.getMonth();
+  const map = eventsByDate();
 
-  const map = eventsByDate(); // key: YYYY-MM-DD -> items[]
-  const dows = ["日","月","火","水","木","金","土"];
-
-  // 表示日配列
   const days = buildRangeDays(state.scheduleView, cursor);
 
-  // ヘッダ文言
   let title = "";
   if(state.scheduleView === "month"){
-    title = `${y}年 ${String(m+1).padStart(2,"0")}月`;
-  }else if(state.scheduleView === "2w"){
-    title = `直近2週間`;
-  }else{
-    title = `直近1週間`;
+    title = `${cursor.getFullYear()}年 ${String(cursor.getMonth()+1).padStart(2,"0")}月`;
+  } else {
+    const start = days[0];
+    const end = days[days.length - 1];
+    title = `${formatDateJP(ymd(start))} 〜 ${formatDateJP(ymd(end))}`;
   }
 
-  // view切替ボタン
   const head = `
-    <div class="cal__head">
-      <div class="cal__left">
-        <button class="cal__nav" id="calPrev" type="button" aria-label="前へ">‹</button>
-        <button class="cal__nav" id="calToday" type="button">今月</button>
-        <button class="cal__nav" id="calNext" type="button" aria-label="次へ">›</button>
-        <div class="cal__month" id="calMonth">${title}</div>
-      </div>
+  <div class="cal__head">
+    <div class="cal__left">
+      <button class="cal__nav" id="calPrev" type="button" aria-label="前へ">‹</button>
+      <button class="cal__nav" id="calToday" type="button">
+        ${state.scheduleView === "month" ? "今月" : "今週"}
+      </button>
+      <button class="cal__nav" id="calNext" type="button" aria-label="次へ">›</button>
+      <div class="cal__month" id="calMonth">${title}</div>
     </div>
-  `;
+  </div>
+`;
 
-  // 曜日行
-  const dowRow = dows.map(w => `<div class="cal__cell cal__dow">${w}</div>`).join("");
+  let gridHtml = "";
 
-  // セル
-  const cells = days.map(d=>{
-    const dateStr = ymd(d);
-    const inMonth = (d.getFullYear() === y && d.getMonth() === m);
+  if(state.scheduleView === "month"){
+    const dows = ["日","月","火","水","木","金","土"];
+    const currentYear = cursor.getFullYear();
+    const currentMonth = cursor.getMonth();
 
-    // 「来月分が下に薄く表示」は不要 → 月表示で当月以外は “数字を出さない”
-    const outCls = (state.scheduleView==="month" && !inMonth) ? " is-out" : "";
+    const dowRow = dows.map(w => `<div class="cal__cell cal__dow">${w}</div>`).join("");
 
-    const evs = (map.get(dateStr) || []).slice(0,2); // 多すぎると潰れるので2件まで
+    const cells = days.map(d => {
+      const dateStr = ymd(d);
+      const inMonth = (d.getFullYear() === currentYear && d.getMonth() === currentMonth);
+      const outCls = !inMonth ? " is-out" : "";
+      const evs = (map.get(dateStr) || []).slice(0, 2);
 
-    const evHtml = evs.map(ev => `
-  <button class="cal__ev" type="button" data-event-date="${dateStr}">
-    <span class="cal__evtitle">${escapeHtml(ev.title || "")}</span>
-    <span class="cal__evdesc">${escapeHtml(ev.desc || "")}</span>
-  </button>
-`).join("");
+      const evHtml = evs.map(ev => `
+        <button class="cal__ev" type="button" data-event-date="${dateStr}">
+          <span class="cal__evtitle">${escapeHtml(ev.title || "")}</span>
+          <span class="cal__evdesc">${escapeHtml(ev.desc || "")}</span>
+        </button>
+      `).join("");
 
-    return `
-      <div class="cal__cell${outCls}">
-        <div class="cal__daynum">${d.getDate()}</div>
-        ${evHtml}
+      return `
+        <div class="cal__cell${outCls}">
+          <div class="cal__daynum">${d.getDate()}</div>
+          ${evHtml}
+        </div>
+      `;
+    }).join("");
+
+    gridHtml = `
+      <div class="cal__grid" id="calGrid">
+        ${dowRow}
+        ${cells}
       </div>
     `;
-  }).join("");
+  } else {
+    gridHtml = `
+      <div class="cal2w" id="calGrid">
+        ${days.map(d => {
+          const dateStr = ymd(d);
+          const evs = map.get(dateStr) || [];
+          const dow = ["日","月","火","水","木","金","土"][d.getDay()];
+
+          return `
+            <div class="cal2w__day">
+              <div class="cal2w__head">
+                <div class="cal2w__date">${formatDateJP(dateStr)}</div>
+                <div class="cal2w__dow">${dow}</div>
+              </div>
+              <div class="cal2w__body">
+                ${evs.length ? evs.map(ev => `
+                  <button class="cal2w__event" type="button" data-event-date="${dateStr}">
+                    <div class="cal2w__eventTitle">${escapeHtml(ev.title || "")}</div>
+                    <div class="cal2w__eventDesc">${escapeHtml(ev.desc || "")}</div>
+                  </button>
+                `).join("") : `<div class="cal2w__empty">イベントなし</div>`}
+              </div>
+            </div>
+          `;
+        }).join("")}
+      </div>
+    `;
+  }
 
   calRoot.innerHTML = `
     ${head}
-    <div class="cal__grid" id="calGrid">
-      ${dowRow}
-      ${cells}
-    </div>
+    ${gridHtml}
   `;
 
-   $$(".cal__ev", calRoot).forEach(btn => {
-  btn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    const dateStr = btn.dataset.eventDate;
-    const events = map.get(dateStr) || [];
-    openEventModal(dateStr, events);
+  // 表示切替
+  $$(".seg__btn", calRoot).forEach(btn => {
+    btn.addEventListener("click", () => {
+      state.scheduleView = btn.dataset.view;
+      if(state.scheduleView === "2w"){
+        state.scheduleCursor = new Date();
+        state.scheduleCursor.setHours(0,0,0,0);
+      }
+      renderCalendar();
+    });
   });
-});
 
-  // prev/next/today（monthだけ有効）
-  $("#calPrev")?.addEventListener("click", ()=>{
-    if(state.scheduleView !== "month") return;
+  // イベント詳細ポップアップ
+  $$(".cal__ev, .cal2w__event", calRoot).forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const dateStr = btn.dataset.eventDate;
+      const events = map.get(dateStr) || [];
+      openEventModal(dateStr, events);
+    });
+  });
+
+  // 前後移動
+  $("#calPrev")?.addEventListener("click", () => {
     const c = new Date(state.scheduleCursor);
-    c.setMonth(c.getMonth()-1);
+    if(state.scheduleView === "month"){
+      c.setMonth(c.getMonth() - 1);
+    } else {
+      c.setDate(c.getDate() - 14);
+    }
     state.scheduleCursor = c;
     renderCalendar();
   });
-  $("#calNext")?.addEventListener("click", ()=>{
-    if(state.scheduleView !== "month") return;
+
+  $("#calNext")?.addEventListener("click", () => {
     const c = new Date(state.scheduleCursor);
-    c.setMonth(c.getMonth()+1);
+    if(state.scheduleView === "month"){
+      c.setMonth(c.getMonth() + 1);
+    } else {
+      c.setDate(c.getDate() + 14);
+    }
     state.scheduleCursor = c;
     renderCalendar();
   });
-  $("#calToday")?.addEventListener("click", ()=>{
+
+   const schedViewSeg = $("#schedViewSeg");
+if (schedViewSeg) {
+  $$(".seg__btn", schedViewSeg).forEach(btn => {
+    btn.classList.toggle("seg__btn--active", btn.dataset.view === state.scheduleView);
+  });
+}
+
+  $("#calToday")?.addEventListener("click", () => {
     state.scheduleCursor = new Date();
     state.scheduleCursor.setHours(0,0,0,0);
     renderCalendar();
@@ -1025,11 +1081,17 @@ async function saveEditor(){
     return;
   }
 
+  const btnSave = $("#btnSavePost");
+  const oldText = btnSave ? btnSave.textContent : "";
+
   try {
-    // ① GASに保存
+    if (btnSave) {
+      btnSave.disabled = true;
+      btnSave.textContent = "保存中...";
+    }
+
     const saved = await savePostToApi(a);
 
-    // ② 返却データを画面用データに変換
     const normalized = normalizePost({
       id: saved.id,
       channel: saved.channel,
@@ -1051,35 +1113,47 @@ async function saveEditor(){
       }
     });
 
-    // ③ cloudPosts を即更新（ここが即時反映ポイント）
+    // cloudPosts を即更新
     const cidx = cloudPosts.findIndex(x => x.id === normalized.id);
     if(cidx >= 0) cloudPosts[cidx] = normalized;
     else cloudPosts.unshift(normalized);
 
-    // ④ localStorage 側も一応合わせる
+    // localStorage も更新
     const posts = loadPosts();
     const lidx = posts.findIndex(x => x.id === normalized.id);
     if(lidx >= 0) posts[lidx] = normalized;
     else posts.unshift(normalized);
     savePosts(posts);
 
-    // ⑤ 先に画面更新
+    // 先に画面反映
     renderAdmin();
     renderFeed();
     renderSaved();
+    if ($(`.page[data-page="schedule"]`)?.classList.contains("page--active")) {
+      renderCalendar();
+    }
 
     state.editingId = normalized.id;
     syncAdminButtons();
 
-    alert("保存しました。");
+    if (btnSave) {
+      btnSave.textContent = "保存済み";
+    }
 
-    // ⑥ 裏で再同期（待たない）
+    setTimeout(() => {
+      if (btnSave) btnSave.textContent = oldText || "保存";
+    }, 1000);
+
+    // 裏で再同期
     fetchPostsFromApi()
       .then(posts => {
         cloudPosts = posts;
+        renderAdmin();
         renderFeed();
         renderSaved();
-        renderAdmin();
+        if ($(`.page[data-page="schedule"]`)?.classList.contains("page--active")) {
+          renderCalendar();
+        }
       })
       .catch(err => {
         console.warn("Cloud resync failed:", err);
@@ -1088,6 +1162,13 @@ async function saveEditor(){
   } catch (err) {
     console.error(err);
     alert("保存に失敗しました。\n" + (err.message || err));
+  } finally {
+    if (btnSave) {
+      btnSave.disabled = false;
+      if (btnSave.textContent === "保存中...") {
+        btnSave.textContent = oldText || "保存";
+      }
+    }
   }
 }
 
@@ -1180,6 +1261,32 @@ function bind(){
       const key = btn.dataset.nav;
       if(!key) return;
       setActivePage(key);
+    });
+  }
+
+  // schedule view switch
+  const schedViewSeg = $("#schedViewSeg");
+  if (schedViewSeg) {
+    schedViewSeg.addEventListener("click", (e) => {
+      const btn = e.target.closest(".seg__btn");
+      if (!btn) return;
+
+      const view = btn.dataset.view;
+      if (!view) return;
+
+      state.scheduleView = view;
+
+      if (view === "2w") {
+        state.scheduleCursor = new Date();
+        state.scheduleCursor.setHours(0,0,0,0);
+      }
+
+      if (view === "month" && !state.scheduleCursor) {
+        state.scheduleCursor = new Date();
+        state.scheduleCursor.setHours(0,0,0,0);
+      }
+
+      renderCalendar();
     });
   }
 
@@ -1289,21 +1396,31 @@ function bind(){
 
 // ===== Init =====
 async function init(){
-  // 先に最低限の表示を出す
   bind();
   setActivePage("home");
 
   if($("#pDate")) $("#pDate").value = todayYMD();
 
-  try {
-    cloudPosts = await fetchPostsFromApi();
-  } catch (err) {
-    console.error("Failed to load posts from GAS:", err);
-  }
-
+  // まずは即表示
   try { renderChips(); } catch (e) { console.error("renderChips error:", e); }
   try { renderFeed(); } catch (e) { console.error("renderFeed error:", e); }
   try { renderContact(); } catch (e) { console.error("renderContact error:", e); }
   try { renderAdmin(); } catch (e) { console.error("renderAdmin error:", e); }
+
+  // クラウドは裏で取得
+  fetchPostsFromApi()
+    .then(posts => {
+      cloudPosts = posts;
+      renderFeed();
+      renderSaved();
+      renderAdmin();
+
+      if ($(`.page[data-page="schedule"]`)?.classList.contains("page--active")) {
+        renderCalendar();
+      }
+    })
+    .catch(err => {
+      console.error("Failed to load posts from GAS:", err);
+    });
 }
 init();
