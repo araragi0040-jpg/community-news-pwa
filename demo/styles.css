@@ -1156,3 +1156,80 @@ svg{ width:22px; height:22px; fill: currentColor; }
   font-size: 12px;
   color: var(--muted);
 }
+
+/* 2週間表示の内容 */
+.cal2w{
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.cal2w__day{
+  border: 1px solid rgba(176,125,79,.18);
+  border-radius: 16px;
+  background: rgba(255,255,255,.78);
+  overflow: hidden;
+}
+
+.cal2w__head{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:8px;
+  padding:10px 12px;
+  border-bottom:1px solid rgba(176,125,79,.14);
+  background: rgba(255,255,255,.9);
+}
+
+.cal2w__date{
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text-strong);
+}
+
+.cal2w__dow{
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.cal2w__body{
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.cal2w__event{
+  width: 100%;
+  text-align: left;
+  border: 1px solid rgba(176,125,79,.18);
+  border-radius: 12px;
+  background: rgba(176,125,79,.08);
+  padding: 10px;
+  cursor: pointer;
+}
+
+.cal2w__eventTitle{
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text-strong);
+  line-height: 1.4;
+  margin-bottom: 4px;
+}
+
+.cal2w__eventDesc{
+  font-size: 12px;
+  color: var(--text-soft);
+  line-height: 1.5;
+}
+
+.cal2w__empty{
+  font-size: 12px;
+  color: var(--muted);
+  padding: 8px 4px;
+}
+
+@media (max-width: 640px){
+  .cal2w{
+    grid-template-columns: 1fr;
+  }
+}
