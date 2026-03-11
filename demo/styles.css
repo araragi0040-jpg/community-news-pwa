@@ -998,15 +998,16 @@ svg{ width:22px; height:22px; fill: currentColor; }
 
 /* ===== Month grid (image-like) ===== */
 .cal__grid{
-  display:grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 0;                      /* 罫線で仕切るのでgap 0 */
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0;
   border: 1px solid rgba(176,125,79,.18);
   border-radius: 14px;
-  overflow:hidden;
+  overflow: hidden;
   background: rgba(255,255,255,.75);
 }
 .cal__cell{
+  min-width: 0;
   min-height: 110px;
   padding: 8px 8px 6px;
   border-right: 1px solid rgba(176,125,79,.12);
@@ -1042,9 +1043,9 @@ svg{ width:22px; height:22px; fill: currentColor; }
 
 /* その日のイベント（1〜2件くらい見える想定） */
 .cal__ev{
-  display:block;
+  display: block;
   width: 100%;
-  text-align: left;
+  min-width: 0;
   font-size: 11px;
   line-height: 1.25;
   color: var(--text);
@@ -1053,7 +1054,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
   border-radius: 10px;
   padding: 6px 6px;
   margin-top: 6px;
-  cursor: pointer;
+  text-align: left;
 }
 .cal__ev:hover{
   background: rgba(176,125,79,.16);
