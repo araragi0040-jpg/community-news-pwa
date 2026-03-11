@@ -797,19 +797,17 @@ function renderCalendar(){
   }
 
   const head = `
-    <div class="cal__head">
-      <div class="cal__left">
-        <button class="cal__nav" id="calPrev" type="button" aria-label="前へ">‹</button>
-        <button class="cal__nav" id="calToday" type="button">今週</button>
-        <button class="cal__nav" id="calNext" type="button" aria-label="次へ">›</button>
-        <div class="cal__month" id="calMonth">${title}</div>
-      </div>
-      <div class="seg" id="calViewSeg">
-        <button class="seg__btn ${state.scheduleView === "month" ? "seg__btn--active" : ""}" data-view="month" type="button">1カ月</button>
-        <button class="seg__btn ${state.scheduleView === "2w" ? "seg__btn--active" : ""}" data-view="2w" type="button">2週間</button>
-      </div>
+  <div class="cal__head">
+    <div class="cal__left">
+      <button class="cal__nav" id="calPrev" type="button" aria-label="前へ">‹</button>
+      <button class="cal__nav" id="calToday" type="button">
+        ${state.scheduleView === "month" ? "今月" : "今週"}
+      </button>
+      <button class="cal__nav" id="calNext" type="button" aria-label="次へ">›</button>
+      <div class="cal__month" id="calMonth">${title}</div>
     </div>
-  `;
+  </div>
+`;
 
   let gridHtml = "";
 
@@ -925,6 +923,13 @@ function renderCalendar(){
     state.scheduleCursor = c;
     renderCalendar();
   });
+
+   const schedViewSeg = $("#schedViewSeg");
+if (schedViewSeg) {
+  $$(".seg__btn", schedViewSeg).forEach(btn => {
+    btn.classList.toggle("seg__btn--active", btn.dataset.view === state.scheduleView);
+  });
+}
 
   $("#calToday")?.addEventListener("click", () => {
     state.scheduleCursor = new Date();
