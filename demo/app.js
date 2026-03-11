@@ -929,35 +929,69 @@ function collectForm(){
   return a;
 }
 
-function saveEditor(){
+async function saveEditor(){
   const a = collectForm();
   if(!a.title || !a.date){
     alert("タイトルと日付は必須です。");
     return;
   }
 
-  const posts = loadPosts();
-  const idx = posts.findIndex(x=>x.id===a.id);
-  if(idx >= 0) posts[idx] = a;
-  else posts.push(a);
+  try {
+    // ① GASに保存
+    const saved = await savePostToApi(a);
 
-  fetch(GAS_API_URL, {
-  method: "POST",
-  body: JSON.stringify({
-    action: "savePost",
-    post: a
-  })
-})
+    // ② ローカルにも一時反映（すぐ画面に出すため）
+    const posts = loadPosts();
+    const idx = posts.findIndex(x => x.id === saved.id);
 
-  // refresh UI
-  renderAdmin();
-  renderFeed();
+    const normalized = normalizePost({
+      id: saved.id,
+      channel: saved.channel,
+      tone: saved.tone,
+      badge: saved.badge,
+      date: saved.date,
+      title: saved.title,
+      desc: saved.desc,
+      tags: saved.tags || [],
+      summary: saved.summary || [],
+      body: saved.body || [],
+      cta: saved.ctaUrl ? {
+        text: saved.ctaText || "開く",
+        url: saved.ctaUrl
+      } : null,
+      media: {
+        images: saved.images || [],
+        video: saved.video || ""
+      }
+    });
 
-  // keep editing
-  state.editingId = a.id;
-  syncAdminButtons();
+    if(idx >= 0) posts[idx] = normalized;
+    else posts.push(normalized);
 
-  alert("保存しました。Homeに反映済みです。");
+    savePosts(posts);
+
+    // ③ クラウドデータも再取得して同期
+    try {
+      cloudPosts = await fetchPostsFromApi();
+    } catch (syncErr) {
+      console.warn("Cloud sync failed:", syncErr);
+    }
+
+    // ④ UI更新
+    renderAdmin();
+    renderFeed();
+    renderSaved();
+
+    // ⑤ 編集状態更新
+    state.editingId = normalized.id;
+    syncAdminButtons();
+
+    alert("保存しました。スプレッドシートにも反映済みです。");
+
+  } catch (err) {
+    console.error(err);
+    alert("保存に失敗しました。\n" + (err.message || err));
+  }
 }
 
 function deleteEditor(){
