@@ -788,7 +788,6 @@ function renderCalendar(){
 
   const cursor = new Date(state.scheduleCursor);
   const map = eventsByDate();
-
   const days = buildRangeDays(state.scheduleView, cursor);
 
   let title = "";
@@ -801,17 +800,17 @@ function renderCalendar(){
   }
 
   const head = `
-  <div class="cal__head">
-    <div class="cal__left">
-      <button class="cal__nav" id="calPrev" type="button" aria-label="前へ">‹</button>
-      <button class="cal__nav" id="calToday" type="button">
-        ${state.scheduleView === "month" ? "今月" : "今週"}
-      </button>
-      <button class="cal__nav" id="calNext" type="button" aria-label="次へ">›</button>
-      <div class="cal__month" id="calMonth">${title}</div>
+    <div class="cal__head">
+      <div class="cal__left">
+        <button class="cal__nav" id="calPrev" type="button" aria-label="前へ">‹</button>
+        <button class="cal__nav" id="calToday" type="button">
+          ${state.scheduleView === "month" ? "今月" : "今週"}
+        </button>
+        <button class="cal__nav" id="calNext" type="button" aria-label="次へ">›</button>
+        <div class="cal__month" id="calMonth">${title}</div>
+      </div>
     </div>
-  </div>
-`;
+  `;
 
   let gridHtml = "";
 
@@ -883,62 +882,12 @@ function renderCalendar(){
     ${gridHtml}
   `;
 
-     $$(".cal__ev", calRoot).forEach(btn => {
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const dateStr = btn.dataset.eventDate;
-      const events = map.get(dateStr) || [];
-      openEventModal(dateStr, events);
+  const schedViewSeg = $("#schedViewSeg");
+  if (schedViewSeg) {
+    $$(".seg__btn", schedViewSeg).forEach(btn => {
+      btn.classList.toggle("seg__btn--active", btn.dataset.view === state.scheduleView);
     });
-  });
-
-calRoot.addEventListener("click", (e) => {
-  const btn = e.target.closest(".cal__ev, .cal2w__event");
-  if (!btn) return;
-
-  e.preventDefault();
-  e.stopPropagation();
-
-  const dateStr = btn.dataset.eventDate;
-  const events = map.get(dateStr) || [];
-  openEventModal(dateStr, events);
-});
-
-  // 前後移動
-  $("#calPrev")?.addEventListener("click", () => {
-    const c = new Date(state.scheduleCursor);
-    if(state.scheduleView === "month"){
-      c.setMonth(c.getMonth() - 1);
-    } else {
-      c.setDate(c.getDate() - 14);
-    }
-    state.scheduleCursor = c;
-    renderCalendar();
-  });
-
-  $("#calNext")?.addEventListener("click", () => {
-    const c = new Date(state.scheduleCursor);
-    if(state.scheduleView === "month"){
-      c.setMonth(c.getMonth() + 1);
-    } else {
-      c.setDate(c.getDate() + 14);
-    }
-    state.scheduleCursor = c;
-    renderCalendar();
-  });
-
-   const schedViewSeg = $("#schedViewSeg");
-if (schedViewSeg) {
-  $$(".seg__btn", schedViewSeg).forEach(btn => {
-    btn.classList.toggle("seg__btn--active", btn.dataset.view === state.scheduleView);
-  });
-}
-
-  $("#calToday")?.addEventListener("click", () => {
-    state.scheduleCursor = new Date();
-    state.scheduleCursor.setHours(0,0,0,0);
-    renderCalendar();
-  });
+  }
 }
 
 // ===== Admin: list / editor =====
@@ -1231,19 +1180,16 @@ function importJsonFile(file){
 
 // ===== Bindings =====
 function bind(){
-  // helper: 要素があればイベント登録
   const on = (sel, ev, fn, root=document) => {
     const el = root.querySelector(sel);
     if(!el) return null;
     el.addEventListener(ev, fn);
     return el;
   };
-   
- // event modal
-    on("#eventModalScrim", "click", closeEventModal);
-    on("#eventModalClose", "click", closeEventModal);
 
-  // search
+  on("#eventModalScrim", "click", closeEventModal);
+  on("#eventModalClose", "click", closeEventModal);
+
   on("#q", "input", (e) => {
     state.query = e.target.value;
     renderFeed();
@@ -1256,7 +1202,6 @@ function bind(){
     renderFeed();
   });
 
-  // nav
   const navRoot = document.querySelector(".bottomnav");
   if(navRoot){
     navRoot.addEventListener("click", (e) => {
@@ -1268,7 +1213,6 @@ function bind(){
     });
   }
 
-  // schedule view switch
   const schedViewSeg = $("#schedViewSeg");
   if (schedViewSeg) {
     schedViewSeg.addEventListener("click", (e) => {
@@ -1279,22 +1223,62 @@ function bind(){
       if (!view) return;
 
       state.scheduleView = view;
-
-      if (view === "2w") {
-        state.scheduleCursor = new Date();
-        state.scheduleCursor.setHours(0,0,0,0);
-      }
-
-      if (view === "month" && !state.scheduleCursor) {
-        state.scheduleCursor = new Date();
-        state.scheduleCursor.setHours(0,0,0,0);
-      }
+      state.scheduleCursor = new Date();
+      state.scheduleCursor.setHours(0,0,0,0);
 
       renderCalendar();
     });
   }
 
-  // drawer controls
+const calRoot = $("#cal");
+if (calRoot) {
+  calRoot.addEventListener("click", (e) => {
+    const eventBtn = e.target.closest(".cal__ev, .cal2w__event");
+    if (eventBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const dateStr = eventBtn.dataset.eventDate;
+      const events = eventsByDate().get(dateStr) || [];
+      openEventModal(dateStr, events);
+      return;
+    }
+
+    const prevBtn = e.target.closest("#calPrev");
+    if (prevBtn) {
+      const c = new Date(state.scheduleCursor || new Date());
+      if(state.scheduleView === "month"){
+        c.setMonth(c.getMonth() - 1);
+      } else {
+        c.setDate(c.getDate() - 14);
+      }
+      state.scheduleCursor = c;
+      renderCalendar();
+      return;
+    }
+
+    const nextBtn = e.target.closest("#calNext");
+    if (nextBtn) {
+      const c = new Date(state.scheduleCursor || new Date());
+      if(state.scheduleView === "month"){
+        c.setMonth(c.getMonth() + 1);
+      } else {
+        c.setDate(c.getDate() + 14);
+      }
+      state.scheduleCursor = c;
+      renderCalendar();
+      return;
+    }
+
+    const todayBtn = e.target.closest("#calToday");
+    if (todayBtn) {
+      state.scheduleCursor = new Date();
+      state.scheduleCursor.setHours(0,0,0,0);
+      renderCalendar();
+    }
+  });
+}
+
   on("#drawerScrim", "click", closeDrawer);
   on("#btnClose", "click", closeDrawer);
 
@@ -1308,14 +1292,6 @@ function bind(){
     saveSaved(arr);
     renderSaveBtn();
   });
-
-  const upcoming = $("#onlyUpcoming");
-  if(upcoming){
-    upcoming.checked = (localStorage.getItem(LS_KEY_ONLY_UPCOMING) === "1");
-    upcoming.addEventListener("change", () => {
-      localStorage.setItem(LS_KEY_ONLY_UPCOMING, upcoming.checked ? "1" : "0");
-    });
-  }
 
   on("#btnNewPost", "click", () => {
     clearEditor();
@@ -1358,43 +1334,6 @@ function bind(){
   on("#btnImport", "click", () => {
     const f = $("#fileImport");
     if(f) f.click();
-  });
-
-  const fileImport = $("#fileImport");
-  if(fileImport){
-    fileImport.addEventListener("change", async (e) => {
-      const file = e.target.files?.[0];
-      if(!file) return;
-
-      try{
-        const data = await importJsonFile(file);
-        if(!data || !Array.isArray(data.posts)){
-          alert("JSON形式が想定と違います（posts配列が必要）。");
-          return;
-        }
-        const normalized = data.posts.map(normalizePost);
-        savePosts(normalized);
-        renderAdmin();
-        renderFeed();
-        alert("Import完了。Homeに反映しました。");
-      }catch(err){
-        console.error(err);
-        alert("Importに失敗しました。JSONを確認してください。");
-      }finally{
-        fileImport.value = "";
-      }
-    });
-  }
-
-  on("#btnHelp", "click", () => {
-    alert(
-`Adminタブで記事を投稿・編集できます（localStorage保存）。
-運用で共有する場合は Export(JSON) → 別端末で Import が最短です。
-
-次の段階：
-・コミュ限定ログイン（合言葉/招待）
-・記事データをスプレッドシート/Firestoreに移行`
-    );
   });
 }
 
