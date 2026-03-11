@@ -1239,21 +1239,31 @@ function bind(){
     });
   }
 
-    // 2週間表示に切り替えたときは今日基準にする
-    if (view === "2w") {
-      state.scheduleCursor = new Date();
-      state.scheduleCursor.setHours(0,0,0,0);
-    }
+  // schedule view switch
+  const schedViewSeg = $("#schedViewSeg");
+  if (schedViewSeg) {
+    schedViewSeg.addEventListener("click", (e) => {
+      const btn = e.target.closest(".seg__btn");
+      if (!btn) return;
 
-    // 1カ月表示に戻したときも一応現在月基準に寄せる
-    if (view === "month" && !state.scheduleCursor) {
-      state.scheduleCursor = new Date();
-      state.scheduleCursor.setHours(0,0,0,0);
-    }
+      const view = btn.dataset.view;
+      if (!view) return;
 
-    renderCalendar();
-  });
-} 
+      state.scheduleView = view;
+
+      if (view === "2w") {
+        state.scheduleCursor = new Date();
+        state.scheduleCursor.setHours(0,0,0,0);
+      }
+
+      if (view === "month" && !state.scheduleCursor) {
+        state.scheduleCursor = new Date();
+        state.scheduleCursor.setHours(0,0,0,0);
+      }
+
+      renderCalendar();
+    });
+  }
 
   // drawer controls
   on("#drawerScrim", "click", closeDrawer);
@@ -1277,23 +1287,6 @@ function bind(){
       localStorage.setItem(LS_KEY_ONLY_UPCOMING, upcoming.checked ? "1" : "0");
     });
   }
-
-   const schedViewSeg = $("#schedViewSeg");
-if (schedViewSeg) {
-  schedViewSeg.addEventListener("click", (e) => {
-    const btn = e.target.closest(".seg__btn");
-    if (!btn) return;
-
-    state.scheduleView = btn.dataset.view;
-
-    if (state.scheduleView === "2w") {
-      state.scheduleCursor = new Date();
-      state.scheduleCursor.setHours(0,0,0,0);
-    }
-
-    renderCalendar();
-  });
-}
 
   on("#btnNewPost", "click", () => {
     clearEditor();
