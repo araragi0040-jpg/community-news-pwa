@@ -458,7 +458,6 @@ function applyAuthUI() {
 
   if (!authGate || !appRoot) return;
 
-  // 未ログイン
   if (!user) {
     authGate.hidden = false;
     appRoot.hidden = true;
@@ -466,11 +465,9 @@ function applyAuthUI() {
     if (btnLogout) btnLogout.style.display = "none";
     if (adminNav) adminNav.style.display = "none";
     if (adminPage) adminPage.style.display = "none";
-
     return;
   }
 
-  // ログイン済み
   authGate.hidden = true;
   appRoot.hidden = false;
 
@@ -478,21 +475,8 @@ function applyAuthUI() {
 
   const isAdmin = user.role === "admin";
 
-  if (adminNav) {
-    adminNav.style.display = isAdmin ? "flex" : "none";
-  }
-
-  if (adminPage) {
-    adminPage.style.display = isAdmin ? "" : "none";
-  }
-
-  // adminでないのにadminページを開いていた場合はhomeへ戻す
-  if (!isAdmin) {
-    const activeAdmin = document.querySelector('.page[data-page="admin"].page--active');
-    if (activeAdmin) {
-      setActivePage("home");
-    }
-  }
+  if (adminNav) adminNav.style.display = isAdmin ? "flex" : "none";
+  if (adminPage) adminPage.style.display = isAdmin ? "" : "none";
 }
 
 // ===== Rendering: Chips =====
@@ -1553,13 +1537,21 @@ function bind(){
         }
 
 const user = await loginToApi(email, password);
+console.log("login success user =", user);
+
 saveCurrentUser(user);
 applyAuthUI();
 
-renderChips();
-renderFeed();
-renderContact();
-renderAdmin();
+// ここで hidden 切替後の状態確認
+console.log("authGate hidden =", document.getElementById("authGate")?.hidden);
+console.log("appRoot hidden =", document.getElementById("appRoot")?.hidden);
+
+setActivePage("home");
+
+try { renderChips(); } catch (e) { console.error("renderChips error:", e); }
+try { renderFeed(); } catch (e) { console.error("renderFeed error:", e); }
+try { renderContact(); } catch (e) { console.error("renderContact error:", e); }
+try { renderAdmin(); } catch (e) { console.error("renderAdmin error:", e); }
 
 fetchPostsFromApi()
   .then(posts => {
@@ -1572,9 +1564,7 @@ fetchPostsFromApi()
     console.error("Failed to load posts from GAS:", err);
   });
 
-setActivePage("home");
-
-        if (msg) msg.textContent = "";
+if (msg) msg.textContent = "";
       } catch (err) {
         console.error(err);
         if (msg) msg.textContent = err.message || "ログインに失敗しました。";
