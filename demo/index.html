@@ -11,18 +11,32 @@
 </head>
 <body>
 
-  <div class="auth" id="authGate">
-  <div class="auth__panel">
-    <h1 class="auth__title">語り場ニュース</h1>
-    <p class="auth__sub">ログインして続きをご利用ください</p>
+<form id="loginForm" class="auth__form">
+  <input type="email" id="loginEmail" placeholder="メールアドレス" required>
+  <input type="password" id="loginPassword" placeholder="パスワード" required>
+  <button type="submit" id="loginBtn">ログイン</button>
+</form>
 
-    <form id="loginForm" class="auth__form">
-      <input type="email" id="loginEmail" placeholder="メールアドレス" required>
-      <input type="password" id="loginPassword" placeholder="パスワード" required>
-      <button type="submit" id="loginBtn">ログイン</button>
-    </form>
+<div class="auth__switch">
+  <button type="button" id="showRegisterBtn" class="auth__linkbtn">
+    新規登録はこちら
+  </button>
+</div>
 
-    <div class="auth__msg" id="loginMsg"></div>
+<form id="registerForm" class="auth__form" style="display:none;">
+  <input type="text" id="registerName" placeholder="お名前" required>
+  <input type="email" id="registerEmail" placeholder="メールアドレス" required>
+  <input type="password" id="registerPassword" placeholder="パスワード" required>
+  <button type="submit" id="registerBtn">新規登録</button>
+</form>
+
+<div class="auth__switch">
+  <button type="button" id="showLoginBtn" class="auth__linkbtn" style="display:none;">
+    ログイン画面に戻る
+  </button>
+</div>
+
+<div class="auth__msg" id="loginMsg"></div>
   </div>
 </div>
   
