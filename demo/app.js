@@ -450,24 +450,28 @@ function clearCurrentUser() {
 function applyAuthUI() {
   const user = getCurrentUser();
 
-  const authGate = $("#authGate");
-  const appRoot = $(".app");
-  const btnLogout = $("#btnLogout");
-  const adminNav = $('.navitem[data-nav="admin"]');
+  const authGate = document.getElementById("authGate");
+  const appRoot = document.querySelector(".app");
+  const btnLogout = document.getElementById("btnLogout");
+  const adminNav = document.querySelector('.navitem[data-nav="admin"]');
+
+  if (!authGate || !appRoot) return;
 
   if (!user) {
-    if (authGate) authGate.style.display = "flex";
-    if (appRoot) appRoot.style.display = "none";
+    authGate.style.display = "flex";
+    authGate.classList.remove("auth--hidden");
+    appRoot.style.display = "none";
     if (btnLogout) btnLogout.style.display = "none";
     return;
   }
 
-  if (authGate) authGate.style.display = "none";
-  if (appRoot) appRoot.style.display = "block";
+  authGate.style.display = "none";
+  authGate.classList.add("auth--hidden");
+  appRoot.style.display = "block";
   if (btnLogout) btnLogout.style.display = "grid";
 
   if (adminNav) {
-    adminNav.style.display = user.role === "admin" ? "flex" : "flex";
+    adminNav.style.display = "flex";
   }
 }
 
@@ -1524,26 +1528,29 @@ function bind(){
         }
 
         const user = await loginToApi(email, password);
-        saveCurrentUser(user);
-        applyAuthUI();
+saveCurrentUser(user);
 
-        renderChips();
-        renderFeed();
-        renderContact();
-        renderAdmin();
+// 先にUI切替
+applyAuthUI();
 
-        fetchPostsFromApi()
-          .then(posts => {
-            cloudPosts = posts;
-            renderFeed();
-            renderSaved();
-            renderAdmin();
-          })
-          .catch(err => {
-            console.error("Failed to load posts from GAS:", err);
-          });
+// そのあと描画
+renderChips();
+renderFeed();
+renderContact();
+renderAdmin();
 
-        setActivePage("home");
+fetchPostsFromApi()
+  .then(posts => {
+    cloudPosts = posts;
+    renderFeed();
+    renderSaved();
+    renderAdmin();
+  })
+  .catch(err => {
+    console.error("Failed to load posts from GAS:", err);
+  });
+
+setActivePage("home");
 
         if (msg) msg.textContent = "";
       } catch (err) {
@@ -1672,11 +1679,9 @@ async function init(){
     return;
   }
   setActivePage("home");
-
-  if($("#pDate")) $("#pDate").value = todayYMD();
-
+   
   // まずは即表示
-  try { renderChips(); } catch (e) { console.error("renderChips error:", e); }
+ try { renderChips(); } catch (e) { console.error("renderChips error:", e); }
   try { renderFeed(); } catch (e) { console.error("renderFeed error:", e); }
   try { renderContact(); } catch (e) { console.error("renderContact error:", e); }
   try { renderAdmin(); } catch (e) { console.error("renderAdmin error:", e); }
