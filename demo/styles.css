@@ -1260,21 +1260,21 @@ svg{ width:22px; height:22px; fill: currentColor; }
 .auth{
   position: fixed;
   inset: 0;
-  z-index: 2000;
+  z-index: 3000;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 20px;
-  background: linear-gradient(180deg, rgba(246,239,231,0.96), rgba(255,250,245,0.98));
+  background: rgba(246,239,231,0.96);
 }
 
 .auth__panel{
   width: min(92vw, 420px);
-  background: rgba(255,255,255,.92);
-  border: 1px solid rgba(176,125,79,.20);
+  background: #fffaf5;
+  border: 1px solid rgba(176,125,79,.18);
   border-radius: 24px;
   padding: 24px 20px;
-  box-shadow: 0 18px 40px rgba(75,50,30,.10);
+  box-shadow: 0 18px 40px rgba(75,50,30,.12);
 }
 
 .auth__title{
@@ -1304,11 +1304,6 @@ svg{ width:22px; height:22px; fill: currentColor; }
   outline: none;
 }
 
-.auth__form input:focus{
-  border-color: rgba(176,125,79,.55);
-  box-shadow: 0 0 0 4px rgba(176,125,79,.12);
-}
-
 .auth__form button{
   border: 0;
   border-radius: 14px;
@@ -1317,18 +1312,6 @@ svg{ width:22px; height:22px; fill: currentColor; }
   color: #fff;
   font-weight: 700;
   cursor: pointer;
-}
-
-.auth__form button:disabled{
-  opacity: .65;
-  cursor: not-allowed;
-}
-
-.auth__msg{
-  margin-top: 12px;
-  min-height: 18px;
-  font-size: 13px;
-  color: #9b3d32;
 }
 
 .auth__switch{
@@ -1343,4 +1326,11 @@ svg{ width:22px; height:22px; fill: currentColor; }
   font-size: 13px;
   cursor: pointer;
   padding: 6px 8px;
+}
+
+.auth__msg{
+  margin-top: 12px;
+  min-height: 18px;
+  font-size: 13px;
+  color: #9b3d32;
 }
