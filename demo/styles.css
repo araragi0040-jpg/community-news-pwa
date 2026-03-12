@@ -1334,3 +1334,11 @@ svg{ width:22px; height:22px; fill: currentColor; }
   font-size: 13px;
   color: #9b3d32;
 }
+
+#authGate[hidden]{
+  display: none !important;
+}
+
+#appRoot[hidden]{
+  display: none !important;
+}
