@@ -1027,13 +1027,64 @@ function renderCalendar(){
     ${gridHtml}
   `;
 
+  // イベント詳細ポップアップ
+  $$(".cal__ev, .cal2w__event", calRoot).forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const dateStr = btn.dataset.eventDate;
+      const events = map.get(dateStr) || [];
+      openEventModal(dateStr, events);
+    });
+  });
+
+  // 前後移動
+  const prevBtn = $("#calPrev", calRoot);
+  const nextBtn = $("#calNext", calRoot);
+  const todayBtn = $("#calToday", calRoot);
+
+  if (prevBtn) {
+    prevBtn.addEventListener("click", () => {
+      const c = new Date(state.scheduleCursor || new Date());
+      if (state.scheduleView === "month") {
+        c.setMonth(c.getMonth() - 1);
+      } else {
+        c.setDate(c.getDate() - 14);
+      }
+      state.scheduleCursor = c;
+      renderCalendar();
+    });
+  }
+
+  if (nextBtn) {
+    nextBtn.addEventListener("click", () => {
+      const c = new Date(state.scheduleCursor || new Date());
+      if (state.scheduleView === "month") {
+        c.setMonth(c.getMonth() + 1);
+      } else {
+        c.setDate(c.getDate() + 14);
+      }
+      state.scheduleCursor = c;
+      renderCalendar();
+    });
+  }
+
+  if (todayBtn) {
+    todayBtn.addEventListener("click", () => {
+      state.scheduleCursor = new Date();
+      state.scheduleCursor.setHours(0,0,0,0);
+      renderCalendar();
+    });
+  }
+
+  // 表示切替ボタンの見た目更新（外側のsegを使う）
   const schedViewSeg = $("#schedViewSeg");
   if (schedViewSeg) {
     $$(".seg__btn", schedViewSeg).forEach(btn => {
       btn.classList.toggle("seg__btn--active", btn.dataset.view === state.scheduleView);
     });
   }
-}
 
 // ===== Admin: list / editor =====
 function adminArticles(){
