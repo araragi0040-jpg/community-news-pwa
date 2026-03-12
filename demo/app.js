@@ -1578,6 +1578,84 @@ if (btnLogout) {
   });
 }
 
+   const showRegisterBtn = $("#showRegisterBtn");
+const showLoginBtn = $("#showLoginBtn");
+const loginForm = $("#loginForm");
+const registerForm = $("#registerForm");
+const loginMsg = $("#loginMsg");
+
+if (showRegisterBtn) {
+  showRegisterBtn.addEventListener("click", () => {
+    if (loginForm) loginForm.style.display = "none";
+    if (registerForm) registerForm.style.display = "grid";
+    if (showRegisterBtn) showRegisterBtn.style.display = "none";
+    if (showLoginBtn) showLoginBtn.style.display = "inline-block";
+    if (loginMsg) loginMsg.textContent = "";
+  });
+}
+
+if (showLoginBtn) {
+  showLoginBtn.addEventListener("click", () => {
+    if (loginForm) loginForm.style.display = "grid";
+    if (registerForm) registerForm.style.display = "none";
+    if (showRegisterBtn) showRegisterBtn.style.display = "inline-block";
+    if (showLoginBtn) showLoginBtn.style.display = "none";
+    if (loginMsg) loginMsg.textContent = "";
+  });
+}
+
+   const registerFormEl = $("#registerForm");
+if (registerFormEl) {
+  registerFormEl.addEventListener("submit", async (e) => {
+    e.preventDefault();
+
+    const name = ($("#registerName")?.value || "").trim();
+    const email = ($("#registerEmail")?.value || "").trim();
+    const password = ($("#registerPassword")?.value || "").trim();
+    const msg = $("#loginMsg");
+    const btn = $("#registerBtn");
+
+    if (msg) msg.textContent = "";
+
+    if (!name || !email || !password) {
+      if (msg) msg.textContent = "お名前・メールアドレス・パスワードを入力してください。";
+      return;
+    }
+
+    const oldText = btn ? btn.textContent : "";
+
+    try {
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = "登録中...";
+      }
+
+      await registerToApi(name, email, password);
+
+      if (msg) msg.textContent = "登録が完了しました。ログインしてください。";
+
+      registerFormEl.reset();
+
+      if (loginForm) loginForm.style.display = "grid";
+      if (registerForm) registerForm.style.display = "none";
+      if (showRegisterBtn) showRegisterBtn.style.display = "inline-block";
+      if (showLoginBtn) showLoginBtn.style.display = "none";
+
+      const loginEmail = $("#loginEmail");
+      if (loginEmail) loginEmail.value = email;
+
+    } catch (err) {
+      console.error(err);
+      if (msg) msg.textContent = err.message || "新規登録に失敗しました。";
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = oldText || "新規登録";
+      }
+    }
+  });
+}
+
   on("#btnImport", "click", () => {
     const f = $("#fileImport");
     if(f) f.click();
