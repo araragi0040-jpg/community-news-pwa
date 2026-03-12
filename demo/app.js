@@ -404,6 +404,36 @@ async function loginToApi(email, password) {
   return data.user;
 }
 
+async function registerToApi(name, email, password) {
+  const base = window.APP_CONFIG?.GAS_API_URL;
+  if (!base) {
+    throw new Error("GAS_API_URL is not set");
+  }
+
+  const res = await fetch(base, {
+    method: "POST",
+    headers: {
+      "Content-Type": "text/plain;charset=utf-8"
+    },
+    body: JSON.stringify({
+      action: "register",
+      user: {
+        name,
+        email,
+        password
+      }
+    })
+  });
+
+  const data = await res.json();
+
+  if (!data.ok) {
+    throw new Error(data.message || "Register failed");
+  }
+
+  return data.user;
+}
+
 function getCurrentUser() {
   return safeJsonParse(localStorage.getItem(LS_KEY_USER) || "null", null);
 }
