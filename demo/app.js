@@ -1085,7 +1085,7 @@ function renderCalendar(){
       btn.classList.toggle("seg__btn--active", btn.dataset.view === state.scheduleView);
     });
   }
-
+}
 // ===== Admin: list / editor =====
 function adminArticles(){
   return loadPosts().slice().sort((a,b)=> (a.date < b.date ? 1 : -1));
