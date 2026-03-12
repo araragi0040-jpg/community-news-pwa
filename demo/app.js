@@ -345,6 +345,36 @@ async function savePostToApi(post) {
   return data.post;
 }
 
+async function saveContactToApi(contact) {
+  const base = window.APP_CONFIG?.GAS_API_URL;
+  if (!base) {
+    throw new Error("GAS_API_URL is not set");
+  }
+
+  const res = await fetch(base, {
+    method: "POST",
+    headers: {
+      "Content-Type": "text/plain;charset=utf-8"
+    },
+    body: JSON.stringify({
+      action: "saveContact",
+      contact: {
+        name: contact.name || "",
+        email: contact.email || "",
+        message: contact.message || ""
+      }
+    })
+  });
+
+  const data = await res.json();
+
+  if (!data.ok) {
+    throw new Error(data.message || "Failed to save contact");
+  }
+
+  return data.contact;
+}
+
 // ===== Rendering: Chips =====
 function renderChips(){
   const row = $("#chipRow");
@@ -1322,14 +1352,49 @@ if (calRoot) {
     downloadJson(obj, `community-news-export-${Date.now()}.json`);
   });
 
-  const contactForm = document.getElementById("contactForm");
-  if(contactForm){
-    contactForm.addEventListener("submit", (e) => {
-      e.preventDefault();
-      alert("送信ありがとうございます。\n（現在はデモ保存のみ）");
+const contactForm = document.getElementById("contactForm");
+if(contactForm){
+  contactForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+
+    const btn = contactForm.querySelector('button[type="submit"]');
+    const oldText = btn ? btn.textContent : "";
+
+    const name = ($("#cName")?.value || "").trim();
+    const email = ($("#cEmail")?.value || "").trim();
+    const message = ($("#cMessage")?.value || "").trim();
+
+    if (!name || !email || !message) {
+      alert("お名前・メールアドレス・お問い合わせ内容を入力してください。");
+      return;
+    }
+
+    try {
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = "送信中...";
+      }
+
+      await saveContactToApi({
+        name,
+        email,
+        message
+      });
+
+      alert("お問い合わせを送信しました。");
       contactForm.reset();
-    });
-  }
+
+    } catch (err) {
+      console.error(err);
+      alert("送信に失敗しました。\n" + (err.message || err));
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = oldText || "送信";
+      }
+    }
+  });
+}
 
   on("#btnImport", "click", () => {
     const f = $("#fileImport");
