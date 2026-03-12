@@ -11,6 +11,7 @@ const LS_KEY_SAVED = "community_news_saved_v1";
 const LS_KEY_ONLY_IMPORTANT = "community_news_only_important_v1";
 const LS_KEY_ONLY_UPCOMING = "community_news_only_upcoming_v1";
 const LS_KEY_POSTS = "community_news_posts_v1"; // admin-created posts
+const LS_KEY_USER = "community_news_user_v1";
 
 const CHANNELS = [
   { key:"all", label:"All", tone:"accent" },
@@ -373,6 +374,76 @@ async function saveContactToApi(contact) {
   }
 
   return data.contact;
+}
+
+/* ログイン関数 */
+async function loginToApi(email, password) {
+  const base = window.APP_CONFIG?.GAS_API_URL;
+  if (!base) {
+    throw new Error("GAS_API_URL is not set");
+  }
+
+  const res = await fetch(base, {
+    method: "POST",
+    headers: {
+      "Content-Type": "text/plain;charset=utf-8"
+    },
+    body: JSON.stringify({
+      action: "login",
+      email,
+      password
+    })
+  });
+
+  const data = await res.json();
+
+  if (!data.ok) {
+    throw new Error(data.message || "Login failed");
+  }
+
+  return data.user;
+}
+
+function getCurrentUser() {
+  return safeJsonParse(localStorage.getItem(LS_KEY_USER) || "null", null);
+}
+
+function saveCurrentUser(user) {
+  localStorage.setItem(LS_KEY_USER, JSON.stringify(user));
+}
+
+function clearCurrentUser() {
+  localStorage.removeItem(LS_KEY_USER);
+}
+
+/* 画面切り替え関数 */
+function applyAuthUI() {
+  const user = getCurrentUser();
+
+  const authGate = $("#authGate");
+  const appRoot = $(".app");
+  const btnLogout = $("#btnLogout");
+  const adminNav = $('.navitem[data-nav="admin"]');
+
+  if (!user) {
+    if (authGate) authGate.style.display = "flex";
+    if (appRoot) appRoot.style.display = "none";
+    if (btnLogout) btnLogout.style.display = "none";
+    return;
+  }
+
+  if (authGate) authGate.style.display = "none";
+  if (appRoot) appRoot.style.display = "block";
+  if (btnLogout) btnLogout.style.display = "grid";
+
+  if (adminNav) {
+    adminNav.style.display = user.role === "admin" ? "flex" : "none";
+  }
+
+  if (user.role !== "admin") {
+    const adminPage = $('.page[data-page="admin"]');
+    if (adminPage) adminPage.style.display = "none";
+  }
 }
 
 // ===== Rendering: Chips =====
@@ -1396,6 +1467,87 @@ if(contactForm){
   });
 }
 
+   const loginForm = $("#loginForm");
+if (loginForm) {
+  loginForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+
+    const email = ($("#loginEmail")?.value || "").trim();
+    const password = ($("#loginPassword")?.value || "").trim();
+    const msg = $("#loginMsg");
+    const btn = $("#loginBtn");
+
+    if (msg) msg.textContent = "";
+
+    if (!email || !password) {
+      if (msg) msg.textContent = "メールアドレスとパスワードを入力してください。";
+      return;
+    }
+
+    const oldText = btn ? btn.textContent : "";
+
+    try {
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = "ログイン中...";
+      }
+
+      const user = await loginToApi(email, password);
+saveCurrentUser(user);
+applyAuthUI();
+
+renderChips();
+renderFeed();
+renderContact();
+renderAdmin();
+
+fetchPostsFromApi()
+  .then(posts => {
+    cloudPosts = posts;
+    renderFeed();
+    renderSaved();
+    renderAdmin();
+  })
+  .catch(err => {
+    console.error("Failed to load posts from GAS:", err);
+  });
+
+setActivePage("home");
+
+      if (msg) msg.textContent = "";
+
+    } catch (err) {
+      console.error(err);
+      if (msg) msg.textContent = err.message || "ログインに失敗しました。";
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = oldText || "ログイン";
+      }
+    }
+  });
+}
+/* ログイン処理 */
+const btnLogout = $("#btnLogout");
+if (btnLogout) {
+  btnLogout.addEventListener("click", () => {
+    clearCurrentUser();
+    applyAuthUI();
+
+    const loginEmail = $("#loginEmail");
+    const loginPassword = $("#loginPassword");
+    const loginMsg = $("#loginMsg");
+
+    if (loginEmail) loginEmail.value = "";
+    if (loginPassword) loginPassword.value = "";
+    if (loginMsg) loginMsg.textContent = "";
+
+    setTimeout(() => {
+      if (loginEmail) loginEmail.focus();
+    }, 50);
+  });
+}
+
   on("#btnImport", "click", () => {
     const f = $("#fileImport");
     if(f) f.click();
@@ -1428,6 +1580,13 @@ async function testLoginApi() {
 // ===== Init =====
 async function init(){
   bind();
+  if($("#pDate")) $("#pDate").value = todayYMD();
+
+  applyAuthUI();
+
+  if (!getCurrentUser()) {
+    return;
+  }
   setActivePage("home");
 
   if($("#pDate")) $("#pDate").value = todayYMD();
