@@ -1330,3 +1330,17 @@ svg{ width:22px; height:22px; fill: currentColor; }
   font-size: 13px;
   color: #9b3d32;
 }
+
+.auth__switch{
+  margin-top: 10px;
+  text-align: center;
+}
+
+.auth__linkbtn{
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 6px 8px;
+}
