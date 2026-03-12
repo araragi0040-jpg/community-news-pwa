@@ -266,29 +266,6 @@ function normalizePost(input){
   return a;
 }
 
-async function testLoginApi() {
-  const base = window.APP_CONFIG?.GAS_API_URL;
-  if (!base) {
-    console.log("GAS_API_URL is not set");
-    return;
-  }
-
-  const res = await fetch(base, {
-    method: "POST",
-    headers: {
-      "Content-Type": "text/plain;charset=utf-8"
-    },
-    body: JSON.stringify({
-      action: "login",
-      email: "yourmail@example.com",
-      password: "1234"
-    })
-  });
-
-  const data = await res.json();
-  console.log("login result:", data);
-}
-
 async function fetchPostsFromApi() {
   const base = window.APP_CONFIG?.GAS_API_URL;
   if (!base) {
@@ -1423,6 +1400,29 @@ if(contactForm){
     const f = $("#fileImport");
     if(f) f.click();
   });
+}
+
+async function testLoginApi() {
+  const base = window.APP_CONFIG?.GAS_API_URL;
+  if (!base) {
+    console.log("GAS_API_URL is not set");
+    return;
+  }
+
+  const res = await fetch(base, {
+    method: "POST",
+    headers: {
+      "Content-Type": "text/plain;charset=utf-8"
+    },
+    body: JSON.stringify({
+      action: "login",
+      email: "yourmail@example.com",
+      password: "1234"
+    })
+  });
+
+  const data = await res.json();
+  console.log("login result:", data);
 }
 
 // ===== Init =====
