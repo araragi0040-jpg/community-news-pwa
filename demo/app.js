@@ -467,12 +467,7 @@ function applyAuthUI() {
   if (btnLogout) btnLogout.style.display = "grid";
 
   if (adminNav) {
-    adminNav.style.display = user.role === "admin" ? "flex" : "none";
-  }
-
-  if (user.role !== "admin") {
-    const adminPage = $('.page[data-page="admin"]');
-    if (adminPage) adminPage.style.display = "none";
+    adminNav.style.display = user.role === "admin" ? "flex" : "flex";
   }
 }
 
