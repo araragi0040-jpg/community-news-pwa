@@ -460,7 +460,10 @@ function applyAuthUI() {
 
   if (!user) {
     authGate.hidden = false;
+    authGate.style.display = "flex";
+
     appRoot.hidden = true;
+    appRoot.style.display = "none";
 
     if (btnLogout) btnLogout.style.display = "none";
     if (adminNav) adminNav.style.display = "none";
@@ -469,7 +472,10 @@ function applyAuthUI() {
   }
 
   authGate.hidden = true;
+  authGate.style.display = "none";
+
   appRoot.hidden = false;
+  appRoot.style.display = "block";
 
   if (btnLogout) btnLogout.style.display = "grid";
 
