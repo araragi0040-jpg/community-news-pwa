@@ -451,23 +451,21 @@ function applyAuthUI() {
   const user = getCurrentUser();
 
   const authGate = document.getElementById("authGate");
-  const appRoot = document.querySelector(".app");
+  const appRoot = document.getElementById("appRoot");
   const btnLogout = document.getElementById("btnLogout");
   const adminNav = document.querySelector('.navitem[data-nav="admin"]');
 
   if (!authGate || !appRoot) return;
 
   if (!user) {
-    authGate.style.display = "flex";
-    authGate.classList.remove("auth--hidden");
-    appRoot.style.display = "none";
+    authGate.hidden = false;
+    appRoot.hidden = true;
     if (btnLogout) btnLogout.style.display = "none";
     return;
   }
 
-  authGate.style.display = "none";
-  authGate.classList.add("auth--hidden");
-  appRoot.style.display = "block";
+  authGate.hidden = true;
+  appRoot.hidden = false;
   if (btnLogout) btnLogout.style.display = "grid";
 
   if (adminNav) {
@@ -1527,13 +1525,10 @@ function bind(){
           btn.textContent = "ログイン中...";
         }
 
-        const user = await loginToApi(email, password);
+const user = await loginToApi(email, password);
 saveCurrentUser(user);
-
-// 先にUI切替
 applyAuthUI();
 
-// そのあと描画
 renderChips();
 renderFeed();
 renderContact();
@@ -1671,6 +1666,7 @@ async function testLoginApi() {
 // ===== Init =====
 async function init(){
   bind();
+
   if($("#pDate")) $("#pDate").value = todayYMD();
 
   applyAuthUI();
@@ -1678,15 +1674,14 @@ async function init(){
   if (!getCurrentUser()) {
     return;
   }
+
   setActivePage("home");
-   
-  // まずは即表示
- try { renderChips(); } catch (e) { console.error("renderChips error:", e); }
+
+  try { renderChips(); } catch (e) { console.error("renderChips error:", e); }
   try { renderFeed(); } catch (e) { console.error("renderFeed error:", e); }
   try { renderContact(); } catch (e) { console.error("renderContact error:", e); }
   try { renderAdmin(); } catch (e) { console.error("renderAdmin error:", e); }
 
-  // クラウドは裏で取得
   fetchPostsFromApi()
     .then(posts => {
       cloudPosts = posts;
