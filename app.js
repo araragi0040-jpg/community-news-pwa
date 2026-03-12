@@ -11,6 +11,7 @@ const LS_KEY_SAVED = "community_news_saved_v1";
 const LS_KEY_ONLY_IMPORTANT = "community_news_only_important_v1";
 const LS_KEY_ONLY_UPCOMING = "community_news_only_upcoming_v1";
 const LS_KEY_POSTS = "community_news_posts_v1"; // admin-created posts
+const LS_KEY_USER = "community_news_user_v1";
 
 const CHANNELS = [
   { key:"all", label:"All", tone:"accent" },
@@ -345,6 +346,145 @@ async function savePostToApi(post) {
   return data.post;
 }
 
+async function saveContactToApi(contact) {
+  const base = window.APP_CONFIG?.GAS_API_URL;
+  if (!base) {
+    throw new Error("GAS_API_URL is not set");
+  }
+
+  const res = await fetch(base, {
+    method: "POST",
+    headers: {
+      "Content-Type": "text/plain;charset=utf-8"
+    },
+    body: JSON.stringify({
+      action: "saveContact",
+      contact: {
+        name: contact.name || "",
+        email: contact.email || "",
+        message: contact.message || ""
+      }
+    })
+  });
+
+  const data = await res.json();
+
+  if (!data.ok) {
+    throw new Error(data.message || "Failed to save contact");
+  }
+
+  return data.contact;
+}
+
+/* ログイン関数 */
+async function loginToApi(email, password) {
+  const base = window.APP_CONFIG?.GAS_API_URL;
+  if (!base) {
+    throw new Error("GAS_API_URL is not set");
+  }
+
+  const res = await fetch(base, {
+    method: "POST",
+    headers: {
+      "Content-Type": "text/plain;charset=utf-8"
+    },
+    body: JSON.stringify({
+      action: "login",
+      email,
+      password
+    })
+  });
+
+  const data = await res.json();
+
+  if (!data.ok) {
+    throw new Error(data.message || "Login failed");
+  }
+
+  return data.user;
+}
+
+async function registerToApi(name, email, password) {
+  const base = window.APP_CONFIG?.GAS_API_URL;
+  if (!base) {
+    throw new Error("GAS_API_URL is not set");
+  }
+
+  const res = await fetch(base, {
+    method: "POST",
+    headers: {
+      "Content-Type": "text/plain;charset=utf-8"
+    },
+    body: JSON.stringify({
+      action: "register",
+      user: {
+        name,
+        email,
+        password
+      }
+    })
+  });
+
+  const data = await res.json();
+
+  if (!data.ok) {
+    throw new Error(data.message || "Register failed");
+  }
+
+  return data.user;
+}
+
+function getCurrentUser() {
+  return safeJsonParse(localStorage.getItem(LS_KEY_USER) || "null", null);
+}
+
+function saveCurrentUser(user) {
+  localStorage.setItem(LS_KEY_USER, JSON.stringify(user));
+}
+
+function clearCurrentUser() {
+  localStorage.removeItem(LS_KEY_USER);
+}
+
+/* 画面切り替え関数 */
+function applyAuthUI() {
+  const user = getCurrentUser();
+
+  const authGate = document.getElementById("authGate");
+  const appRoot = document.getElementById("appRoot");
+  const btnLogout = document.getElementById("btnLogout");
+  const adminNav = document.querySelector('.navitem[data-nav="admin"]');
+  const adminPage = document.querySelector('.page[data-page="admin"]');
+
+  if (!authGate || !appRoot) return;
+
+  if (!user) {
+    authGate.hidden = false;
+    authGate.style.display = "flex";
+
+    appRoot.hidden = true;
+    appRoot.style.display = "none";
+
+    if (btnLogout) btnLogout.style.display = "none";
+    if (adminNav) adminNav.style.display = "none";
+    if (adminPage) adminPage.style.display = "none";
+    return;
+  }
+
+  authGate.hidden = true;
+  authGate.style.display = "none";
+
+  appRoot.hidden = false;
+  appRoot.style.display = "block";
+
+  if (btnLogout) btnLogout.style.display = "grid";
+
+  const isAdmin = user.role === "admin";
+
+  if (adminNav) adminNav.style.display = isAdmin ? "flex" : "none";
+  if (adminPage) adminPage.style.display = isAdmin ? "" : "none";
+}
+
 // ===== Rendering: Chips =====
 function renderChips(){
   const row = $("#chipRow");
@@ -615,6 +755,12 @@ function renderContact(){
 
 // ===== Navigation =====
 function setActivePage(key){
+  const user = getCurrentUser();
+
+  if (key === "admin" && (!user || user.role !== "admin")) {
+    key = "home";
+  }
+
   $$(".page").forEach(p => p.classList.remove("page--active"));
   const page = $(`.page[data-page="${key}"]`);
   if(page) page.classList.add("page--active");
@@ -623,7 +769,6 @@ function setActivePage(key){
   const nav = $(`.navitem[data-nav="${key}"]`);
   if(nav) nav.classList.add("navitem--active");
 
-  // per page refresh
   if(key === "saved") renderSaved();
   if(key === "contact") renderContact();
   if(key === "schedule") renderCalendar();
@@ -743,9 +888,13 @@ function eventsByDate(){
 }
 
 function openEventModal(dateStr, events){
+  console.log("openEventModal fired", dateStr, events);
+
   const modal = $("#eventModal");
   const title = $("#eventModalTitle");
   const body = $("#eventModalBody");
+
+  console.log("modal parts", modal, title, body);
 
   if(!modal || !title || !body) return;
 
@@ -784,7 +933,6 @@ function renderCalendar(){
 
   const cursor = new Date(state.scheduleCursor);
   const map = eventsByDate();
-
   const days = buildRangeDays(state.scheduleView, cursor);
 
   let title = "";
@@ -797,17 +945,17 @@ function renderCalendar(){
   }
 
   const head = `
-  <div class="cal__head">
-    <div class="cal__left">
-      <button class="cal__nav" id="calPrev" type="button" aria-label="前へ">‹</button>
-      <button class="cal__nav" id="calToday" type="button">
-        ${state.scheduleView === "month" ? "今月" : "今週"}
-      </button>
-      <button class="cal__nav" id="calNext" type="button" aria-label="次へ">›</button>
-      <div class="cal__month" id="calMonth">${title}</div>
+    <div class="cal__head">
+      <div class="cal__left">
+        <button class="cal__nav" id="calPrev" type="button" aria-label="前へ">‹</button>
+        <button class="cal__nav" id="calToday" type="button">
+          ${state.scheduleView === "month" ? "今月" : "今週"}
+        </button>
+        <button class="cal__nav" id="calNext" type="button" aria-label="次へ">›</button>
+        <div class="cal__month" id="calMonth">${title}</div>
+      </div>
     </div>
-  </div>
-`;
+  `;
 
   let gridHtml = "";
 
@@ -879,63 +1027,12 @@ function renderCalendar(){
     ${gridHtml}
   `;
 
-  // 表示切替
-  $$(".seg__btn", calRoot).forEach(btn => {
-    btn.addEventListener("click", () => {
-      state.scheduleView = btn.dataset.view;
-      if(state.scheduleView === "2w"){
-        state.scheduleCursor = new Date();
-        state.scheduleCursor.setHours(0,0,0,0);
-      }
-      renderCalendar();
+  const schedViewSeg = $("#schedViewSeg");
+  if (schedViewSeg) {
+    $$(".seg__btn", schedViewSeg).forEach(btn => {
+      btn.classList.toggle("seg__btn--active", btn.dataset.view === state.scheduleView);
     });
-  });
-
-  // イベント詳細ポップアップ
-  $$(".cal__ev, .cal2w__event", calRoot).forEach(btn => {
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const dateStr = btn.dataset.eventDate;
-      const events = map.get(dateStr) || [];
-      openEventModal(dateStr, events);
-    });
-  });
-
-  // 前後移動
-  $("#calPrev")?.addEventListener("click", () => {
-    const c = new Date(state.scheduleCursor);
-    if(state.scheduleView === "month"){
-      c.setMonth(c.getMonth() - 1);
-    } else {
-      c.setDate(c.getDate() - 14);
-    }
-    state.scheduleCursor = c;
-    renderCalendar();
-  });
-
-  $("#calNext")?.addEventListener("click", () => {
-    const c = new Date(state.scheduleCursor);
-    if(state.scheduleView === "month"){
-      c.setMonth(c.getMonth() + 1);
-    } else {
-      c.setDate(c.getDate() + 14);
-    }
-    state.scheduleCursor = c;
-    renderCalendar();
-  });
-
-   const schedViewSeg = $("#schedViewSeg");
-if (schedViewSeg) {
-  $$(".seg__btn", schedViewSeg).forEach(btn => {
-    btn.classList.toggle("seg__btn--active", btn.dataset.view === state.scheduleView);
-  });
-}
-
-  $("#calToday")?.addEventListener("click", () => {
-    state.scheduleCursor = new Date();
-    state.scheduleCursor.setHours(0,0,0,0);
-    renderCalendar();
-  });
+  }
 }
 
 // ===== Admin: list / editor =====
@@ -1228,7 +1325,7 @@ function importJsonFile(file){
 
 // ===== Bindings =====
 function bind(){
-  // helper: 要素があればイベント登録
+  // helper
   const on = (sel, ev, fn, root=document) => {
     const el = root.querySelector(sel);
     if(!el) return null;
@@ -1236,6 +1333,7 @@ function bind(){
     return el;
   };
 
+  // Event modal
   on("#eventModalScrim", "click", closeEventModal);
   on("#eventModalClose", "click", closeEventModal);
 
@@ -1290,7 +1388,7 @@ function bind(){
     });
   }
 
-  // drawer controls
+  // drawer
   on("#drawerScrim", "click", closeDrawer);
   on("#btnClose", "click", closeDrawer);
 
@@ -1305,14 +1403,7 @@ function bind(){
     renderSaveBtn();
   });
 
-  const upcoming = $("#onlyUpcoming");
-  if(upcoming){
-    upcoming.checked = (localStorage.getItem(LS_KEY_ONLY_UPCOMING) === "1");
-    upcoming.addEventListener("change", () => {
-      localStorage.setItem(LS_KEY_ONLY_UPCOMING, upcoming.checked ? "1" : "0");
-    });
-  }
-
+  // admin
   on("#btnNewPost", "click", () => {
     clearEditor();
     const pDate = $("#pDate");
@@ -1341,15 +1432,6 @@ function bind(){
     const obj = buildExportObject();
     downloadJson(obj, `community-news-export-${Date.now()}.json`);
   });
-
-  const contactForm = document.getElementById("contactForm");
-  if(contactForm){
-    contactForm.addEventListener("submit", (e) => {
-      e.preventDefault();
-      alert("送信ありがとうございます。\n（現在はデモ保存のみ）");
-      contactForm.reset();
-    });
-  }
 
   on("#btnImport", "click", () => {
     const f = $("#fileImport");
@@ -1382,32 +1464,247 @@ function bind(){
     });
   }
 
+  // contact
+  const contactForm = document.getElementById("contactForm");
+  if(contactForm){
+    contactForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const name = ($("#cName")?.value || "").trim();
+      const email = ($("#cEmail")?.value || "").trim();
+      const message = ($("#cMessage")?.value || "").trim();
+
+      if (!name || !email || !message) {
+        alert("お名前・メールアドレス・お問い合わせ内容を入力してください。");
+        return;
+      }
+
+      try {
+        await saveContactToApi({ name, email, message });
+        alert("送信ありがとうございます。");
+        contactForm.reset();
+      } catch (err) {
+        console.error(err);
+        alert("送信に失敗しました。\n" + (err.message || err));
+      }
+    });
+  }
+
+  // login / register switch
+  const showRegisterBtn = $("#showRegisterBtn");
+  const showLoginBtn = $("#showLoginBtn");
+  const loginForm = $("#loginForm");
+  const registerForm = $("#registerForm");
+  const loginMsg = $("#loginMsg");
+
+  if (showRegisterBtn) {
+    showRegisterBtn.addEventListener("click", () => {
+      if (loginForm) loginForm.style.display = "none";
+      if (registerForm) registerForm.style.display = "grid";
+      showRegisterBtn.style.display = "none";
+      if (showLoginBtn) showLoginBtn.style.display = "inline-block";
+      if (loginMsg) loginMsg.textContent = "";
+    });
+  }
+
+  if (showLoginBtn) {
+    showLoginBtn.addEventListener("click", () => {
+      if (loginForm) loginForm.style.display = "grid";
+      if (registerForm) registerForm.style.display = "none";
+      if (showRegisterBtn) showRegisterBtn.style.display = "inline-block";
+      showLoginBtn.style.display = "none";
+      if (loginMsg) loginMsg.textContent = "";
+    });
+  }
+
+  // login
+  if (loginForm) {
+    loginForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const email = ($("#loginEmail")?.value || "").trim();
+      const password = ($("#loginPassword")?.value || "").trim();
+      const msg = $("#loginMsg");
+      const btn = $("#loginBtn");
+
+      if (msg) msg.textContent = "";
+
+      if (!email || !password) {
+        if (msg) msg.textContent = "メールアドレスとパスワードを入力してください。";
+        return;
+      }
+
+      const oldText = btn ? btn.textContent : "";
+
+      try {
+        if (btn) {
+          btn.disabled = true;
+          btn.textContent = "ログイン中...";
+        }
+
+const user = await loginToApi(email, password);
+console.log("login success user =", user);
+
+saveCurrentUser(user);
+applyAuthUI();
+
+// ここで hidden 切替後の状態確認
+console.log("authGate hidden =", document.getElementById("authGate")?.hidden);
+console.log("appRoot hidden =", document.getElementById("appRoot")?.hidden);
+
+setActivePage("home");
+
+try { renderChips(); } catch (e) { console.error("renderChips error:", e); }
+try { renderFeed(); } catch (e) { console.error("renderFeed error:", e); }
+try { renderContact(); } catch (e) { console.error("renderContact error:", e); }
+try { renderAdmin(); } catch (e) { console.error("renderAdmin error:", e); }
+
+fetchPostsFromApi()
+  .then(posts => {
+    cloudPosts = posts;
+    renderFeed();
+    renderSaved();
+    renderAdmin();
+  })
+  .catch(err => {
+    console.error("Failed to load posts from GAS:", err);
+  });
+
+if (msg) msg.textContent = "";
+      } catch (err) {
+        console.error(err);
+        if (msg) msg.textContent = err.message || "ログインに失敗しました。";
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = oldText || "ログイン";
+        }
+      }
+    });
+  }
+
+  // register
+  if (registerForm) {
+    registerForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const name = ($("#registerName")?.value || "").trim();
+      const email = ($("#registerEmail")?.value || "").trim();
+      const password = ($("#registerPassword")?.value || "").trim();
+      const msg = $("#loginMsg");
+      const btn = $("#registerBtn");
+
+      if (msg) msg.textContent = "";
+
+      if (!name || !email || !password) {
+        if (msg) msg.textContent = "お名前・メールアドレス・パスワードを入力してください。";
+        return;
+      }
+
+      const oldText = btn ? btn.textContent : "";
+
+      try {
+        if (btn) {
+          btn.disabled = true;
+          btn.textContent = "登録中...";
+        }
+
+        await registerToApi(name, email, password);
+
+        if (msg) msg.textContent = "登録が完了しました。ログインしてください。";
+        registerForm.reset();
+
+        if (loginForm) loginForm.style.display = "grid";
+        registerForm.style.display = "none";
+        if (showRegisterBtn) showRegisterBtn.style.display = "inline-block";
+        if (showLoginBtn) showLoginBtn.style.display = "none";
+
+        const loginEmail = $("#loginEmail");
+        if (loginEmail) loginEmail.value = email;
+
+      } catch (err) {
+        console.error(err);
+        if (msg) msg.textContent = err.message || "新規登録に失敗しました。";
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = oldText || "新規登録";
+        }
+      }
+    });
+  }
+
+  // logout
+  on("#btnLogout", "click", () => {
+    clearCurrentUser();
+    applyAuthUI();
+
+    const loginEmail = $("#loginEmail");
+    const loginPassword = $("#loginPassword");
+    const loginMsg = $("#loginMsg");
+
+    if (loginEmail) loginEmail.value = "";
+    if (loginPassword) loginPassword.value = "";
+    if (loginMsg) loginMsg.textContent = "";
+
+    setTimeout(() => {
+      if (loginEmail) loginEmail.focus();
+    }, 50);
+  });
+
   on("#btnHelp", "click", () => {
     alert(
-`Adminタブで記事を投稿・編集できます（localStorage保存）。
-運用で共有する場合は Export(JSON) → 別端末で Import が最短です。
-
+`Adminタブで記事を投稿・編集できます。
 次の段階：
-・コミュ限定ログイン（合言葉/招待）
+・コミュ限定ログイン
+・権限制御
 ・記事データをスプレッドシート/Firestoreに移行`
     );
   });
 }
 
+async function testLoginApi() {
+  const base = window.APP_CONFIG?.GAS_API_URL;
+  if (!base) {
+    console.log("GAS_API_URL is not set");
+    return;
+  }
+
+  const res = await fetch(base, {
+    method: "POST",
+    headers: {
+      "Content-Type": "text/plain;charset=utf-8"
+    },
+    body: JSON.stringify({
+      action: "login",
+      email: "yourmail@example.com",
+      password: "1234"
+    })
+  });
+
+  const data = await res.json();
+  console.log("login result:", data);
+}
+
 // ===== Init =====
 async function init(){
   bind();
-  setActivePage("home");
 
   if($("#pDate")) $("#pDate").value = todayYMD();
 
-  // まずは即表示
+  applyAuthUI();
+
+  if (!getCurrentUser()) {
+    return;
+  }
+
+  setActivePage("home");
+
   try { renderChips(); } catch (e) { console.error("renderChips error:", e); }
   try { renderFeed(); } catch (e) { console.error("renderFeed error:", e); }
   try { renderContact(); } catch (e) { console.error("renderContact error:", e); }
   try { renderAdmin(); } catch (e) { console.error("renderAdmin error:", e); }
 
-  // クラウドは裏で取得
   fetchPostsFromApi()
     .then(posts => {
       cloudPosts = posts;
