@@ -454,22 +454,44 @@ function applyAuthUI() {
   const appRoot = document.getElementById("appRoot");
   const btnLogout = document.getElementById("btnLogout");
   const adminNav = document.querySelector('.navitem[data-nav="admin"]');
+  const adminPage = document.querySelector('.page[data-page="admin"]');
 
   if (!authGate || !appRoot) return;
 
+  // 未ログイン
   if (!user) {
     authGate.hidden = false;
     appRoot.hidden = true;
+
     if (btnLogout) btnLogout.style.display = "none";
+    if (adminNav) adminNav.style.display = "none";
+    if (adminPage) adminPage.style.display = "none";
+
     return;
   }
 
+  // ログイン済み
   authGate.hidden = true;
   appRoot.hidden = false;
+
   if (btnLogout) btnLogout.style.display = "grid";
 
+  const isAdmin = user.role === "admin";
+
   if (adminNav) {
-    adminNav.style.display = "flex";
+    adminNav.style.display = isAdmin ? "flex" : "none";
+  }
+
+  if (adminPage) {
+    adminPage.style.display = isAdmin ? "" : "none";
+  }
+
+  // adminでないのにadminページを開いていた場合はhomeへ戻す
+  if (!isAdmin) {
+    const activeAdmin = document.querySelector('.page[data-page="admin"].page--active');
+    if (activeAdmin) {
+      setActivePage("home");
+    }
   }
 }
 
@@ -743,6 +765,12 @@ function renderContact(){
 
 // ===== Navigation =====
 function setActivePage(key){
+  const user = getCurrentUser();
+
+  if (key === "admin" && (!user || user.role !== "admin")) {
+    key = "home";
+  }
+
   $$(".page").forEach(p => p.classList.remove("page--active"));
   const page = $(`.page[data-page="${key}"]`);
   if(page) page.classList.add("page--active");
@@ -751,7 +779,6 @@ function setActivePage(key){
   const nav = $(`.navitem[data-nav="${key}"]`);
   if(nav) nav.classList.add("navitem--active");
 
-  // per page refresh
   if(key === "saved") renderSaved();
   if(key === "contact") renderContact();
   if(key === "schedule") renderCalendar();
