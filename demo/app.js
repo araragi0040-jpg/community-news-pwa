@@ -1311,6 +1311,7 @@ function importJsonFile(file){
 
 // ===== Bindings =====
 function bind(){
+  // helper
   const on = (sel, ev, fn, root=document) => {
     const el = root.querySelector(sel);
     if(!el) return null;
@@ -1318,9 +1319,11 @@ function bind(){
     return el;
   };
 
+  // Event modal
   on("#eventModalScrim", "click", closeEventModal);
   on("#eventModalClose", "click", closeEventModal);
 
+  // search
   on("#q", "input", (e) => {
     state.query = e.target.value;
     renderFeed();
@@ -1333,6 +1336,7 @@ function bind(){
     renderFeed();
   });
 
+  // nav
   const navRoot = document.querySelector(".bottomnav");
   if(navRoot){
     navRoot.addEventListener("click", (e) => {
@@ -1344,6 +1348,7 @@ function bind(){
     });
   }
 
+  // schedule view switch
   const schedViewSeg = $("#schedViewSeg");
   if (schedViewSeg) {
     schedViewSeg.addEventListener("click", (e) => {
@@ -1354,62 +1359,22 @@ function bind(){
       if (!view) return;
 
       state.scheduleView = view;
-      state.scheduleCursor = new Date();
-      state.scheduleCursor.setHours(0,0,0,0);
+
+      if (view === "2w") {
+        state.scheduleCursor = new Date();
+        state.scheduleCursor.setHours(0,0,0,0);
+      }
+
+      if (view === "month" && !state.scheduleCursor) {
+        state.scheduleCursor = new Date();
+        state.scheduleCursor.setHours(0,0,0,0);
+      }
 
       renderCalendar();
     });
   }
 
-const calRoot = $("#cal");
-if (calRoot) {
-  calRoot.addEventListener("click", (e) => {
-    const eventBtn = e.target.closest(".cal__ev, .cal2w__event");
-    if (eventBtn) {
-      e.preventDefault();
-      e.stopPropagation();
-
-      const dateStr = eventBtn.dataset.eventDate;
-      const events = eventsByDate().get(dateStr) || [];
-      openEventModal(dateStr, events);
-      return;
-    }
-
-    const prevBtn = e.target.closest("#calPrev");
-    if (prevBtn) {
-      const c = new Date(state.scheduleCursor || new Date());
-      if(state.scheduleView === "month"){
-        c.setMonth(c.getMonth() - 1);
-      } else {
-        c.setDate(c.getDate() - 14);
-      }
-      state.scheduleCursor = c;
-      renderCalendar();
-      return;
-    }
-
-    const nextBtn = e.target.closest("#calNext");
-    if (nextBtn) {
-      const c = new Date(state.scheduleCursor || new Date());
-      if(state.scheduleView === "month"){
-        c.setMonth(c.getMonth() + 1);
-      } else {
-        c.setDate(c.getDate() + 14);
-      }
-      state.scheduleCursor = c;
-      renderCalendar();
-      return;
-    }
-
-    const todayBtn = e.target.closest("#calToday");
-    if (todayBtn) {
-      state.scheduleCursor = new Date();
-      state.scheduleCursor.setHours(0,0,0,0);
-      renderCalendar();
-    }
-  });
-}
-
+  // drawer
   on("#drawerScrim", "click", closeDrawer);
   on("#btnClose", "click", closeDrawer);
 
@@ -1424,6 +1389,7 @@ if (calRoot) {
     renderSaveBtn();
   });
 
+  // admin
   on("#btnNewPost", "click", () => {
     clearEditor();
     const pDate = $("#pDate");
@@ -1453,114 +1419,203 @@ if (calRoot) {
     downloadJson(obj, `community-news-export-${Date.now()}.json`);
   });
 
-const contactForm = document.getElementById("contactForm");
-if(contactForm){
-  contactForm.addEventListener("submit", async (e) => {
-    e.preventDefault();
-
-    const btn = contactForm.querySelector('button[type="submit"]');
-    const oldText = btn ? btn.textContent : "";
-
-    const name = ($("#cName")?.value || "").trim();
-    const email = ($("#cEmail")?.value || "").trim();
-    const message = ($("#cMessage")?.value || "").trim();
-
-    if (!name || !email || !message) {
-      alert("お名前・メールアドレス・お問い合わせ内容を入力してください。");
-      return;
-    }
-
-    try {
-      if (btn) {
-        btn.disabled = true;
-        btn.textContent = "送信中...";
-      }
-
-      await saveContactToApi({
-        name,
-        email,
-        message
-      });
-
-      alert("お問い合わせを送信しました。");
-      contactForm.reset();
-
-    } catch (err) {
-      console.error(err);
-      alert("送信に失敗しました。\n" + (err.message || err));
-    } finally {
-      if (btn) {
-        btn.disabled = false;
-        btn.textContent = oldText || "送信";
-      }
-    }
-  });
-}
-
-   const loginForm = $("#loginForm");
-if (loginForm) {
-  loginForm.addEventListener("submit", async (e) => {
-    e.preventDefault();
-
-    const email = ($("#loginEmail")?.value || "").trim();
-    const password = ($("#loginPassword")?.value || "").trim();
-    const msg = $("#loginMsg");
-    const btn = $("#loginBtn");
-
-    if (msg) msg.textContent = "";
-
-    if (!email || !password) {
-      if (msg) msg.textContent = "メールアドレスとパスワードを入力してください。";
-      return;
-    }
-
-    const oldText = btn ? btn.textContent : "";
-
-    try {
-      if (btn) {
-        btn.disabled = true;
-        btn.textContent = "ログイン中...";
-      }
-
-      const user = await loginToApi(email, password);
-saveCurrentUser(user);
-applyAuthUI();
-
-renderChips();
-renderFeed();
-renderContact();
-renderAdmin();
-
-fetchPostsFromApi()
-  .then(posts => {
-    cloudPosts = posts;
-    renderFeed();
-    renderSaved();
-    renderAdmin();
-  })
-  .catch(err => {
-    console.error("Failed to load posts from GAS:", err);
+  on("#btnImport", "click", () => {
+    const f = $("#fileImport");
+    if(f) f.click();
   });
 
-setActivePage("home");
+  const fileImport = $("#fileImport");
+  if(fileImport){
+    fileImport.addEventListener("change", async (e) => {
+      const file = e.target.files?.[0];
+      if(!file) return;
+
+      try{
+        const data = await importJsonFile(file);
+        if(!data || !Array.isArray(data.posts)){
+          alert("JSON形式が想定と違います（posts配列が必要）。");
+          return;
+        }
+        const normalized = data.posts.map(normalizePost);
+        savePosts(normalized);
+        renderAdmin();
+        renderFeed();
+        alert("Import完了。Homeに反映しました。");
+      }catch(err){
+        console.error(err);
+        alert("Importに失敗しました。JSONを確認してください。");
+      }finally{
+        fileImport.value = "";
+      }
+    });
+  }
+
+  // contact
+  const contactForm = document.getElementById("contactForm");
+  if(contactForm){
+    contactForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const name = ($("#cName")?.value || "").trim();
+      const email = ($("#cEmail")?.value || "").trim();
+      const message = ($("#cMessage")?.value || "").trim();
+
+      if (!name || !email || !message) {
+        alert("お名前・メールアドレス・お問い合わせ内容を入力してください。");
+        return;
+      }
+
+      try {
+        await saveContactToApi({ name, email, message });
+        alert("送信ありがとうございます。");
+        contactForm.reset();
+      } catch (err) {
+        console.error(err);
+        alert("送信に失敗しました。\n" + (err.message || err));
+      }
+    });
+  }
+
+  // login / register switch
+  const showRegisterBtn = $("#showRegisterBtn");
+  const showLoginBtn = $("#showLoginBtn");
+  const loginForm = $("#loginForm");
+  const registerForm = $("#registerForm");
+  const loginMsg = $("#loginMsg");
+
+  if (showRegisterBtn) {
+    showRegisterBtn.addEventListener("click", () => {
+      if (loginForm) loginForm.style.display = "none";
+      if (registerForm) registerForm.style.display = "grid";
+      showRegisterBtn.style.display = "none";
+      if (showLoginBtn) showLoginBtn.style.display = "inline-block";
+      if (loginMsg) loginMsg.textContent = "";
+    });
+  }
+
+  if (showLoginBtn) {
+    showLoginBtn.addEventListener("click", () => {
+      if (loginForm) loginForm.style.display = "grid";
+      if (registerForm) registerForm.style.display = "none";
+      if (showRegisterBtn) showRegisterBtn.style.display = "inline-block";
+      showLoginBtn.style.display = "none";
+      if (loginMsg) loginMsg.textContent = "";
+    });
+  }
+
+  // login
+  if (loginForm) {
+    loginForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const email = ($("#loginEmail")?.value || "").trim();
+      const password = ($("#loginPassword")?.value || "").trim();
+      const msg = $("#loginMsg");
+      const btn = $("#loginBtn");
 
       if (msg) msg.textContent = "";
 
-    } catch (err) {
-      console.error(err);
-      if (msg) msg.textContent = err.message || "ログインに失敗しました。";
-    } finally {
-      if (btn) {
-        btn.disabled = false;
-        btn.textContent = oldText || "ログイン";
+      if (!email || !password) {
+        if (msg) msg.textContent = "メールアドレスとパスワードを入力してください。";
+        return;
       }
-    }
-  });
-}
-/* ログイン処理 */
-const btnLogout = $("#btnLogout");
-if (btnLogout) {
-  btnLogout.addEventListener("click", () => {
+
+      const oldText = btn ? btn.textContent : "";
+
+      try {
+        if (btn) {
+          btn.disabled = true;
+          btn.textContent = "ログイン中...";
+        }
+
+        const user = await loginToApi(email, password);
+        saveCurrentUser(user);
+        applyAuthUI();
+
+        renderChips();
+        renderFeed();
+        renderContact();
+        renderAdmin();
+
+        fetchPostsFromApi()
+          .then(posts => {
+            cloudPosts = posts;
+            renderFeed();
+            renderSaved();
+            renderAdmin();
+          })
+          .catch(err => {
+            console.error("Failed to load posts from GAS:", err);
+          });
+
+        setActivePage("home");
+
+        if (msg) msg.textContent = "";
+      } catch (err) {
+        console.error(err);
+        if (msg) msg.textContent = err.message || "ログインに失敗しました。";
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = oldText || "ログイン";
+        }
+      }
+    });
+  }
+
+  // register
+  if (registerForm) {
+    registerForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const name = ($("#registerName")?.value || "").trim();
+      const email = ($("#registerEmail")?.value || "").trim();
+      const password = ($("#registerPassword")?.value || "").trim();
+      const msg = $("#loginMsg");
+      const btn = $("#registerBtn");
+
+      if (msg) msg.textContent = "";
+
+      if (!name || !email || !password) {
+        if (msg) msg.textContent = "お名前・メールアドレス・パスワードを入力してください。";
+        return;
+      }
+
+      const oldText = btn ? btn.textContent : "";
+
+      try {
+        if (btn) {
+          btn.disabled = true;
+          btn.textContent = "登録中...";
+        }
+
+        await registerToApi(name, email, password);
+
+        if (msg) msg.textContent = "登録が完了しました。ログインしてください。";
+        registerForm.reset();
+
+        if (loginForm) loginForm.style.display = "grid";
+        registerForm.style.display = "none";
+        if (showRegisterBtn) showRegisterBtn.style.display = "inline-block";
+        if (showLoginBtn) showLoginBtn.style.display = "none";
+
+        const loginEmail = $("#loginEmail");
+        if (loginEmail) loginEmail.value = email;
+
+      } catch (err) {
+        console.error(err);
+        if (msg) msg.textContent = err.message || "新規登録に失敗しました。";
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = oldText || "新規登録";
+        }
+      }
+    });
+  }
+
+  // logout
+  on("#btnLogout", "click", () => {
     clearCurrentUser();
     applyAuthUI();
 
@@ -1576,89 +1631,15 @@ if (btnLogout) {
       if (loginEmail) loginEmail.focus();
     }, 50);
   });
-}
 
-   const showRegisterBtn = $("#showRegisterBtn");
-const showLoginBtn = $("#showLoginBtn");
-const loginForm = $("#loginForm");
-const registerForm = $("#registerForm");
-const loginMsg = $("#loginMsg");
-
-if (showRegisterBtn) {
-  showRegisterBtn.addEventListener("click", () => {
-    if (loginForm) loginForm.style.display = "none";
-    if (registerForm) registerForm.style.display = "grid";
-    if (showRegisterBtn) showRegisterBtn.style.display = "none";
-    if (showLoginBtn) showLoginBtn.style.display = "inline-block";
-    if (loginMsg) loginMsg.textContent = "";
-  });
-}
-
-if (showLoginBtn) {
-  showLoginBtn.addEventListener("click", () => {
-    if (loginForm) loginForm.style.display = "grid";
-    if (registerForm) registerForm.style.display = "none";
-    if (showRegisterBtn) showRegisterBtn.style.display = "inline-block";
-    if (showLoginBtn) showLoginBtn.style.display = "none";
-    if (loginMsg) loginMsg.textContent = "";
-  });
-}
-
-   const registerFormEl = $("#registerForm");
-if (registerFormEl) {
-  registerFormEl.addEventListener("submit", async (e) => {
-    e.preventDefault();
-
-    const name = ($("#registerName")?.value || "").trim();
-    const email = ($("#registerEmail")?.value || "").trim();
-    const password = ($("#registerPassword")?.value || "").trim();
-    const msg = $("#loginMsg");
-    const btn = $("#registerBtn");
-
-    if (msg) msg.textContent = "";
-
-    if (!name || !email || !password) {
-      if (msg) msg.textContent = "お名前・メールアドレス・パスワードを入力してください。";
-      return;
-    }
-
-    const oldText = btn ? btn.textContent : "";
-
-    try {
-      if (btn) {
-        btn.disabled = true;
-        btn.textContent = "登録中...";
-      }
-
-      await registerToApi(name, email, password);
-
-      if (msg) msg.textContent = "登録が完了しました。ログインしてください。";
-
-      registerFormEl.reset();
-
-      if (loginForm) loginForm.style.display = "grid";
-      if (registerForm) registerForm.style.display = "none";
-      if (showRegisterBtn) showRegisterBtn.style.display = "inline-block";
-      if (showLoginBtn) showLoginBtn.style.display = "none";
-
-      const loginEmail = $("#loginEmail");
-      if (loginEmail) loginEmail.value = email;
-
-    } catch (err) {
-      console.error(err);
-      if (msg) msg.textContent = err.message || "新規登録に失敗しました。";
-    } finally {
-      if (btn) {
-        btn.disabled = false;
-        btn.textContent = oldText || "新規登録";
-      }
-    }
-  });
-}
-
-  on("#btnImport", "click", () => {
-    const f = $("#fileImport");
-    if(f) f.click();
+  on("#btnHelp", "click", () => {
+    alert(
+`Adminタブで記事を投稿・編集できます。
+次の段階：
+・コミュ限定ログイン
+・権限制御
+・記事データをスプレッドシート/Firestoreに移行`
+    );
   });
 }
 
