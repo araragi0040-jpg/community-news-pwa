@@ -735,7 +735,6 @@ function renderContact(){
   root.innerHTML = OWNERS.map(o => `
     <div class="owner-card">
       <div class="owner-name">${o.name}</div>
-      <div class="owner-role">${o.role}</div>
       <div class="owner-links">
         ${o.instagram ? `<a href="${o.instagram}" target="_blank">Instagram</a>` : ""}
         ${o.x ? `<a href="${o.x}" target="_blank">X</a>` : ""}
