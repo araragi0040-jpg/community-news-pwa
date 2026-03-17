@@ -73,47 +73,38 @@ const BASE_ARTICLES = [
 const OWNERS = [
   {
     name: "東",
-    role: "共同オーナー",
     instagram: "https://x.gd/tLcAs",
   },
   {
     name: "しゅう",
-    role: "共同オーナー",
     instagram: "https://x.gd/2a58h",
   },
   {
     name: "◯◯",
-    role: "共同オーナー",
     instagram: "https://instagram.com/yyyy",
   },
   {
     name: "◯◯",
-    role: "共同オーナー",
     instagram: "https://instagram.com/yyyy",
   },
   {
     name: "◯◯",
-    role: "共同オーナー",
     instagram: "https://instagram.com/yyyy",
   },
   {
     name: "◯◯",
-    role: "共同オーナー",
     instagram: "https://instagram.com/yyyy",
   },
   {
     name: "◯◯",
-    role: "共同オーナー",
     instagram: "https://instagram.com/yyyy",
   },
   {
     name: "◯◯",
-    role: "共同オーナー",
     instagram: "https://instagram.com/yyyy",
   },
   {
     name: "◯◯",
-    role: "共同オーナー",
     instagram: "https://instagram.com/yyyy",
   },
 ];
@@ -744,7 +735,6 @@ function renderContact(){
   root.innerHTML = OWNERS.map(o => `
     <div class="owner-card">
       <div class="owner-name">${o.name}</div>
-      <div class="owner-role">${o.role}</div>
       <div class="owner-links">
         ${o.instagram ? `<a href="${o.instagram}" target="_blank">Instagram</a>` : ""}
         ${o.x ? `<a href="${o.x}" target="_blank">X</a>` : ""}
