@@ -1342,3 +1342,32 @@ svg{ width:22px; height:22px; fill: currentColor; }
 #appRoot[hidden]{
   display: none !important;
 }
+
+.pane--schedule{
+  max-width: 920px;
+  margin: 0 auto;
+}
+
+.pane--schedule .pane__head{
+  margin: 8px 0 12px;
+}
+
+.schedview--top{
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  margin: 0 0 14px;
+}
+
+#schedViewSeg{
+  display: inline-flex;
+  padding: 6px;
+  border-radius: 999px;
+  border: 1px solid rgba(176,125,79,.22);
+  background: rgba(255,255,255,.70);
+  gap: 6px;
+}
+
+#cal{
+  width: 100%;
+}
