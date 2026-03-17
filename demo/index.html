@@ -117,19 +117,21 @@
     </main>
 
 <!-- Schedule Page -->
+<!-- Schedule Page -->
 <main class="page" data-page="schedule">
-  <section class="pane">
-    <div class="pane__head pane__head--row">
-      <div>
-        <h2 class="pane__title">イベントカレンダー</h2>
-        <p class="pane__sub">イベントのみを表示します</p>
-      </div>
+  <section class="pane pane--schedule">
+    <div class="pane__head">
+      <h2 class="pane__title">イベントカレンダー</h2>
+      <p class="pane__sub">イベントのみを表示します</p>
+    </div>
 
+    <div class="schedview schedview--top">
       <div class="seg" id="schedViewSeg">
         <button class="seg__btn" data-view="month" type="button">1カ月</button>
         <button class="seg__btn" data-view="2w" type="button">2週間</button>
       </div>
-  
+    </div>
+
     <div id="cal"></div>
   </section>
 </main>
