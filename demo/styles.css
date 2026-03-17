@@ -63,7 +63,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
 .brand__logo{
   width: 60px;
   height: 60px;
-  border-radius: 20px;      /* 四角ロゴなら良い感じ */
+  border-radius: 30px;      /* 四角ロゴなら良い感じ */
 /*  object-fit: contain;*/
   object-fit: cover;
   border: 1px solid rgba(176,125,79,.18);
