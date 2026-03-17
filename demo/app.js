@@ -73,47 +73,38 @@ const BASE_ARTICLES = [
 const OWNERS = [
   {
     name: "東",
-    role: "共同オーナー",
     instagram: "https://x.gd/tLcAs",
   },
   {
     name: "しゅう",
-    role: "共同オーナー",
     instagram: "https://x.gd/2a58h",
   },
   {
     name: "◯◯",
-    role: "共同オーナー",
     instagram: "https://instagram.com/yyyy",
   },
   {
     name: "◯◯",
-    role: "共同オーナー",
     instagram: "https://instagram.com/yyyy",
   },
   {
     name: "◯◯",
-    role: "共同オーナー",
     instagram: "https://instagram.com/yyyy",
   },
   {
     name: "◯◯",
-    role: "共同オーナー",
     instagram: "https://instagram.com/yyyy",
   },
   {
     name: "◯◯",
-    role: "共同オーナー",
     instagram: "https://instagram.com/yyyy",
   },
   {
     name: "◯◯",
-    role: "共同オーナー",
     instagram: "https://instagram.com/yyyy",
   },
   {
     name: "◯◯",
-    role: "共同オーナー",
     instagram: "https://instagram.com/yyyy",
   },
 ];
