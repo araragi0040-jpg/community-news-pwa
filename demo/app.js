@@ -1484,37 +1484,6 @@ function bind(){
     downloadJson(obj, `community-news-export-${Date.now()}.json`);
   });
 
-  on("#btnImport", "click", () => {
-    const f = $("#fileImport");
-    if(f) f.click();
-  });
-
-  const fileImport = $("#fileImport");
-  if(fileImport){
-    fileImport.addEventListener("change", async (e) => {
-      const file = e.target.files?.[0];
-      if(!file) return;
-
-      try{
-        const data = await importJsonFile(file);
-        if(!data || !Array.isArray(data.posts)){
-          alert("JSON形式が想定と違います（posts配列が必要）。");
-          return;
-        }
-        const normalized = data.posts.map(normalizePost);
-        savePosts(normalized);
-        renderAdmin();
-        renderFeed();
-        alert("Import完了。Homeに反映しました。");
-      }catch(err){
-        console.error(err);
-        alert("Importに失敗しました。JSONを確認してください。");
-      }finally{
-        fileImport.value = "";
-      }
-    });
-  }
-
   // contact
   const contactForm = document.getElementById("contactForm");
   if(contactForm){
