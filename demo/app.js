@@ -321,6 +321,50 @@ async function deletePostFromApi(id) {
   return true;
 }
 
+async function fetchAdminPostsFromApi() {
+  const base = window.APP_CONFIG?.GAS_API_URL;
+  if (!base) {
+    throw new Error("GAS_API_URL is not set");
+  }
+
+  const res = await fetch(base, {
+    method: "POST",
+    headers: {
+      "Content-Type": "text/plain;charset=utf-8"
+    },
+    body: JSON.stringify({
+      action: "listAdminPosts"
+    })
+  });
+
+  const data = await res.json();
+  if (!data.ok) {
+    throw new Error(data.message || "Failed to fetch admin posts");
+  }
+
+  return (data.posts || []).map(post => normalizePost({
+    id: post.id,
+    channel: post.channel,
+    tone: post.tone,
+    badge: post.badge,
+    date: post.date,
+    title: post.title,
+    desc: post.desc,
+    tags: post.tags || [],
+    summary: post.summary || [],
+    body: post.body || [],
+    cta: post.ctaUrl ? {
+      text: post.ctaText || "開く",
+      url: post.ctaUrl
+    } : null,
+    media: {
+      images: post.images || [],
+      video: post.video || ""
+    },
+    status: post.status || "public"
+  }));
+}
+
 async function savePostToApi(post) {
   const base = window.APP_CONFIG?.GAS_API_URL;
   if (!base) {
@@ -1139,8 +1183,14 @@ function renderCalendar(){
   }
 }
 // ===== Admin: list / editor =====
-function adminArticles(){
-  return cloudPosts.slice().sort((a,b)=> (a.date < b.date ? 1 : -1));
+function adminArticles() {
+  const source = adminPosts.slice().sort((a, b) => (a.date < b.date ? 1 : -1));
+
+  if (state.adminFilter === "draft") {
+    return source.filter(a => (a.status || "public") === "draft");
+  }
+
+  return source.filter(a => (a.status || "public") !== "draft");
 }
 
 function renderAdmin(){
