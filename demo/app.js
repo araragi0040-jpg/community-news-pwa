@@ -1246,6 +1246,7 @@ function clearEditor(){
   $("#pCtaUrl").value = "";
   $("#pImages").value = "";
   $("#pVideo").value = "";
+  $("#pStatus").value = "public";
   syncAdminButtons();
 }
 
@@ -1267,6 +1268,7 @@ function startEdit(id){
   $("#pCtaUrl").value = a.cta?.url || "";
   $("#pImages").value = (a.media?.images || []).join("\n");
   $("#pVideo").value = a.media?.video || "";
+  $("#pStatus").value = a.status || "public";
   syncAdminButtons();
 }
 
@@ -1297,6 +1299,7 @@ function collectForm(){
 
   const ctaText = $("#pCtaText").value.trim();
   const ctaUrl = $("#pCtaUrl").value.trim();
+  const status = $("#pStatus").value || "public";
 
   // ★ここを追加（画像URLと動画URLを読む）
   const images = ($("#pImages").value || "")
@@ -1320,7 +1323,23 @@ function collectForm(){
     media: { images, video }
   });
 
-  return a;
+  return {
+  id: state.editingId || "",
+  date,
+  channel,
+  tone,
+  badge: channelLabel(channel),
+  title,
+  desc,
+  tags,
+  summary,
+  body,
+  ctaText,
+  ctaUrl,
+  images,
+  video,
+  status
+};
 }
 
 async function saveEditor(){
