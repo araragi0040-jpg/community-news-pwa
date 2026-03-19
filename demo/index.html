@@ -167,14 +167,14 @@
             <div class="admin__items" id="adminItems"></div>
           </div>
 
-          <div class="admin__editor">
-            <div class="admin__editorhead">
-              <div class="admin__listh">編集</div>
-              <div style="display:flex; gap:8px;">
-                <button class="btn btn--danger" id="btnDeletePost" disabled>削除</button>
-                <button class="btn" id="btnSavePost" disabled>保存</button>
-              </div>
-            </div>
+          <div class="adminTopbar">
+  <div class="adminTabs" id="adminTabs">
+    <button type="button" class="adminTab adminTab--active" data-admin-filter="public">記事一覧</button>
+    <button type="button" class="adminTab" data-admin-filter="draft">下書き</button>
+  </div>
+
+  <button type="button" class="btn btn--line" id="btnNewPost">＋ 新規記事</button>
+</div>
 
             <form class="form" id="postForm">
               <div class="grid2">
