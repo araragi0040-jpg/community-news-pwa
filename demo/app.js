@@ -1114,7 +1114,7 @@ function renderCalendar(){
 }
 // ===== Admin: list / editor =====
 function adminArticles(){
-  return loadPosts().slice().sort((a,b)=> (a.date < b.date ? 1 : -1));
+  return cloudPosts.slice().sort((a,b)=> (a.date < b.date ? 1 : -1));
 }
 
 function renderAdmin(){
@@ -1174,8 +1174,7 @@ function clearEditor(){
 }
 
 function startEdit(id){
-  const posts = loadPosts();
-  const a = posts.find(x=>x.id===id);
+  const a = cloudPosts.find(x => x.id === id);
   if(!a) return;
 
   state.editingId = a.id;
@@ -1185,9 +1184,9 @@ function startEdit(id){
   $("#pChannel").value = a.channel || "announce";
   $("#pTone").value = a.tone || "accent";
   $("#pDesc").value = a.desc || "";
-  $("#pTags").value = (a.tags||[]).join(",");
-  $("#pSummary").value = (a.summary||[]).join("\n");
-  $("#pBody").value = (a.body||[]).join("\n\n");
+  $("#pTags").value = (a.tags || []).join(",");
+  $("#pSummary").value = (a.summary || []).join("\n");
+  $("#pBody").value = (a.body || []).join("\n\n");
   $("#pCtaText").value = a.cta?.text || "";
   $("#pCtaUrl").value = a.cta?.url || "";
   $("#pImages").value = (a.media?.images || []).join("\n");
@@ -1292,13 +1291,6 @@ async function saveEditor(){
     if(cidx >= 0) cloudPosts[cidx] = normalized;
     else cloudPosts.unshift(normalized);
 
-    // localStorage も更新
-    const posts = loadPosts();
-    const lidx = posts.findIndex(x => x.id === normalized.id);
-    if(lidx >= 0) posts[lidx] = normalized;
-    else posts.unshift(normalized);
-    savePosts(posts);
-
     // 先に画面反映
     renderAdmin();
     renderFeed();
@@ -1346,24 +1338,55 @@ async function saveEditor(){
   }
 }
 
-function deleteEditor(){
+async function deletePostFromApi(id) {
+  const base = window.APP_CONFIG?.GAS_API_URL;
+  if (!base) {
+    throw new Error("GAS_API_URL is not set");
+  }
+
+  const res = await fetch(base, {
+    method: "POST",
+    headers: {
+      "Content-Type": "text/plain;charset=utf-8"
+    },
+    body: JSON.stringify({
+      action: "deletePost",
+      id
+    })
+  });
+
+  const data = await res.json();
+
+  if (!data.ok) {
+    throw new Error(data.message || "Failed to delete post");
+  }
+
+  return true;
+}
+
+async function deleteEditor(){
   if(!state.editingId) return;
   const ok = confirm("この記事を削除しますか？");
   if(!ok) return;
 
-  const posts = loadPosts().filter(x=>x.id !== state.editingId);
-  savePosts(posts);
+  try {
+    await deletePostFromApi(state.editingId);
 
-  // remove from saved if saved
-  const saved = loadSaved().filter(id => id !== state.editingId);
-  saveSaved(saved);
+    cloudPosts = cloudPosts.filter(x => x.id !== state.editingId);
 
-  clearEditor();
-  renderAdmin();
-  renderFeed();
-  renderSaved();
+    const saved = loadSaved().filter(id => id !== state.editingId);
+    saveSaved(saved);
 
-  alert("削除しました。");
+    clearEditor();
+    renderAdmin();
+    renderFeed();
+    renderSaved();
+
+    alert("削除しました。");
+  } catch (err) {
+    console.error(err);
+    alert("削除に失敗しました。\n" + (err.message || err));
+  }
 }
 
 // ===== Export / Import =====
