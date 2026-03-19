@@ -295,6 +295,32 @@ async function fetchPostsFromApi() {
   }));
 }
 
+async function deletePostFromApi(id) {
+  const base = window.APP_CONFIG?.GAS_API_URL;
+  if (!base) {
+    throw new Error("GAS_API_URL is not set");
+  }
+
+  const res = await fetch(base, {
+    method: "POST",
+    headers: {
+      "Content-Type": "text/plain;charset=utf-8"
+    },
+    body: JSON.stringify({
+      action: "deletePost",
+      id
+    })
+  });
+
+  const data = await res.json();
+
+  if (!data.ok) {
+    throw new Error(data.message || "Failed to delete post");
+  }
+
+  return true;
+}
+
 async function savePostToApi(post) {
   const base = window.APP_CONFIG?.GAS_API_URL;
   if (!base) {
@@ -365,6 +391,42 @@ async function saveContactToApi(contact) {
   }
 
   return data.contact;
+}
+
+async function uploadImageToApi(file) {
+  const base = window.APP_CONFIG?.GAS_API_URL;
+  if (!base) throw new Error("GAS_API_URL is not set");
+
+  const dataUrl = await fileToDataUrl(file);
+
+  const res = await fetch(base, {
+    method: "POST",
+    headers: {
+      "Content-Type": "text/plain;charset=utf-8"
+    },
+    body: JSON.stringify({
+      action: "uploadImage",
+      fileName: file.name,
+      mimeType: file.type,
+      dataUrl
+    })
+  });
+
+  const data = await res.json();
+  if (!data.ok) {
+    throw new Error(data.message || "Image upload failed");
+  }
+
+  return data.url;
+}
+
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }
 
 /* ログイン関数 */
@@ -1078,7 +1140,7 @@ function renderCalendar(){
 }
 // ===== Admin: list / editor =====
 function adminArticles(){
-  return loadPosts().slice().sort((a,b)=> (a.date < b.date ? 1 : -1));
+  return cloudPosts.slice().sort((a,b)=> (a.date < b.date ? 1 : -1));
 }
 
 function renderAdmin(){
@@ -1138,8 +1200,7 @@ function clearEditor(){
 }
 
 function startEdit(id){
-  const posts = loadPosts();
-  const a = posts.find(x=>x.id===id);
+  const a = cloudPosts.find(x => x.id === id);
   if(!a) return;
 
   state.editingId = a.id;
@@ -1149,9 +1210,9 @@ function startEdit(id){
   $("#pChannel").value = a.channel || "announce";
   $("#pTone").value = a.tone || "accent";
   $("#pDesc").value = a.desc || "";
-  $("#pTags").value = (a.tags||[]).join(",");
-  $("#pSummary").value = (a.summary||[]).join("\n");
-  $("#pBody").value = (a.body||[]).join("\n\n");
+  $("#pTags").value = (a.tags || []).join(",");
+  $("#pSummary").value = (a.summary || []).join("\n");
+  $("#pBody").value = (a.body || []).join("\n\n");
   $("#pCtaText").value = a.cta?.text || "";
   $("#pCtaUrl").value = a.cta?.url || "";
   $("#pImages").value = (a.media?.images || []).join("\n");
@@ -1256,13 +1317,6 @@ async function saveEditor(){
     if(cidx >= 0) cloudPosts[cidx] = normalized;
     else cloudPosts.unshift(normalized);
 
-    // localStorage も更新
-    const posts = loadPosts();
-    const lidx = posts.findIndex(x => x.id === normalized.id);
-    if(lidx >= 0) posts[lidx] = normalized;
-    else posts.unshift(normalized);
-    savePosts(posts);
-
     // 先に画面反映
     renderAdmin();
     renderFeed();
@@ -1310,24 +1364,29 @@ async function saveEditor(){
   }
 }
 
-function deleteEditor(){
+async function deleteEditor(){
   if(!state.editingId) return;
   const ok = confirm("この記事を削除しますか？");
   if(!ok) return;
 
-  const posts = loadPosts().filter(x=>x.id !== state.editingId);
-  savePosts(posts);
+  try {
+    await deletePostFromApi(state.editingId);
 
-  // remove from saved if saved
-  const saved = loadSaved().filter(id => id !== state.editingId);
-  saveSaved(saved);
+    cloudPosts = cloudPosts.filter(x => x.id !== state.editingId);
 
-  clearEditor();
-  renderAdmin();
-  renderFeed();
-  renderSaved();
+    const saved = loadSaved().filter(id => id !== state.editingId);
+    saveSaved(saved);
 
-  alert("削除しました。");
+    clearEditor();
+    renderAdmin();
+    renderFeed();
+    renderSaved();
+
+    alert("削除しました。");
+  } catch (err) {
+    console.error(err);
+    alert("削除に失敗しました。\n" + (err.message || err));
+  }
 }
 
 // ===== Export / Import =====
@@ -1473,6 +1532,14 @@ function bind(){
     const obj = buildExportObject();
     downloadJson(obj, `community-news-export-${Date.now()}.json`);
   });
+
+   const postForm = document.getElementById("postForm");
+if (postForm) {
+  postForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  });
+}
 
   // contact
   const contactForm = document.getElementById("contactForm");
@@ -1643,6 +1710,38 @@ if (msg) msg.textContent = "";
       }
     });
   }
+
+   const pImageFiles = document.getElementById("pImageFiles");
+if (pImageFiles) {
+  pImageFiles.addEventListener("change", async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+
+    const textarea = document.getElementById("pImages");
+    if (!textarea) return;
+
+    try {
+      const uploadedUrls = [];
+
+      for (const file of files) {
+        const url = await uploadImageToApi(file);
+        uploadedUrls.push(url);
+      }
+
+      const current = textarea.value.trim();
+      textarea.value = [current, ...uploadedUrls]
+        .filter(Boolean)
+        .join("\n");
+
+      console.log("pImages updated:", textarea.value);
+    } catch (err) {
+      console.error(err);
+      alert("画像アップロードに失敗しました。\n" + (err.message || err));
+    } finally {
+      pImageFiles.value = "";
+    }
+  });
+}
 
   // logout
   on("#btnLogout", "click", () => {
