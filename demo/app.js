@@ -367,6 +367,42 @@ async function saveContactToApi(contact) {
   return data.contact;
 }
 
+async function uploadImageToApi(file) {
+  const base = window.APP_CONFIG?.GAS_API_URL;
+  if (!base) throw new Error("GAS_API_URL is not set");
+
+  const dataUrl = await fileToDataUrl(file);
+
+  const res = await fetch(base, {
+    method: "POST",
+    headers: {
+      "Content-Type": "text/plain;charset=utf-8"
+    },
+    body: JSON.stringify({
+      action: "uploadImage",
+      fileName: file.name,
+      mimeType: file.type,
+      dataUrl
+    })
+  });
+
+  const data = await res.json();
+  if (!data.ok) {
+    throw new Error(data.message || "Image upload failed");
+  }
+
+  return data.url;
+}
+
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 /* ログイン関数 */
 async function loginToApi(email, password) {
   const base = window.APP_CONFIG?.GAS_API_URL;
@@ -1643,6 +1679,34 @@ if (msg) msg.textContent = "";
       }
     });
   }
+
+   const pImageFiles = document.getElementById("pImageFiles");
+if (pImageFiles) {
+  pImageFiles.addEventListener("change", async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+
+    const textarea = document.getElementById("pImages");
+    if (!textarea) return;
+
+    try {
+      const uploadedUrls = [];
+
+      for (const file of files) {
+        const url = await uploadImageToApi(file);
+        uploadedUrls.push(url);
+      }
+
+      const current = textarea.value.trim();
+      textarea.value = [current, ...uploadedUrls].filter(Boolean).join("\n");
+    } catch (err) {
+      console.error(err);
+      alert("画像アップロードに失敗しました。\n" + (err.message || err));
+    } finally {
+      pImageFiles.value = "";
+    }
+  });
+}
 
   // logout
   on("#btnLogout", "click", () => {
