@@ -1689,6 +1689,7 @@ if (msg) msg.textContent = "";
   }
 
    const pImageFiles = document.getElementById("pImageFiles");
+
 if (pImageFiles) {
   pImageFiles.addEventListener("change", async (e) => {
     const files = Array.from(e.target.files || []);
@@ -1706,7 +1707,11 @@ if (pImageFiles) {
       }
 
       const current = textarea.value.trim();
-      textarea.value = [current, ...uploadedUrls].filter(Boolean).join("\n");
+
+      textarea.value = [current, ...uploadedUrls]
+        .filter(Boolean)
+        .join("\n");
+
     } catch (err) {
       console.error(err);
       alert("画像アップロードに失敗しました。\n" + (err.message || err));
