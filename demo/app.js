@@ -321,50 +321,6 @@ async function deletePostFromApi(id) {
   return true;
 }
 
-async function fetchAdminPostsFromApi() {
-  const base = window.APP_CONFIG?.GAS_API_URL;
-  if (!base) {
-    throw new Error("GAS_API_URL is not set");
-  }
-
-  const res = await fetch(base, {
-    method: "POST",
-    headers: {
-      "Content-Type": "text/plain;charset=utf-8"
-    },
-    body: JSON.stringify({
-      action: "listAdminPosts"
-    })
-  });
-
-  const data = await res.json();
-  if (!data.ok) {
-    throw new Error(data.message || "Failed to fetch admin posts");
-  }
-
-  return (data.posts || []).map(post => normalizePost({
-    id: post.id,
-    channel: post.channel,
-    tone: post.tone,
-    badge: post.badge,
-    date: post.date,
-    title: post.title,
-    desc: post.desc,
-    tags: post.tags || [],
-    summary: post.summary || [],
-    body: post.body || [],
-    cta: post.ctaUrl ? {
-      text: post.ctaText || "開く",
-      url: post.ctaUrl
-    } : null,
-    media: {
-      images: post.images || [],
-      video: post.video || ""
-    },
-    status: post.status || "public"
-  }));
-}
-
 async function savePostToApi(post) {
   const base = window.APP_CONFIG?.GAS_API_URL;
   if (!base) {
@@ -1183,14 +1139,8 @@ function renderCalendar(){
   }
 }
 // ===== Admin: list / editor =====
-function adminArticles() {
-  const source = adminPosts.slice().sort((a, b) => (a.date < b.date ? 1 : -1));
-
-  if (state.adminFilter === "draft") {
-    return source.filter(a => (a.status || "public") === "draft");
-  }
-
-  return source.filter(a => (a.status || "public") !== "draft");
+function adminArticles(){
+  return cloudPosts.slice().sort((a,b)=> (a.date < b.date ? 1 : -1));
 }
 
 function renderAdmin(){
@@ -1246,7 +1196,6 @@ function clearEditor(){
   $("#pCtaUrl").value = "";
   $("#pImages").value = "";
   $("#pVideo").value = "";
-  $("#pStatus").value = "public";
   syncAdminButtons();
 }
 
@@ -1268,7 +1217,6 @@ function startEdit(id){
   $("#pCtaUrl").value = a.cta?.url || "";
   $("#pImages").value = (a.media?.images || []).join("\n");
   $("#pVideo").value = a.media?.video || "";
-  $("#pStatus").value = a.status || "public";
   syncAdminButtons();
 }
 
@@ -1299,7 +1247,6 @@ function collectForm(){
 
   const ctaText = $("#pCtaText").value.trim();
   const ctaUrl = $("#pCtaUrl").value.trim();
-  const status = $("#pStatus").value || "public";
 
   // ★ここを追加（画像URLと動画URLを読む）
   const images = ($("#pImages").value || "")
@@ -1323,23 +1270,7 @@ function collectForm(){
     media: { images, video }
   });
 
-  return {
-  id: state.editingId || "",
-  date,
-  channel,
-  tone,
-  badge: channelLabel(channel),
-  title,
-  desc,
-  tags,
-  summary,
-  body,
-  ctaText,
-  ctaUrl,
-  images,
-  video,
-  status
-};
+  return a;
 }
 
 async function saveEditor(){
@@ -1580,20 +1511,6 @@ function bind(){
     syncAdminButtons();
   });
 
-   on("#btnSaveDraft", "click", (e) => {
-  e.preventDefault();
-  const pStatus = $("#pStatus");
-  if (pStatus) pStatus.value = "draft";
-  saveEditor();
-});
-
-on("#btnSavePost", "click", (e) => {
-  e.preventDefault();
-  const pStatus = $("#pStatus");
-  if (pStatus) pStatus.value = "public";
-  saveEditor();
-});
-
   on("#btnSavePost", "click", (e) => {
     e.preventDefault();
     saveEditor();
@@ -1621,22 +1538,6 @@ if (postForm) {
   postForm.addEventListener("submit", (e) => {
     e.preventDefault();
     e.stopPropagation();
-  });
-}
-
-   const adminTabs = $("#adminTabs");
-if (adminTabs) {
-  adminTabs.addEventListener("click", (e) => {
-    const btn = e.target.closest("[data-admin-filter]");
-    if (!btn) return;
-
-    state.adminFilter = btn.dataset.adminFilter || "public";
-
-    $$("#adminTabs [data-admin-filter]").forEach(el => {
-      el.classList.toggle("adminTab--active", el.dataset.adminFilter === state.adminFilter);
-    });
-
-    renderAdmin();
   });
 }
 
@@ -1927,14 +1828,5 @@ async function init(){
     .catch(err => {
       console.error("Failed to load posts from GAS:", err);
     });
-   
-   fetchAdminPostsFromApi()
-  .then(posts => {
-    adminPosts = posts;
-    renderAdmin();
-  })
-  .catch(err => {
-    console.error("fetchAdminPostsFromApi error:", err);
-  });
 }
 init();
