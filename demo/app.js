@@ -1510,6 +1510,14 @@ function bind(){
     downloadJson(obj, `community-news-export-${Date.now()}.json`);
   });
 
+   const postForm = document.getElementById("postForm");
+if (postForm) {
+  postForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  });
+}
+
   // contact
   const contactForm = document.getElementById("contactForm");
   if(contactForm){
