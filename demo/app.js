@@ -1580,6 +1580,20 @@ function bind(){
     syncAdminButtons();
   });
 
+   on("#btnSaveDraft", "click", (e) => {
+  e.preventDefault();
+  const pStatus = $("#pStatus");
+  if (pStatus) pStatus.value = "draft";
+  saveEditor();
+});
+
+on("#btnSavePost", "click", (e) => {
+  e.preventDefault();
+  const pStatus = $("#pStatus");
+  if (pStatus) pStatus.value = "public";
+  saveEditor();
+});
+
   on("#btnSavePost", "click", (e) => {
     e.preventDefault();
     saveEditor();
@@ -1607,6 +1621,22 @@ if (postForm) {
   postForm.addEventListener("submit", (e) => {
     e.preventDefault();
     e.stopPropagation();
+  });
+}
+
+   const adminTabs = $("#adminTabs");
+if (adminTabs) {
+  adminTabs.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-admin-filter]");
+    if (!btn) return;
+
+    state.adminFilter = btn.dataset.adminFilter || "public";
+
+    $$("#adminTabs [data-admin-filter]").forEach(el => {
+      el.classList.toggle("adminTab--active", el.dataset.adminFilter === state.adminFilter);
+    });
+
+    renderAdmin();
   });
 }
 
@@ -1897,5 +1927,14 @@ async function init(){
     .catch(err => {
       console.error("Failed to load posts from GAS:", err);
     });
+   
+   fetchAdminPostsFromApi()
+  .then(posts => {
+    adminPosts = posts;
+    renderAdmin();
+  })
+  .catch(err => {
+    console.error("fetchAdminPostsFromApi error:", err);
+  });
 }
 init();
