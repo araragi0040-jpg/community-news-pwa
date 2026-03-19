@@ -7,7 +7,7 @@
   <title>語り場ニュース</title>
   <link rel="icon" href="./favicon.png" type="image/png">
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=35" />
+  <link rel="stylesheet" href="./styles.css?v=36" />
 </head>
 <body>
   <div class="auth" id="authGate">
@@ -232,7 +232,12 @@
               </label>
 
               <label class="field">
-  <div class="field__label">画像URL（改行で複数）</div>
+  <div class="field__label">画像追加</div>
+  <input class="input" id="pImageFiles" type="file" accept="image/*" multiple>
+</label>
+
+<label class="field">
+  <div class="field__label">画像URL（自動反映 / 手入力も可）</div>
   <textarea class="textarea" id="pImages" rows="3" placeholder="https://..."></textarea>
 </label>
 
@@ -359,7 +364,7 @@
 
   <input id="fileImport" type="file" accept="application/json" style="display:none;" />
 
-  <script src="config.js?v=35"></script>
-  <script src="./app.js?v=35"></script>
+  <script src="config.js?v=36"></script>
+  <script src="./app.js?v=36"></script>
 </body>
 </html>
