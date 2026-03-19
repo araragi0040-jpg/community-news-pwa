@@ -295,6 +295,32 @@ async function fetchPostsFromApi() {
   }));
 }
 
+async function deletePostFromApi(id) {
+  const base = window.APP_CONFIG?.GAS_API_URL;
+  if (!base) {
+    throw new Error("GAS_API_URL is not set");
+  }
+
+  const res = await fetch(base, {
+    method: "POST",
+    headers: {
+      "Content-Type": "text/plain;charset=utf-8"
+    },
+    body: JSON.stringify({
+      action: "deletePost",
+      id
+    })
+  });
+
+  const data = await res.json();
+
+  if (!data.ok) {
+    throw new Error(data.message || "Failed to delete post");
+  }
+
+  return true;
+}
+
 async function savePostToApi(post) {
   const base = window.APP_CONFIG?.GAS_API_URL;
   if (!base) {
@@ -1336,32 +1362,6 @@ async function saveEditor(){
       }
     }
   }
-}
-
-async function deletePostFromApi(id) {
-  const base = window.APP_CONFIG?.GAS_API_URL;
-  if (!base) {
-    throw new Error("GAS_API_URL is not set");
-  }
-
-  const res = await fetch(base, {
-    method: "POST",
-    headers: {
-      "Content-Type": "text/plain;charset=utf-8"
-    },
-    body: JSON.stringify({
-      action: "deletePost",
-      id
-    })
-  });
-
-  const data = await res.json();
-
-  if (!data.ok) {
-    throw new Error(data.message || "Failed to delete post");
-  }
-
-  return true;
 }
 
 async function deleteEditor(){
