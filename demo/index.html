@@ -189,40 +189,18 @@
                 </label>
               </div>
 
-              <div class="grid2">
-                <label class="field">
-                  <div class="field__label">チャンネル</div>
-                  <select class="input" id="pChannel">
-                    <option value="article">記事</option>
-                    <option value="event">イベント概要</option>
-                    <option value="ops">運営</option>
-                  </select>
-                </label>
-
-                <label class="field">
-                  <div class="field__label">トーン（色）</div>
-                  <select class="input" id="pTone">
-                    <option value="accent">accent</option>
-                    <option value="good">good</option>
-                    <option value="warn">warn</option>
-                    <option value="danger">danger</option>
-                  </select>
-                </label>
-              </div>
-
               <label class="field">
-                <div class="field__label">短い説明（カードに表示）</div>
-                <input class="input" id="pDesc" placeholder="例：締切や参加方法などの要約" />
+                <div class="field__label">チャンネル</div>
+                <select class="input" id="pChannel">
+                  <option value="article">記事</option>
+                  <option value="event">イベント概要</option>
+                  <option value="ops">運営</option>
+                </select>
               </label>
 
               <label class="field">
                 <div class="field__label">タグ（カンマ区切り）</div>
                 <input class="input" id="pTags" placeholder="例：固定,Zoom,必読" />
-              </label>
-
-              <label class="field">
-                <div class="field__label">要点（改行区切り）</div>
-                <textarea class="textarea" id="pSummary" rows="4" placeholder="例：&#10;・日時：2/18 20:00&#10;・URLは当日掲示"></textarea>
               </label>
 
               <label class="field">
@@ -326,7 +304,7 @@
           </div>
           <div style="display:flex; gap:8px;">
             <button class="iconbtn" id="btnSave" aria-label="Save">
-              <svg viewBox="0 0 24 24"><path d="M6 2h12a2 2 0 0 1 2 2v18l-8-4-8 4V4a2 2 0 0 1 2-2z"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2h12a2 2 0 0 1 2 2v18l-8-4-8 4V4a2 2 0 0 1 2-2z"/></svg>
             </button>
             <button class="iconbtn" id="btnClose" aria-label="Close">
               <svg viewBox="0 0 24 24"><path d="M18.3 5.71 12 12l6.3 6.29-1.41
