@@ -523,13 +523,23 @@ function renderCard(a){
     ? `<div class="card__media"><img src="${escapeAttr(thumb)}" alt="" loading="lazy"></div>`
     : `<div class="card__media card__media--placeholder" aria-hidden="true"></div>`;
   const savedBadge = `<span class="card__saved${saved ? " card__saved--active" : ""}" aria-label="${saved ? "保存済み" : "未保存"}" title="${saved ? "保存済み" : "未保存"}">${savedMark}</span>`;
+  const bodyPreview = (a.body && a.body.length) ? a.body.join(" ") : "";
+  const tagsHtml = (a.tags && a.tags.length)
+    ? `<div class="card__meta">${a.tags.map(t => `<span class="card__tag">${escapeHtml(t)}</span>`).join("")}</div>`
+    : "";
   return `
     <article class="card" data-article="${escapeAttr(a.id)}">
       ${savedBadge}
       ${mediaHtml}
       <div class="card__content">
+        <div class="card__top">
+          <span class="card__badge">${escapeHtml(a.badge || "Info")}</span>
+          <span class="card__date">${relativeDate(a.date)}</span>
+        </div>
         <div class="card__title">${escapeHtml(a.title||"")}</div>
-        <div class="card__date">${relativeDate(a.date)}</div>
+        ${bodyPreview ? `<div class="card__desc">${escapeHtml(bodyPreview)}</div>` : ""}
+        ${tagsHtml}
+        <div class="card__author">#${escapeHtml(channelLabel(a.channel))}</div>
       </div>
     </article>
   `;
