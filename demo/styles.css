@@ -200,15 +200,38 @@ svg{ width:22px; height:22px; fill: currentColor; }
   border-radius: 16px;
   overflow: hidden;
   box-shadow: 0 4px 12px rgba(0,0,0,.04);
+  position: relative;
+  aspect-ratio: 1 / 1;
   display: flex;
   flex-direction: column;
   gap: 0px;   /* ← ここが記事間の余白 */
 }
 
+.card__saved{
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 1px solid rgba(176,125,79,.35);
+  background: rgba(255,255,255,.88);
+  color: var(--accent);
+  display: grid;
+  place-items: center;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.card__saved svg{
+  width: 16px;
+  height: 16px;
+}
+
 /* ===== Card Media (always shown) ===== */
 .card__media{
   width: 100%;
-  aspect-ratio: 16 / 9;                 /* ニュースっぽい比率 */
+  flex: 0 0 60%;
   border-bottom: 1px solid var(--stroke);
   line-height:0;
   overflow: hidden;
@@ -265,9 +288,13 @@ svg{ width:22px; height:22px; fill: currentColor; }
 
 /* 記事内の余白調整 */
 .card__content{
+  flex: 0 0 40%;
   padding: 4px 12px 8px;
   margin-top:0;
-  height: auto;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
 }
 
 .card__content > *:first-child{
@@ -811,8 +838,6 @@ svg{ width:22px; height:22px; fill: currentColor; }
   cursor: not-allowed;
   transform: none;
 }
-
-.media{ display:grid; gap:12px; margin:12px 0; }
 
 .media__img img{
   width:100%;
