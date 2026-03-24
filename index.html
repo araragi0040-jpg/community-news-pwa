@@ -3,11 +3,11 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <meta name="theme-color" content="#111827" />
+  <meta name="theme-color" content="#ffffff" />
   <title>語り場ニュース</title>
   <link rel="icon" href="./favicon.png" type="image/png">
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=37" />
+  <link rel="stylesheet" href="./styles.css?v=38" />
 </head>
 <body>
   <div class="auth" id="authGate">
@@ -52,15 +52,21 @@
     </div>
   </div>
 
-        <button class="iconbtn" id="btnLogout" aria-label="Logout" title="Logout" style="display:none;">
+        <button class="iconbtn" id="btnInstall" aria-label="Install" title="インストール" hidden>
   <svg viewBox="0 0 24 24" aria-hidden="true">
-    <path d="M10 17l1.41-1.41L8.83 13H20v-2H8.83l2.58-2.59L10 7l-5 5 5 5zm9-14H5c-1.1 0-2 .9-2 2v4h2V5h14v14H5v-4H3v4c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/>
+    <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
   </svg>
 </button>
     </header>
+    <div class="notify-banner" id="notifyBanner" hidden>
+      <span>新しい記事があります</span>
+      <button id="notifyRefresh" type="button">更新</button>
+      <button id="notifyDismiss" type="button" aria-label="閉じる">×</button>
+    </div>
+    <main id="mainContent">
 
     <!-- Home Page -->
-    <main class="page page--active" data-page="home">
+    <section class="page page--active" data-page="home">
       <!-- Search -->
       <section class="search">
         <div class="search__box">
@@ -88,15 +94,17 @@
       <section class="feed">
         <div class="feed__meta">
           <div class="feed__title" id="feedTitle">Latest</div>
-          <div class="feed__hint" id="feedHint">0件</div>
+          <div class="feed__actions">
+            <button class="sort-toggle" id="btnSortToggle" type="button" aria-label="Sort order">新しい順</button>
+            <div class="feed__hint" id="feedHint">0件</div>
+          </div>
         </div>
         <div class="cards" id="cards"></div>
       </section>
-    </main>
+    </section>
 
 <!-- Schedule Page -->
-<!-- Schedule Page -->
-<main class="page" data-page="schedule">
+<section class="page" data-page="schedule">
   <section class="pane pane--schedule">
     <div class="pane__head">
       <h2 class="pane__title">イベントカレンダー</h2>
@@ -112,10 +120,10 @@
 
     <div id="cal"></div>
   </section>
-</main>
+</section>
 
     <!-- Saved Page -->
-    <main class="page" data-page="saved">
+    <section class="page" data-page="saved">
       <section class="pane">
         <div class="pane__head">
           <h2 class="pane__title">保存</h2>
@@ -128,10 +136,10 @@
           <div class="empty__text">記事を開いて「保存」してください。</div>
         </div>
       </section>
-    </main>
+    </section>
 
     <!-- Contact Page -->
-    <div class="page" data-page="contact">
+    <section class="page" data-page="contact">
   <div class="page__inner">
     <h2>語り場 共同オーナー</h2>
 
@@ -148,32 +156,24 @@
       <button type="submit">送信</button>
     </form>
   </div>
-</div>
+</section>
 
     <!-- Admin Page -->
-    <main class="page" data-page="admin">
+    <section class="page" data-page="admin">
       <section class="pane">
         <div class="pane__head pane__head--row">
-          <h2 class="pane__title">管理（投稿・編集）</h2>
-          <button class="btn" id="btnNewPost">＋ 新規記事</button>
+          <h2 class="pane__title">管理</h2>
+        </div>
+        <div class="admin-tabs" role="tablist" aria-label="Admin tabs">
+          <button class="admin-tab admin-tab--active" id="adminTabEditor" type="button" role="tab" aria-selected="true">新規記事</button>
+          <button class="admin-tab" id="adminTabList" type="button" role="tab" aria-selected="false">記事一覧</button>
         </div>
 
         <div class="admin__row">
-          <div class="admin__list">
-            <div class="admin__listhead">
-              <div class="admin__listh">記事一覧</div>
-              <div class="admin__listhint" id="adminCount">0件</div>
-            </div>
-            <div class="admin__items" id="adminItems"></div>
-          </div>
-
-          <div class="admin__editor">
+          <div class="admin__editor" id="adminPanelEditor">
             <div class="admin__editorhead">
-              <div class="admin__listh">編集</div>
-              <div style="display:flex; gap:8px;">
-                <button class="btn btn--danger" id="btnDeletePost" disabled>削除</button>
-                <button class="btn" id="btnSavePost" disabled>保存</button>
-              </div>
+              <div class="admin__listh">記事作成 / 編集</div>
+              <button class="btn" id="btnNewPost" type="button">＋ 新規記事</button>
             </div>
 
             <form class="form" id="postForm">
@@ -189,41 +189,18 @@
                 </label>
               </div>
 
-              <div class="grid2">
-                <label class="field">
-                  <div class="field__label">チャンネル</div>
-                  <select class="input" id="pChannel">
-                    <option value="announce">告知</option>
-                    <option value="event">イベント</option>
-                    <option value="ops">運営</option>
-                    <option value="tips">Tips</option>
-                  </select>
-                </label>
-
-                <label class="field">
-                  <div class="field__label">トーン（色）</div>
-                  <select class="input" id="pTone">
-                    <option value="accent">accent</option>
-                    <option value="good">good</option>
-                    <option value="warn">warn</option>
-                    <option value="danger">danger</option>
-                  </select>
-                </label>
-              </div>
-
               <label class="field">
-                <div class="field__label">短い説明（カードに表示）</div>
-                <input class="input" id="pDesc" placeholder="例：締切や参加方法などの要約" />
+                <div class="field__label">チャンネル</div>
+                <select class="input" id="pChannel">
+                  <option value="article">記事</option>
+                  <option value="event">イベント概要</option>
+                  <option value="ops">運営</option>
+                </select>
               </label>
 
               <label class="field">
                 <div class="field__label">タグ（カンマ区切り）</div>
                 <input class="input" id="pTags" placeholder="例：固定,Zoom,必読" />
-              </label>
-
-              <label class="field">
-                <div class="field__label">要点（改行区切り）</div>
-                <textarea class="textarea" id="pSummary" rows="4" placeholder="例：&#10;・日時：2/18 20:00&#10;・URLは当日掲示"></textarea>
               </label>
 
               <label class="field">
@@ -259,12 +236,26 @@
               </div>
 
               <div class="hint">
-                ※「保存」を押すと Home に即反映されます（検索/チップにも対応）。
+                現在の状態: <span id="pStatusView">未設定（投稿すると状態が反映されます）</span>
+              </div>
+              <div class="admin-actions">
+                <button class="btn" id="btnPublishPost" type="button" disabled>投稿</button>
+                <button class="btn" id="btnDraftPost" type="button" disabled>下書き</button>
+                <button class="btn" id="btnPrivatePost" type="button" disabled>非公開</button>
               </div>
             </form>
           </div>
+
+          <div class="admin__list" id="adminPanelList" hidden>
+            <div class="admin__listhead">
+              <div class="admin__listh">記事一覧</div>
+              <div class="admin__listhint" id="adminCount">0件</div>
+            </div>
+            <div class="admin__items" id="adminItems"></div>
+          </div>
         </div>
       </section>
+    </section>
     </main>
 
     <!-- Bottom Nav -->
@@ -313,7 +304,7 @@
           </div>
           <div style="display:flex; gap:8px;">
             <button class="iconbtn" id="btnSave" aria-label="Save">
-              <svg viewBox="0 0 24 24"><path d="M6 2h12a2 2 0 0 1 2 2v18l-8-4-8 4V4a2 2 0 0 1 2-2z"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2h12a2 2 0 0 1 2 2v18l-8-4-8 4V4a2 2 0 0 1 2-2z"/></svg>
             </button>
             <button class="iconbtn" id="btnClose" aria-label="Close">
               <svg viewBox="0 0 24 24"><path d="M18.3 5.71 12 12l6.3 6.29-1.41
@@ -362,9 +353,7 @@
   </div>
 </div>
 
-  <input id="fileImport" type="file" accept="application/json" style="display:none;" />
-
-  <script src="config.js?v=37"></script>
-  <script src="./app.js?v=37"></script>
+  <script src="config.js?v=38"></script>
+  <script src="./app.js?v=38"></script>
 </body>
 </html>
