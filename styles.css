@@ -1,15 +1,15 @@
 /* ============ Base ============ */
 :root{
-  --bg: #f6efe7;
+  --bg: #ffffff;
   --panel: #ffffff;
-  --panel2: #fdf8f3;
-  --stroke: #e6d9cc;
+  --panel2: #fafafa;
+  --stroke: #e0e0e0;
 
-  --text-strong: #3b2a1f;
-  --text: #4a3728;
-  --text-soft: #6b4f3a;
-  --muted: #8a6f5a;
-  --muted2: #a98d77;
+  --text-strong: #1f2937;
+  --text: #374151;
+  --text-soft: #4b5563;
+  --muted: #6b7280;
+  --muted2: #9ca3af;
 
   --accent: #b07d4f;
   --accent2: #d9b38c;
@@ -51,7 +51,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
   top: 0;
   z-index: 10;
   padding: 14px 16px 14px; /* safeTopを外す */
-  background: rgba(255, 250, 245, 0.92);
+  background: rgba(255, 255, 255, 0.92);
   backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--stroke);
   display:flex;
@@ -188,6 +188,12 @@ svg{ width:22px; height:22px; fill: currentColor; }
 }
 
 /* ===== Card Base ===== */
+.cards{
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
 .card{
   background: #fff;
   border: 1px solid rgba(176,125,79,.25);
@@ -221,7 +227,8 @@ svg{ width:22px; height:22px; fill: currentColor; }
 
 /* タイトル表示制御（1行固定） */
 .card__title{
-  font-size:15px;
+  font-size:16px;
+  font-weight:700;
   margin-top:2px;
   margin-bottom:2px;
 }
@@ -242,6 +249,13 @@ svg{ width:22px; height:22px; fill: currentColor; }
   margin:0;
 }
 
+.card__date{
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--muted);
+  text-align: right;
+}
+
 /* 投稿者表示制御（1行左寄せ） */
 .card__author{
   font-size: 12px;
@@ -253,8 +267,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
 .card__content{
   padding: 4px 12px 8px;
   margin-top:0;
-  height: 60px;     /* 記事の白枠高さ */
-  overflow: hidden;
+  height: auto;
 }
 
 .card__content > *:first-child{
@@ -357,7 +370,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
   bottom: 0;
   z-index: 20;
   padding: 10px 10px calc(10px + var(--safe));
-  background: rgba(255, 250, 245, 0.95);
+  background: rgba(255, 255, 255, 0.95);
   border-top: 1px solid var(--stroke);
   display:flex;
   justify-content: center;
@@ -580,6 +593,25 @@ svg{ width:22px; height:22px; fill: currentColor; }
   display:grid;
   gap: 12px;
 }
+.admin-tabs{
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.admin-tab{
+  border: 1px solid var(--stroke);
+  background: #fff;
+  color: var(--text);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.admin-tab--active{
+  color: var(--text-strong);
+  border-color: var(--accent);
+  background: rgba(217,179,140,.20);
+}
 .admin__list, .admin__editor{
   border: 1px solid var(--stroke);
   border-radius: var(--radius);
@@ -632,6 +664,12 @@ svg{ width:22px; height:22px; fill: currentColor; }
   grid-template-columns: 1fr;
   gap: 10px;
 }
+.admin-actions{
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
 
 .btn{
   border: 1px solid rgba(176,125,79,.28);
@@ -682,26 +720,6 @@ svg{ width:22px; height:22px; fill: currentColor; }
   text-decoration:none;
 }
  } 
-
-.contact-form input,
-.contact-form textarea{
-  width:100%;
-  margin-bottom:12px;
-  padding:10px;
-  border-radius:8px;
-  border:1px solid rgba(255,255,255,.1);
-  background:#111827;
-  color:white;
-}
-
-.contact-form button{
-  padding:10px 16px;
-  border:none;
-  border-radius:8px;
-  background:var(--accent);
-  color:white;
-  cursor:pointer;
-}
 
 /* ===== BottomNav fix (正規) ===== */
 .bottomnav{
@@ -1371,4 +1389,52 @@ svg{ width:22px; height:22px; fill: currentColor; }
 
 #cal{
   width: 100%;
+}
+
+[hidden]{
+  display: none !important;
+}
+
+.feed__actions{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sort-toggle{
+  border: 1px solid var(--stroke);
+  background: #fff;
+  color: var(--text-strong);
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.notify-banner{
+  position: sticky;
+  top: 70px;
+  z-index: 60;
+  margin: 8px 16px 0;
+  border: 1px solid var(--stroke);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--text-strong);
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.notify-banner button{
+  border: 1px solid var(--stroke);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--text);
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+#notifyDismiss{
+  margin-left: auto;
 }
