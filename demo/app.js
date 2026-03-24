@@ -8,9 +8,6 @@ const $ = (sel, root=document) => root.querySelector(sel);
 const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
 
 const LS_KEY_SAVED = "community_news_saved_v1";
-const LS_KEY_ONLY_IMPORTANT = "community_news_only_important_v1";
-const LS_KEY_ONLY_UPCOMING = "community_news_only_upcoming_v1";
-const LS_KEY_POSTS = "community_news_posts_v1"; // admin-created posts
 const LS_KEY_USER = "community_news_user_v1";
 
 const CHANNELS = [
@@ -21,53 +18,6 @@ const CHANNELS = [
   { key:"tips", label:"Tips", tone:"accent" },
 ];
 
-const BASE_ARTICLES = [
-  {
-    id:"a1",
-    channel:"announce",
-    tone:"accent",
-    badge:"告知",
-    date:"2026-02-12",
-    title:"コミュニティ限定：ニュースアプリ運用を開始します",
-    desc:"このアプリはコミュニティ内の告知・イベント・重要連絡をまとめます。",
-    tags:["運営","固定"],
-    summary:[
-      "このアプリはコミュ内限定で運用",
-      "重要な投稿は通知タブにも反映",
-      "保存であとで読むが可能"
-    ],
-    body:[
-      "ここに本文サンプルが入ります。運営からの重要な告知や、イベントの案内、締切のリマインドなどを集約します。",
-      "投稿のテンプレ化や、チャンネル分けも可能です。"
-    ],
-    cta:{ text:"案内ドキュメントを見る", url:"https://example.com" }
-  },
-  {
-    id:"a2",
-    channel:"event",
-    tone:"good",
-    badge:"イベント",
-    date:"2026-02-18",
-    title:"次回集まり：オンライン交流（テスト）",
-    desc:"試験的に30分の短い交流を実施します。参加方法は本文へ。",
-    tags:["Zoom","30分"],
-    summary:["日時：2/18 20:00","参加URLは当日掲示","途中入退室OK"],
-    body:["イベントの詳細です。ここにZoomリンクや参加方法など。"],
-    cta:{ text:"参加フォームへ", url:"https://example.com" }
-  },
-  {
-    id:"a3",
-    channel:"ops",
-    tone:"warn",
-    badge:"運営",
-    date:"2026-02-15",
-    title:"投稿ルール：個人情報の取り扱いについて",
-    desc:"招待制の場でも、個人情報は最小限に。守ってほしいポイントをまとめました。",
-    tags:["ルール"],
-    summary:["個人情報は原則書かない","外部リンクは確認","困ったら運営へ"],
-    body:["ここに本文。投稿のガイドラインなど。"],
-  }
-];
 
 // ==== Contact data ====
 const OWNERS = [
@@ -109,24 +59,11 @@ const OWNERS = [
   },
 ];
 
-// ==== Schedule data (sample) ====
-const SCHEDULE = [
-  { id:"s1", title:"オンライン交流（テスト）", date:"2026-02-18", time:"20:00", tone:"good", label:"イベント", desc:"30分だけ。近況共有＋次の動き確認。" },
-  { id:"s2", title:"募集締切：参加フォーム", date:"2026-02-16", time:"23:59", tone:"warn", label:"締切", desc:"参加人数把握のため、期限までに入力お願いします。" },
-  { id:"s3", title:"運営投稿：次月の方針共有", date:"2026-03-02", time:"21:00", tone:"accent", label:"運営", desc:"来月の動きと、改善点の共有（15分）。" },
-  { id:"s4", title:"重要：規約更新告知", date:"2026-03-05", time:"12:00", tone:"danger", label:"重要", desc:"投稿ルールの追加。必読。" }
-];
-
-// ==== Notifications (sample) ====
-const NOTIFS = [
-  { id:"n1", title:"重要：明日の締切", time:"2026-02-15 19:30", important:true, text:"参加フォームの締切は 2/16 23:59 です。" },
-  { id:"n2", title:"運営：新機能", time:"2026-02-12 10:05", important:false, text:"Schedule / Admin を追加しました（UIサンプル）。" }
-];
-
 // ===== State =====
 let state = {
   channel: "all",
   query: "",
+  sortOrder: "desc",
   drawerOpen: false,
   activeArticleId: null,
 
@@ -142,6 +79,8 @@ let state = {
 };
 
 let cloudPosts = [];
+let latestPostKey = "";
+let deferredInstallPrompt = null;
 
 // ===== Helpers =====
 function safeJsonParse(s, fallback){
@@ -158,57 +97,48 @@ function isSaved(id){
   return loadSaved().includes(id);
 }
 
-function loadPosts(){
-  return safeJsonParse(localStorage.getItem(LS_KEY_POSTS) || "[]", []);
-}
-function savePosts(posts){
-  localStorage.setItem(LS_KEY_POSTS, JSON.stringify(posts));
-}
-
 function allArticles(){
-  const localAdmin = loadPosts();   // いままで通り localStorage の記事
-  const merged = [...localAdmin, ...cloudPosts, ...BASE_ARTICLES];
-
-  // 同じidがあれば後勝ちで上書き
-  const map = new Map();
-  for(const a of merged){
-    map.set(a.id, a);
-  }
-
-  return Array.from(map.values());
+  return cloudPosts.slice();
 }
-/**
-function formatDateJP(iso){
-  if(!iso) return "-";
-  const [y,m,d] = iso.split("-").map(Number);
-  return `${y}/${String(m).padStart(2,"0")}/${String(d).padStart(2,"0")}`;
-}
-**/
-function formatDateJP(value){
+
+function parseDate(value){
   if(!value) return "-";
-
-  // すでに YYYY-MM-DD 形式
   if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    const [y, m, d] = value.split("-");
-    return `${y}/${m}/${d}`;
+    return value;
   }
-
-  // YYYY/MM/DD 形式
   if (typeof value === "string" && /^\d{4}\/\d{1,2}\/\d{1,2}$/.test(value)) {
     const [y, m, d] = value.split("/");
-    return `${y}/${String(m).padStart(2,"0")}/${String(d).padStart(2,"0")}`;
+    return `${y}-${String(m).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
   }
-
-  // Dateとして解釈して整形
   const dt = new Date(value);
   if (!isNaN(dt.getTime())) {
-    const y = dt.getFullYear();
-    const m = String(dt.getMonth() + 1).padStart(2, "0");
-    const d = String(dt.getDate()).padStart(2, "0");
-    return `${y}/${m}/${d}`;
+    return ymd(dt);
   }
-
   return String(value);
+}
+
+function formatDateJP(value){
+  const parsed = parseDate(value);
+  if (parsed === "-") return "-";
+  const [y, m, d] = parsed.split("-");
+  if (!y || !m || !d) return parsed;
+  return `${y}/${m}/${d}`;
+}
+
+function relativeDate(value){
+  const parsed = parseDate(value);
+  if (parsed === "-") return "-";
+  const target = new Date(parsed);
+  if (isNaN(target.getTime())) return formatDateJP(value);
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  target.setHours(0, 0, 0, 0);
+  const diff = Math.floor((now - target) / 86400000);
+  if (diff <= 0) return "今日";
+  if (diff === 1) return "1日前";
+  if (diff < 7) return `${diff}日前`;
+  if (diff < 30) return `${Math.floor(diff / 7)}週間前`;
+  return formatDateJP(parsed);
 }
 
 function ymd(d){
@@ -258,22 +188,8 @@ function normalizePost(input){
   return a;
 }
 
-async function fetchPostsFromApi() {
-  const base = window.APP_CONFIG?.GAS_API_URL;
-  if (!base) {
-    console.warn("GAS_API_URL is not set");
-    return [];
-  }
-
-  const url = `${base}?action=listPosts`;
-  const res = await fetch(url);
-  const data = await res.json();
-
-  if (!data.ok) {
-    throw new Error(data.message || "Failed to fetch posts");
-  }
-
-  return (data.posts || []).map(post => ({
+function mapApiPost(post){
+  return normalizePost({
     id: post.id,
     channel: post.channel,
     tone: post.tone,
@@ -292,131 +208,79 @@ async function fetchPostsFromApi() {
       images: post.images || [],
       video: post.video || ""
     }
-  }));
+  });
 }
 
-async function deletePostFromApi(id) {
+async function callApi(action, payload = {}) {
   const base = window.APP_CONFIG?.GAS_API_URL;
-  if (!base) {
-    throw new Error("GAS_API_URL is not set");
-  }
-
+  if (!base) throw new Error("GAS_API_URL is not set");
   const res = await fetch(base, {
     method: "POST",
     headers: {
       "Content-Type": "text/plain;charset=utf-8"
     },
-    body: JSON.stringify({
-      action: "deletePost",
-      id
-    })
+    body: JSON.stringify({ action, ...payload })
   });
-
   const data = await res.json();
+  if (!data.ok) throw new Error(data.message || "API error");
+  return data;
+}
 
-  if (!data.ok) {
-    throw new Error(data.message || "Failed to delete post");
-  }
+async function fetchPostsFromApi() {
+  const base = window.APP_CONFIG?.GAS_API_URL;
+  if (!base) return [];
+  const res = await fetch(`${base}?action=listPosts`);
+  const data = await res.json();
+  if (!data.ok) throw new Error(data.message || "Failed to fetch posts");
+  return (data.posts || []).map(mapApiPost);
+}
 
+async function deletePostFromApi(id) {
+  await callApi("deletePost", { id });
   return true;
 }
 
 async function savePostToApi(post) {
-  const base = window.APP_CONFIG?.GAS_API_URL;
-  if (!base) {
-    throw new Error("GAS_API_URL is not set");
-  }
-
-  const res = await fetch(base, {
-    method: "POST",
-    headers: {
-      "Content-Type": "text/plain;charset=utf-8"
-    },
-    body: JSON.stringify({
-      action: "savePost",
-      post: {
-        id: post.id || "",
-        date: post.date || "",
-        channel: post.channel || "announce",
-        tone: post.tone || "accent",
-        badge: post.badge || "",
-        title: post.title || "",
-        desc: post.desc || "",
-        tags: post.tags || [],
-        summary: post.summary || [],
-        body: post.body || [],
-        ctaText: post.cta?.text || "",
-        ctaUrl: post.cta?.url || "",
-        images: post.media?.images || [],
-        video: post.media?.video || "",
-        status: "public"
-      }
-    })
+  const data = await callApi("savePost", {
+    post: {
+      id: post.id || "",
+      date: post.date || "",
+      channel: post.channel || "announce",
+      tone: post.tone || "accent",
+      badge: post.badge || "",
+      title: post.title || "",
+      desc: post.desc || "",
+      tags: post.tags || [],
+      summary: post.summary || [],
+      body: post.body || [],
+      ctaText: post.cta?.text || "",
+      ctaUrl: post.cta?.url || "",
+      images: post.media?.images || [],
+      video: post.media?.video || "",
+      status: "public"
+    }
   });
-
-  const data = await res.json();
-
-  if (!data.ok) {
-    throw new Error(data.message || "Failed to save post");
-  }
-
   return data.post;
 }
 
 async function saveContactToApi(contact) {
-  const base = window.APP_CONFIG?.GAS_API_URL;
-  if (!base) {
-    throw new Error("GAS_API_URL is not set");
-  }
-
-  const res = await fetch(base, {
-    method: "POST",
-    headers: {
-      "Content-Type": "text/plain;charset=utf-8"
-    },
-    body: JSON.stringify({
-      action: "saveContact",
-      contact: {
-        name: contact.name || "",
-        email: contact.email || "",
-        message: contact.message || ""
-      }
-    })
+  const data = await callApi("saveContact", {
+    contact: {
+      name: contact.name || "",
+      email: contact.email || "",
+      message: contact.message || ""
+    }
   });
-
-  const data = await res.json();
-
-  if (!data.ok) {
-    throw new Error(data.message || "Failed to save contact");
-  }
-
   return data.contact;
 }
 
 async function uploadImageToApi(file) {
-  const base = window.APP_CONFIG?.GAS_API_URL;
-  if (!base) throw new Error("GAS_API_URL is not set");
-
   const dataUrl = await fileToDataUrl(file);
-
-  const res = await fetch(base, {
-    method: "POST",
-    headers: {
-      "Content-Type": "text/plain;charset=utf-8"
-    },
-    body: JSON.stringify({
-      action: "uploadImage",
-      fileName: file.name,
-      mimeType: file.type,
-      dataUrl
-    })
+  const data = await callApi("uploadImage", {
+    fileName: file.name,
+    mimeType: file.type,
+    dataUrl
   });
-
-  const data = await res.json();
-  if (!data.ok) {
-    throw new Error(data.message || "Image upload failed");
-  }
-
   return data.url;
 }
 
@@ -431,59 +295,14 @@ function fileToDataUrl(file) {
 
 /* ログイン関数 */
 async function loginToApi(email, password) {
-  const base = window.APP_CONFIG?.GAS_API_URL;
-  if (!base) {
-    throw new Error("GAS_API_URL is not set");
-  }
-
-  const res = await fetch(base, {
-    method: "POST",
-    headers: {
-      "Content-Type": "text/plain;charset=utf-8"
-    },
-    body: JSON.stringify({
-      action: "login",
-      email,
-      password
-    })
-  });
-
-  const data = await res.json();
-
-  if (!data.ok) {
-    throw new Error(data.message || "Login failed");
-  }
-
+  const data = await callApi("login", { email, password });
   return data.user;
 }
 
 async function registerToApi(name, email, password) {
-  const base = window.APP_CONFIG?.GAS_API_URL;
-  if (!base) {
-    throw new Error("GAS_API_URL is not set");
-  }
-
-  const res = await fetch(base, {
-    method: "POST",
-    headers: {
-      "Content-Type": "text/plain;charset=utf-8"
-    },
-    body: JSON.stringify({
-      action: "register",
-      user: {
-        name,
-        email,
-        password
-      }
-    })
+  const data = await callApi("register", {
+    user: { name, email, password }
   });
-
-  const data = await res.json();
-
-  if (!data.ok) {
-    throw new Error(data.message || "Register failed");
-  }
-
   return data.user;
 }
 
@@ -505,7 +324,6 @@ function applyAuthUI() {
 
   const authGate = document.getElementById("authGate");
   const appRoot = document.getElementById("appRoot");
-  const btnLogout = document.getElementById("btnLogout");
   const adminNav = document.querySelector('.navitem[data-nav="admin"]');
   const adminPage = document.querySelector('.page[data-page="admin"]');
 
@@ -513,24 +331,14 @@ function applyAuthUI() {
 
   if (!user) {
     authGate.hidden = false;
-    authGate.style.display = "flex";
-
     appRoot.hidden = true;
-    appRoot.style.display = "none";
-
-    if (btnLogout) btnLogout.style.display = "none";
     if (adminNav) adminNav.style.display = "none";
     if (adminPage) adminPage.style.display = "none";
     return;
   }
 
   authGate.hidden = true;
-  authGate.style.display = "none";
-
   appRoot.hidden = false;
-  appRoot.style.display = "block";
-
-  if (btnLogout) btnLogout.style.display = "grid";
 
   const isAdmin = user.role === "admin";
 
@@ -574,7 +382,29 @@ function filteredArticles(){
         (a.badge||"").toLowerCase().includes(q)
       );
     })
-    .sort((a,b) => (a.date < b.date ? 1 : -1));
+    .sort((a,b) => {
+      const av = parseDate(a.date);
+      const bv = parseDate(b.date);
+      return state.sortOrder === "asc"
+        ? (av > bv ? 1 : -1)
+        : (av < bv ? 1 : -1);
+    });
+}
+
+function renderCard(a){
+  const thumb = (a.media?.images && a.media.images.length) ? a.media.images[0] : "";
+  const mediaHtml = thumb
+    ? `<div class="card__media"><img src="${escapeAttr(thumb)}" alt="" loading="lazy"></div>`
+    : `<div class="card__media card__media--placeholder" aria-hidden="true"></div>`;
+  return `
+    <article class="card" data-article="${escapeAttr(a.id)}">
+      ${mediaHtml}
+      <div class="card__content">
+        <div class="card__title">${escapeHtml(a.title||"")}</div>
+        <div class="card__date">${relativeDate(a.date)}</div>
+      </div>
+    </article>
+  `;
 }
 
 function renderFeed(){
@@ -587,37 +417,14 @@ function renderFeed(){
       ? "Latest"
       : (CHANNELS.find(c=>c.key===state.channel)?.label || "Latest");
   }
+  const sortBtn = $("#btnSortToggle");
+  if(sortBtn){
+    sortBtn.textContent = state.sortOrder === "desc" ? "新しい順" : "古い順";
+  }
 
   const cards = $("#cards");
   if(!cards) return;
-
-cards.innerHTML = items.map(a => {
-  const pills = (a.tags||[]).map(t => `<span class="pill">${escapeHtml(t)}</span>`).join("");
-
-const thumb = (a.media?.images && a.media.images.length) ? a.media.images[0] : "";
-const mediaHtml = thumb
-  ? `<div class="card__media"><img src="${escapeAttr(thumb)}" alt="" loading="lazy"></div>`
-  : `<div class="card__media card__media--placeholder" aria-hidden="true"></div>`;
-
-  return `
-    <article class="card" data-article="${escapeAttr(a.id)}">
-      ${mediaHtml}
-      <div class="card__content">
-        <div class="card__top">
-          <span class="badge" data-tone="${escapeAttr(a.tone||"accent")}">
-            <span class="badge__dot"></span>
-            <span>${escapeHtml(a.badge||"Info")}</span>
-          </span>
-          <div class="card__date">${formatDateJP(a.date)}</div>
-        </div>
-
-        <div class="card__title">${escapeHtml(a.title||"")}</div>
-        <div class="card__desc">${escapeHtml(a.desc||"")}</div>
-        <div class="card__meta">${pills}</div>
-      </div>
-    </article>
-  `;
-}).join("");
+  cards.innerHTML = items.map(renderCard).join("");
 
   $$(".card", cards).forEach(el => {
     el.addEventListener("click", () => openDrawer(el.dataset.article));
@@ -634,6 +441,42 @@ function escapeHtml(s){
 }
 function escapeAttr(s){
   return escapeHtml(s).replaceAll("`","&#096;");
+}
+
+function mediaHtml(a){
+  const imgs = (a.media?.images || [])
+    .map(url => `
+      <div class="media__img">
+        <img src="${escapeAttr(url)}" alt="" loading="lazy" />
+      </div>
+    `).join("");
+  const videoUrl = a.media?.video || "";
+  const video = videoUrl ? renderVideoEmbed(videoUrl) : "";
+  if(!imgs && !video) return "";
+  return `<div class="media">${imgs}${video}</div>`;
+}
+
+function renderVideoEmbed(url){
+  const yt = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([A-Za-z0-9_-]{6,})/);
+  if(yt){
+    const id = yt[1];
+    return `
+      <div class="media__video">
+        <iframe
+          src="https://www.youtube-nocookie.com/embed/${id}"
+          title="YouTube video"
+          frameborder="0"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowfullscreen></iframe>
+      </div>`;
+  }
+  if(url.toLowerCase().endsWith(".mp4")){
+    return `
+      <div class="media__video">
+        <video controls playsinline preload="metadata" src="${escapeAttr(url)}"></video>
+      </div>`;
+  }
+  return `<div class="media__link"><a href="${escapeAttr(url)}" target="_blank" rel="noopener">動画を開く</a></div>`;
 }
 
 // ===== Drawer =====
@@ -663,53 +506,10 @@ function openDrawer(articleId){
   sum.innerHTML = (a.summary||[]).map(x => `<li>${escapeHtml(x)}</li>`).join("");
   $("#aSummary").style.display = (a.summary && a.summary.length) ? "block" : "none";
 
-const body = $("#aBody");
-body.innerHTML =
-  mediaHtml(a) +
-  (a.body||[]).map(p => `<p>${escapeHtml(p)}</p>`).join("");
-
-   function mediaHtml(a){
-  const imgs = (a.media?.images || [])
-    .map(url => `
-      <div class="media__img">
-        <img src="${escapeAttr(url)}" alt="" loading="lazy" />
-      </div>
-    `).join("");
-
-  const videoUrl = a.media?.video || "";
-  const video = videoUrl ? renderVideoEmbed(videoUrl) : "";
-
-  if(!imgs && !video) return "";
-  return `<div class="media">${imgs}${video}</div>`;
-}
-
-function renderVideoEmbed(url){
-  // YouTube
-  const yt = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([A-Za-z0-9_-]{6,})/);
-  if(yt){
-    const id = yt[1];
-    return `
-      <div class="media__video">
-        <iframe
-          src="https://www.youtube-nocookie.com/embed/${id}"
-          title="YouTube video"
-          frameborder="0"
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-          allowfullscreen></iframe>
-      </div>`;
-  }
-
-  // mp4直リンク
-  if(url.toLowerCase().endsWith(".mp4")){
-    return `
-      <div class="media__video">
-        <video controls playsinline preload="metadata" src="${escapeAttr(url)}"></video>
-      </div>`;
-  }
-
-  // それ以外はリンク表示
-  return `<div class="media__link"><a href="${escapeAttr(url)}" target="_blank" rel="noopener">動画を開く</a></div>`;
-}
+  const body = $("#aBody");
+  body.innerHTML =
+    mediaHtml(a) +
+    (a.body||[]).map(p => `<p>${escapeHtml(p)}</p>`).join("");
 
   const cta = $("#cta");
   if(a.cta && a.cta.url){
@@ -734,8 +534,10 @@ function renderSaveBtn(){
   const btn = $("#btnSave");
   if(!id) return;
   const saved = isSaved(id);
-  btn.style.opacity = saved ? "1" : "0.8";
-  btn.title = saved ? "Saved" : "Save";
+  btn.innerHTML = saved
+    ? `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 2h12a2 2 0 0 1 2 2v18l-8-4-8 4V4a2 2 0 0 1 2-2z"/></svg>`
+    : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 2h12a2 2 0 0 1 2 2v18l-8-4-8 4V4a2 2 0 0 1 2-2z"/></svg>`;
+  btn.title = saved ? "保存済み" : "保存";
 }
 
 // ===== Saved =====
@@ -744,7 +546,7 @@ function renderSaved(){
   const list = saved
     .map(id => allArticles().find(a => a.id === id))
     .filter(Boolean)
-    .sort((a,b)=> (a.date < b.date ? 1 : -1));
+    .sort((a,b)=> (parseDate(a.date) < parseDate(b.date) ? 1 : -1));
 
   const cards = $("#savedCards");
   const empty = $("#savedEmpty");
@@ -756,33 +558,7 @@ function renderSaved(){
   }
   empty.style.display = "none";
 
-cards.innerHTML = list.map(a => {
-  const pills = (a.tags||[]).map(t => `<span class="pill">${escapeHtml(t)}</span>`).join("");
-
-  const thumb = (a.media?.images && a.media.images.length) ? a.media.images[0] : "";
-  const mediaHtml = thumb
-    ? `<div class="card__media"><img src="${escapeAttr(thumb)}" alt="" loading="lazy"></div>`
-    : ``;
-
-  return `
-    <article class="card" data-article="${escapeAttr(a.id)}">
-      ${mediaHtml}
-      <div class="card__content">
-        <div class="card__top">
-          <span class="badge" data-tone="${escapeAttr(a.tone||"accent")}">
-            <span class="badge__dot"></span>
-            <span>${escapeHtml(a.badge||"Info")}</span>
-          </span>
-          <div class="card__date">${formatDateJP(a.date)}</div>
-        </div>
-
-        <div class="card__title">${escapeHtml(a.title||"")}</div>
-        <div class="card__desc">${escapeHtml(a.desc||"")}</div>
-        <div class="card__meta">${pills}</div>
-      </div>
-    </article>
-  `;
-}).join("");
+  cards.innerHTML = list.map(renderCard).join("");
 
   $$(".card", cards).forEach(el => {
     el.addEventListener("click", () => openDrawer(el.dataset.article));
@@ -796,10 +572,10 @@ function renderContact(){
 
   root.innerHTML = OWNERS.map(o => `
     <div class="owner-card">
-      <div class="owner-name">${o.name}</div>
+      <div class="owner-name">${escapeHtml(o.name || "")}</div>
       <div class="owner-links">
-        ${o.instagram ? `<a href="${o.instagram}" target="_blank">Instagram</a>` : ""}
-        ${o.x ? `<a href="${o.x}" target="_blank">X</a>` : ""}
+        ${o.instagram ? `<a href="${escapeAttr(o.instagram)}" target="_blank" rel="noopener">Instagram</a>` : ""}
+        ${o.x ? `<a href="${escapeAttr(o.x)}" target="_blank" rel="noopener">X</a>` : ""}
       </div>
     </div>
   `).join("");
@@ -845,26 +621,8 @@ function scheduleItems(){
 }
 
 function normalizeDateForCalendar(value){
-  if(!value) return "";
-
-  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    return value;
-  }
-
-  if (typeof value === "string" && /^\d{4}\/\d{1,2}\/\d{1,2}$/.test(value)) {
-    const [y, m, d] = value.split("/");
-    return `${y}-${String(m).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
-  }
-
-  const dt = new Date(value);
-  if (!isNaN(dt.getTime())) {
-    const y = dt.getFullYear();
-    const m = String(dt.getMonth() + 1).padStart(2, "0");
-    const d = String(dt.getDate()).padStart(2, "0");
-    return `${y}-${m}-${d}`;
-  }
-
-  return "";
+  const parsed = parseDate(value);
+  return parsed === "-" ? "" : parsed;
 }
 
 function renderLegend(){
@@ -940,13 +698,9 @@ function eventsByDate(){
 }
 
 function openEventModal(dateStr, events){
-  console.log("openEventModal fired", dateStr, events);
-
   const modal = $("#eventModal");
   const title = $("#eventModalTitle");
   const body = $("#eventModalBody");
-
-  console.log("modal parts", modal, title, body);
 
   if(!modal || !title || !body) return;
 
@@ -1291,39 +1045,14 @@ async function saveEditor(){
 
     const saved = await savePostToApi(a);
 
-    const normalized = normalizePost({
-      id: saved.id,
-      channel: saved.channel,
-      tone: saved.tone,
-      badge: saved.badge,
-      date: saved.date,
-      title: saved.title,
-      desc: saved.desc,
-      tags: saved.tags || [],
-      summary: saved.summary || [],
-      body: saved.body || [],
-      cta: saved.ctaUrl ? {
-        text: saved.ctaText || "開く",
-        url: saved.ctaUrl
-      } : null,
-      media: {
-        images: saved.images || [],
-        video: saved.video || ""
-      }
-    });
+    const normalized = mapApiPost(saved);
 
     // cloudPosts を即更新
     const cidx = cloudPosts.findIndex(x => x.id === normalized.id);
     if(cidx >= 0) cloudPosts[cidx] = normalized;
     else cloudPosts.unshift(normalized);
 
-    // 先に画面反映
-    renderAdmin();
-    renderFeed();
-    renderSaved();
-    if ($(`.page[data-page="schedule"]`)?.classList.contains("page--active")) {
-      renderCalendar();
-    }
+    renderAll();
 
     state.editingId = normalized.id;
     syncAdminButtons();
@@ -1336,20 +1065,9 @@ async function saveEditor(){
       if (btnSave) btnSave.textContent = oldText || "保存";
     }, 1000);
 
-    // 裏で再同期
-    fetchPostsFromApi()
-      .then(posts => {
-        cloudPosts = posts;
-        renderAdmin();
-        renderFeed();
-        renderSaved();
-        if ($(`.page[data-page="schedule"]`)?.classList.contains("page--active")) {
-          renderCalendar();
-        }
-      })
-      .catch(err => {
-        console.warn("Cloud resync failed:", err);
-      });
+    refreshFromCloud({ silent: false, skipNotify: true }).catch(err => {
+      console.warn("Cloud resync failed:", err);
+    });
 
   } catch (err) {
     console.error(err);
@@ -1378,9 +1096,7 @@ async function deleteEditor(){
     saveSaved(saved);
 
     clearEditor();
-    renderAdmin();
-    renderFeed();
-    renderSaved();
+    renderAll();
 
     alert("削除しました。");
   } catch (err) {
@@ -1389,38 +1105,69 @@ async function deleteEditor(){
   }
 }
 
-// ===== Export / Import =====
-function buildExportObject(){
-  return {
-    version: 1,
-    exportedAt: new Date().toISOString(),
-    posts: loadPosts(),
-    schedule: SCHEDULE, // optional (sample only)
-  };
+function renderAll(){
+  renderChips();
+  renderFeed();
+  renderSaved();
+  renderContact();
+  renderAdmin();
+  if ($(`.page[data-page="schedule"]`)?.classList.contains("page--active")) {
+    renderCalendar();
+  }
 }
-function downloadJson(obj, filename="community-news-export.json"){
-  const blob = new Blob([JSON.stringify(obj, null, 2)], { type:"application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
+
+function updateLatestPostKey(posts){
+  if(!Array.isArray(posts) || posts.length === 0){
+    latestPostKey = "";
+    return;
+  }
+  const sorted = posts
+    .slice()
+    .sort((a, b) => (parseDate(a.date) < parseDate(b.date) ? 1 : -1));
+  const top = sorted[0];
+  latestPostKey = `${top.id}:${parseDate(top.date)}`;
 }
-function importJsonFile(file){
-  return new Promise((resolve,reject)=>{
-    const r = new FileReader();
-    r.onload = () => {
-      try {
-        const data = JSON.parse(String(r.result||"{}"));
-        resolve(data);
-      } catch (e) { reject(e); }
-    };
-    r.onerror = reject;
-    r.readAsText(file);
+
+function showNotifyBanner(){
+  const banner = $("#notifyBanner");
+  if (banner) banner.hidden = false;
+}
+
+function hideNotifyBanner(){
+  const banner = $("#notifyBanner");
+  if (banner) banner.hidden = true;
+}
+
+async function refreshFromCloud(opts = {}){
+  const posts = await fetchPostsFromApi();
+  const prevKey = latestPostKey;
+  cloudPosts = posts;
+  updateLatestPostKey(posts);
+  if (!opts.silent) renderAll();
+  if (!opts.skipNotify && prevKey && prevKey !== latestPostKey) {
+    showNotifyBanner();
+  }
+}
+
+function setupInstallButton(){
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    deferredInstallPrompt = e;
+    const btn = $("#btnInstall");
+    if (btn) btn.hidden = false;
   });
+  window.addEventListener("appinstalled", () => {
+    deferredInstallPrompt = null;
+    const btn = $("#btnInstall");
+    if (btn) btn.hidden = true;
+  });
+}
+
+function setupPostWatcher(){
+  setInterval(() => {
+    if (!getCurrentUser()) return;
+    refreshFromCloud({ silent: true, skipNotify: false }).catch(() => {});
+  }, 60000);
 }
 
 // ===== Bindings =====
@@ -1447,6 +1194,10 @@ function bind(){
     const q = $("#q");
     if(q) q.value = "";
     state.query = "";
+    renderFeed();
+  });
+  on("#btnSortToggle", "click", () => {
+    state.sortOrder = state.sortOrder === "desc" ? "asc" : "desc";
     renderFeed();
   });
 
@@ -1501,6 +1252,7 @@ function bind(){
     else arr.push(id);
     saveSaved(arr);
     renderSaveBtn();
+    renderSaved();
   });
 
   // admin
@@ -1526,11 +1278,6 @@ function bind(){
     if(!el) return;
     el.addEventListener("input", syncAdminButtons);
     el.addEventListener("change", syncAdminButtons);
-  });
-
-  on("#btnExport", "click", () => {
-    const obj = buildExportObject();
-    downloadJson(obj, `community-news-export-${Date.now()}.json`);
   });
 
    const postForm = document.getElementById("postForm");
@@ -1619,35 +1366,12 @@ if (postForm) {
           btn.textContent = "ログイン中...";
         }
 
-const user = await loginToApi(email, password);
-console.log("login success user =", user);
-
-saveCurrentUser(user);
-applyAuthUI();
-
-// ここで hidden 切替後の状態確認
-console.log("authGate hidden =", document.getElementById("authGate")?.hidden);
-console.log("appRoot hidden =", document.getElementById("appRoot")?.hidden);
-
-setActivePage("home");
-
-try { renderChips(); } catch (e) { console.error("renderChips error:", e); }
-try { renderFeed(); } catch (e) { console.error("renderFeed error:", e); }
-try { renderContact(); } catch (e) { console.error("renderContact error:", e); }
-try { renderAdmin(); } catch (e) { console.error("renderAdmin error:", e); }
-
-fetchPostsFromApi()
-  .then(posts => {
-    cloudPosts = posts;
-    renderFeed();
-    renderSaved();
-    renderAdmin();
-  })
-  .catch(err => {
-    console.error("Failed to load posts from GAS:", err);
-  });
-
-if (msg) msg.textContent = "";
+        const user = await loginToApi(email, password);
+        saveCurrentUser(user);
+        applyAuthUI();
+        setActivePage("home");
+        await refreshFromCloud({ silent: false, skipNotify: true });
+        if (msg) msg.textContent = "";
       } catch (err) {
         console.error(err);
         if (msg) msg.textContent = err.message || "ログインに失敗しました。";
@@ -1732,8 +1456,6 @@ if (pImageFiles) {
       textarea.value = [current, ...uploadedUrls]
         .filter(Boolean)
         .join("\n");
-
-      console.log("pImages updated:", textarea.value);
     } catch (err) {
       console.error(err);
       alert("画像アップロードに失敗しました。\n" + (err.message || err));
@@ -1743,61 +1465,31 @@ if (pImageFiles) {
   });
 }
 
-  // logout
-  on("#btnLogout", "click", () => {
-    clearCurrentUser();
-    applyAuthUI();
-
-    const loginEmail = $("#loginEmail");
-    const loginPassword = $("#loginPassword");
-    const loginMsg = $("#loginMsg");
-
-    if (loginEmail) loginEmail.value = "";
-    if (loginPassword) loginPassword.value = "";
-    if (loginMsg) loginMsg.textContent = "";
-
-    setTimeout(() => {
-      if (loginEmail) loginEmail.focus();
-    }, 50);
+  on("#btnInstall", "click", async () => {
+    if (!deferredInstallPrompt) return;
+    deferredInstallPrompt.prompt();
+    await deferredInstallPrompt.userChoice;
+    deferredInstallPrompt = null;
+    const btn = $("#btnInstall");
+    if (btn) btn.hidden = true;
   });
-
-  on("#btnHelp", "click", () => {
-    alert(
-`Adminタブで記事を投稿・編集できます。
-次の段階：
-・コミュ限定ログイン
-・権限制御
-・記事データをスプレッドシート/Firestoreに移行`
-    );
+  on("#notifyRefresh", "click", async () => {
+    try {
+      await refreshFromCloud({ silent: false, skipNotify: true });
+    } finally {
+      hideNotifyBanner();
+    }
   });
-}
-
-async function testLoginApi() {
-  const base = window.APP_CONFIG?.GAS_API_URL;
-  if (!base) {
-    console.log("GAS_API_URL is not set");
-    return;
-  }
-
-  const res = await fetch(base, {
-    method: "POST",
-    headers: {
-      "Content-Type": "text/plain;charset=utf-8"
-    },
-    body: JSON.stringify({
-      action: "login",
-      email: "yourmail@example.com",
-      password: "1234"
-    })
+  on("#notifyDismiss", "click", () => {
+    hideNotifyBanner();
   });
-
-  const data = await res.json();
-  console.log("login result:", data);
 }
 
 // ===== Init =====
 async function init(){
   bind();
+  setupInstallButton();
+  setupPostWatcher();
 
   if($("#pDate")) $("#pDate").value = todayYMD();
 
@@ -1808,25 +1500,6 @@ async function init(){
   }
 
   setActivePage("home");
-
-  try { renderChips(); } catch (e) { console.error("renderChips error:", e); }
-  try { renderFeed(); } catch (e) { console.error("renderFeed error:", e); }
-  try { renderContact(); } catch (e) { console.error("renderContact error:", e); }
-  try { renderAdmin(); } catch (e) { console.error("renderAdmin error:", e); }
-
-  fetchPostsFromApi()
-    .then(posts => {
-      cloudPosts = posts;
-      renderFeed();
-      renderSaved();
-      renderAdmin();
-
-      if ($(`.page[data-page="schedule"]`)?.classList.contains("page--active")) {
-        renderCalendar();
-      }
-    })
-    .catch(err => {
-      console.error("Failed to load posts from GAS:", err);
-    });
+  await refreshFromCloud({ silent: false, skipNotify: true });
 }
 init();
