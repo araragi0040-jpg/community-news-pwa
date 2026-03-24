@@ -270,7 +270,10 @@ async function callApi(action, payload = {}) {
 async function fetchPostsFromApi() {
   const base = window.APP_CONFIG?.GAS_API_URL;
   if (!base) return [];
-  const res = await fetch(`${base}?action=listPosts`);
+  const url = `${base}?action=listPosts&t=${Date.now()}`;
+  const res = await fetch(url, {
+    cache: "no-store"
+  });
   const data = await res.json();
   if (!data.ok) throw new Error(data.message || "Failed to fetch posts");
   return (data.posts || []).map(mapApiPost);
@@ -279,7 +282,10 @@ async function fetchPostsFromApi() {
 async function fetchAllPostsFromApi() {
   const base = window.APP_CONFIG?.GAS_API_URL;
   if (!base) return [];
-  const res = await fetch(`${base}?action=listAllPosts`);
+  const url = `${base}?action=listAllPosts&t=${Date.now()}`;
+  const res = await fetch(url, {
+    cache: "no-store"
+  });
   const data = await res.json();
   if (!data.ok) throw new Error(data.message || "Failed to fetch posts");
   return (data.posts || []).map(mapApiPost);
@@ -288,7 +294,10 @@ async function fetchAllPostsFromApi() {
 async function fetchEventsFromApi() {
   const base = window.APP_CONFIG?.GAS_API_URL;
   if (!base) return [];
-  const res = await fetch(`${base}?action=listEvents`);
+  const url = `${base}?action=listEvents&t=${Date.now()}`;
+  const res = await fetch(url, {
+    cache: "no-store"
+  });
   const data = await res.json();
   if (!data.ok) throw new Error(data.message || "Failed to fetch events");
   return (data.events || []).map(mapApiEvent);
@@ -297,7 +306,10 @@ async function fetchEventsFromApi() {
 async function fetchAllEventsFromApi() {
   const base = window.APP_CONFIG?.GAS_API_URL;
   if (!base) return [];
-  const res = await fetch(`${base}?action=listAllEvents`);
+  const url = `${base}?action=listAllEvents&t=${Date.now()}`;
+  const res = await fetch(url, {
+    cache: "no-store"
+  });
   const data = await res.json();
   if (!data.ok) throw new Error(data.message || "Failed to fetch events");
   return (data.events || []).map(mapApiEvent);
@@ -375,7 +387,7 @@ async function uploadImageToApi(file) {
   return data.url;
 }
 
-function compressImage(file, maxSize = 1600, quality = 0.85) {
+function compressImage(file, maxSize = 2200, quality = 0.9) {
   return new Promise((resolve, reject) => {
     const objectUrl = URL.createObjectURL(file);
     const img = new Image();
