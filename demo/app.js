@@ -12,10 +12,14 @@ const LS_KEY_USER = "community_news_user_v1";
 
 const CHANNELS = [
   { key:"all", label:"All", tone:"accent" },
-  { key:"announce", label:"告知", tone:"accent" },
-  { key:"event", label:"イベント", tone:"good" },
+  { key:"article", label:"記事", tone:"accent" },
   { key:"ops", label:"運営", tone:"warn" },
-  { key:"tips", label:"Tips", tone:"accent" },
+];
+
+const ADMIN_CHANNELS = [
+  { key: "article", label: "記事" },
+  { key: "event", label: "イベント概要" },
+  { key: "ops", label: "運営" },
 ];
 
 
@@ -76,6 +80,7 @@ let state = {
 
   // admin
   editingId: null, // post id
+  adminTab: "editor", // "editor" | "list"
 };
 
 let cloudPosts = [];
@@ -161,18 +166,24 @@ function toneColor(tone){
 }
 
 function channelLabel(key){
-  return CHANNELS.find(c=>c.key===key)?.label || key;
+  return CHANNELS.find(c=>c.key===key)?.label || ADMIN_CHANNELS.find(c=>c.key===key)?.label || key;
 }
 
 function badgeTextFromChannel(ch){
-  const map = { announce:"告知", event:"イベント", ops:"運営", tips:"Tips" };
+  const map = { article:"記事", event:"イベント概要", ops:"運営" };
   return map[ch] || "Info";
+}
+
+function normalizeChannelKey(ch){
+  if (ch === "announce") return "article";
+  if (ch === "tips") return "ops";
+  return ch;
 }
 
 function normalizePost(input){
   const a = { ...input };
   a.id = a.id || `p_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,7)}`;
-  a.channel = a.channel || "announce";
+  a.channel = normalizeChannelKey(a.channel || "article");
   a.tone = a.tone || "accent";
   a.badge = a.badge || badgeTextFromChannel(a.channel);
   a.date = a.date || todayYMD();
@@ -185,6 +196,7 @@ function normalizePost(input){
   a.media = a.media || {};
   a.media.images = Array.isArray(a.media.images) ? a.media.images : [];
   a.media.video = a.media.video || "";
+  a.status = a.status || "public";
   return a;
 }
 
@@ -207,7 +219,8 @@ function mapApiPost(post){
     media: {
       images: post.images || [],
       video: post.video || ""
-    }
+    },
+    status: post.status || "public"
   });
 }
 
@@ -245,7 +258,7 @@ async function savePostToApi(post) {
     post: {
       id: post.id || "",
       date: post.date || "",
-      channel: post.channel || "announce",
+      channel: post.channel || "article",
       tone: post.tone || "accent",
       badge: post.badge || "",
       title: post.title || "",
@@ -257,7 +270,7 @@ async function savePostToApi(post) {
       ctaUrl: post.cta?.url || "",
       images: post.media?.images || [],
       video: post.media?.video || "",
-      status: "public"
+      status: post.status || "public"
     }
   });
   return data.post;
@@ -275,21 +288,51 @@ async function saveContactToApi(contact) {
 }
 
 async function uploadImageToApi(file) {
-  const dataUrl = await fileToDataUrl(file);
+  const dataUrl = await compressImage(file);
   const data = await callApi("uploadImage", {
     fileName: file.name,
-    mimeType: file.type,
+    mimeType: "image/jpeg",
     dataUrl
   });
   return data.url;
 }
 
-function fileToDataUrl(file) {
+function compressImage(file, maxSize = 1600, quality = 0.85) {
   return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
+    const objectUrl = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      let w = img.naturalWidth || img.width;
+      let h = img.naturalHeight || img.height;
+      if (!w || !h) {
+        URL.revokeObjectURL(objectUrl);
+        reject(new Error("画像サイズの取得に失敗しました。"));
+        return;
+      }
+      if (w > maxSize || h > maxSize) {
+        const ratio = Math.min(maxSize / w, maxSize / h);
+        w = Math.max(1, Math.round(w * ratio));
+        h = Math.max(1, Math.round(h * ratio));
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        URL.revokeObjectURL(objectUrl);
+        reject(new Error("画像処理コンテキストの初期化に失敗しました。"));
+        return;
+      }
+      ctx.drawImage(img, 0, 0, w, h);
+      const dataUrl = canvas.toDataURL("image/jpeg", quality);
+      URL.revokeObjectURL(objectUrl);
+      resolve(dataUrl);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error("画像の読み込みに失敗しました。"));
+    };
+    img.src = objectUrl;
   });
 }
 
@@ -372,7 +415,10 @@ function renderChips(){
 function filteredArticles(){
   const q = state.query.trim().toLowerCase();
   return allArticles()
-    .filter(a => state.channel === "all" ? true : a.channel === state.channel)
+    .filter(a => {
+      if (state.channel === "all") return a.channel !== "event";
+      return a.channel === state.channel;
+    })
     .filter(a => {
       if(!q) return true;
       return (
@@ -900,8 +946,22 @@ function adminArticles(){
 function renderAdmin(){
   const adminCount = $("#adminCount");
   const list = $("#adminItems");
+  const tabEditor = $("#adminTabEditor");
+  const tabList = $("#adminTabList");
+  const panelEditor = $("#adminPanelEditor");
+  const panelList = $("#adminPanelList");
+  const pChannel = $("#pChannel");
 
   if(!adminCount || !list) return;
+  if (tabEditor) tabEditor.classList.toggle("admin-tab--active", state.adminTab === "editor");
+  if (tabList) tabList.classList.toggle("admin-tab--active", state.adminTab === "list");
+  if (panelEditor) panelEditor.hidden = state.adminTab !== "editor";
+  if (panelList) panelList.hidden = state.adminTab !== "list";
+  if (pChannel && pChannel.options.length === 0) {
+    pChannel.innerHTML = ADMIN_CHANNELS
+      .map(({ key, label }) => `<option value="${escapeAttr(key)}">${escapeHtml(label)}</option>`)
+      .join("");
+  }
 
   const items = adminArticles();
   adminCount.textContent = `${items.length}件`;
@@ -921,14 +981,16 @@ function renderAdmin(){
           <div class="aitem__title">${escapeHtml(a.title)}</div>
           <div class="aitem__date">${formatDateJP(a.date)}</div>
         </div>
-        <div class="aitem__sub">#${escapeHtml(channelLabel(a.channel))} / ${escapeHtml(a.badge || "")}</div>
+        <div class="aitem__sub">#${escapeHtml(channelLabel(a.channel))} / ${escapeHtml(a.badge || "")} / ${escapeHtml(a.status || "public")}</div>
       </div>
     `).join("");
 
     $$(".aitem", list).forEach(el=>{
       el.addEventListener("click", ()=>{
         const id = el.dataset.eid;
+        state.adminTab = "editor";
         startEdit(id);
+        renderAdmin();
       });
     });
   }
@@ -940,7 +1002,7 @@ function clearEditor(){
   state.editingId = null;
   $("#postForm").reset();
   $("#pDate").value = todayYMD();
-  $("#pChannel").value = "announce";
+  $("#pChannel").value = "article";
   $("#pTone").value = "accent";
   $("#pDesc").value = "";
   $("#pTags").value = "";
@@ -950,6 +1012,8 @@ function clearEditor(){
   $("#pCtaUrl").value = "";
   $("#pImages").value = "";
   $("#pVideo").value = "";
+  const statusView = $("#pStatusView");
+  if (statusView) statusView.textContent = "未設定（投稿すると状態が反映されます）";
   syncAdminButtons();
 }
 
@@ -961,7 +1025,7 @@ function startEdit(id){
 
   $("#pTitle").value = a.title || "";
   $("#pDate").value = a.date || todayYMD();
-  $("#pChannel").value = a.channel || "announce";
+  $("#pChannel").value = a.channel || "article";
   $("#pTone").value = a.tone || "accent";
   $("#pDesc").value = a.desc || "";
   $("#pTags").value = (a.tags || []).join(",");
@@ -971,19 +1035,24 @@ function startEdit(id){
   $("#pCtaUrl").value = a.cta?.url || "";
   $("#pImages").value = (a.media?.images || []).join("\n");
   $("#pVideo").value = a.media?.video || "";
+  const statusView = $("#pStatusView");
+  if (statusView) statusView.textContent = a.status || "public";
   syncAdminButtons();
 }
 
 function syncAdminButtons(){
-  const btnSave = $("#btnSavePost");
-  const btnDelete = $("#btnDeletePost");
+  const btnPublish = $("#btnPublishPost");
+  const btnDraft = $("#btnDraftPost");
+  const btnPrivate = $("#btnPrivatePost");
   const titleInput = $("#pTitle");
+  const dateInput = $("#pDate");
 
-  if(!btnSave || !btnDelete) return;
+  if(!btnPublish || !btnDraft || !btnPrivate) return;
 
-  const has = !!state.editingId || ((titleInput?.value || "").trim().length > 0);
-  btnSave.disabled = !has;
-  btnDelete.disabled = !state.editingId;
+  const canSave = ((titleInput?.value || "").trim().length > 0) && !!(dateInput?.value || "");
+  btnPublish.disabled = !canSave;
+  btnDraft.disabled = !canSave;
+  btnPrivate.disabled = !canSave;
 }
 
 function collectForm(){
@@ -1027,14 +1096,20 @@ function collectForm(){
   return a;
 }
 
-async function saveEditor(){
+async function saveEditor(status){
   const a = collectForm();
   if(!a.title || !a.date){
     alert("タイトルと日付は必須です。");
     return;
   }
+  a.status = status || "public";
 
-  const btnSave = $("#btnSavePost");
+  const statusBtnMap = {
+    public: "#btnPublishPost",
+    draft: "#btnDraftPost",
+    private: "#btnPrivatePost"
+  };
+  const btnSave = $(statusBtnMap[a.status] || "#btnPublishPost");
   const oldText = btnSave ? btnSave.textContent : "";
 
   try {
@@ -1055,6 +1130,8 @@ async function saveEditor(){
     renderAll();
 
     state.editingId = normalized.id;
+    const statusView = $("#pStatusView");
+    if (statusView) statusView.textContent = normalized.status || a.status;
     syncAdminButtons();
 
     if (btnSave) {
@@ -1062,7 +1139,7 @@ async function saveEditor(){
     }
 
     setTimeout(() => {
-      if (btnSave) btnSave.textContent = oldText || "保存";
+      if (btnSave) btnSave.textContent = oldText || "投稿";
     }, 1000);
 
     refreshFromCloud({ silent: false, skipNotify: true }).catch(err => {
@@ -1076,7 +1153,7 @@ async function saveEditor(){
     if (btnSave) {
       btnSave.disabled = false;
       if (btnSave.textContent === "保存中...") {
-        btnSave.textContent = oldText || "保存";
+        btnSave.textContent = oldText || "投稿";
       }
     }
   }
@@ -1257,20 +1334,34 @@ function bind(){
 
   // admin
   on("#btnNewPost", "click", () => {
+    state.adminTab = "editor";
     clearEditor();
     const pDate = $("#pDate");
     if(pDate) pDate.value = todayYMD();
     syncAdminButtons();
+    renderAdmin();
   });
 
-  on("#btnSavePost", "click", (e) => {
-    e.preventDefault();
-    saveEditor();
+  on("#adminTabEditor", "click", () => {
+    state.adminTab = "editor";
+    renderAdmin();
+  });
+  on("#adminTabList", "click", () => {
+    state.adminTab = "list";
+    renderAdmin();
   });
 
-  on("#btnDeletePost", "click", (e) => {
+  on("#btnPublishPost", "click", (e) => {
     e.preventDefault();
-    deleteEditor();
+    saveEditor("public");
+  });
+  on("#btnDraftPost", "click", (e) => {
+    e.preventDefault();
+    saveEditor("draft");
+  });
+  on("#btnPrivatePost", "click", (e) => {
+    e.preventDefault();
+    saveEditor("private");
   });
 
   ["pTitle","pDate","pChannel","pTone","pDesc","pTags","pSummary","pBody","pCtaText","pCtaUrl"].forEach(id=>{
@@ -1456,9 +1547,10 @@ if (pImageFiles) {
       textarea.value = [current, ...uploadedUrls]
         .filter(Boolean)
         .join("\n");
+      alert("画像をアップロードしました");
     } catch (err) {
       console.error(err);
-      alert("画像アップロードに失敗しました。\n" + (err.message || err));
+      alert("画像アップロードに失敗しました。画像サイズを小さくして再試行してください。\n" + (err.message || err));
     } finally {
       pImageFiles.value = "";
     }
