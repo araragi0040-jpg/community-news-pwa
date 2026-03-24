@@ -153,7 +153,13 @@ function relativeDate(value){
   now.setHours(0, 0, 0, 0);
   target.setHours(0, 0, 0, 0);
   const diff = Math.floor((now - target) / 86400000);
-  if (diff <= 0) return "今日";
+  if (diff === 0) return "今日";
+  if (diff < 0) {
+    const days = Math.abs(diff);
+    if (days === 1) return "明日";
+    if (days < 7) return `${days}日後`;
+    return formatDateJP(parsed);
+  }
   if (diff === 1) return "1日前";
   if (diff < 7) return `${diff}日前`;
   if (diff < 30) return `${Math.floor(diff / 7)}週間前`;
@@ -194,6 +200,15 @@ function normalizeChannelKey(ch){
   return ch;
 }
 
+function normalizeStatusValue(value, fallback = "public"){
+  const s = String(value || "").trim().toLowerCase();
+  if (!s) return fallback;
+  if (s === "public" || s === "published" || s === "公開") return "public";
+  if (s === "draft" || s === "下書き") return "draft";
+  if (s === "private" || s === "非公開") return "private";
+  return fallback;
+}
+
 function normalizePost(input){
   const a = { ...input };
   a.id = a.id || `p_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,7)}`;
@@ -209,7 +224,7 @@ function normalizePost(input){
   a.media = a.media || {};
   a.media.images = Array.isArray(a.media.images) ? a.media.images : [];
   a.media.video = a.media.video || "";
-  a.status = a.status || "public";
+  a.status = normalizeStatusValue(a.status, "public");
   return a;
 }
 
@@ -247,7 +262,7 @@ function mapApiEvent(event){
     location: event.location || "",
     imageUrls: Array.isArray(event.imageUrls) ? event.imageUrls : [],
     ctaUrl: event.ctaUrl || "",
-    status: event.status || "public",
+    status: normalizeStatusValue(event.status, "public"),
     createdAt: event.createdAt || ""
   };
 }
@@ -262,55 +277,69 @@ async function callApi(action, payload = {}) {
     },
     body: JSON.stringify({ action, ...payload })
   });
-  const data = await res.json();
+  const data = await parseApiJson(res, action);
   if (!data.ok) throw new Error(data.message || "API error");
+  return data;
+}
+
+async function parseApiJson(res, actionLabel){
+  const text = await res.text();
+  let data = null;
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    throw new Error(`${actionLabel} failed: response is not JSON (status ${res.status})`);
+  }
+  if (!res.ok) {
+    throw new Error(data?.message || `${actionLabel} failed (status ${res.status})`);
+  }
   return data;
 }
 
 async function fetchPostsFromApi() {
   const base = window.APP_CONFIG?.GAS_API_URL;
-  if (!base) return [];
+  if (!base) throw new Error("GAS_API_URL is not set");
   const url = `${base}?action=listPosts&t=${Date.now()}`;
   const res = await fetch(url, {
     cache: "no-store"
   });
-  const data = await res.json();
+  const data = await parseApiJson(res, "listPosts");
   if (!data.ok) throw new Error(data.message || "Failed to fetch posts");
   return (data.posts || []).map(mapApiPost);
 }
 
 async function fetchAllPostsFromApi() {
   const base = window.APP_CONFIG?.GAS_API_URL;
-  if (!base) return [];
+  if (!base) throw new Error("GAS_API_URL is not set");
   const url = `${base}?action=listAllPosts&t=${Date.now()}`;
   const res = await fetch(url, {
     cache: "no-store"
   });
-  const data = await res.json();
+  const data = await parseApiJson(res, "listAllPosts");
   if (!data.ok) throw new Error(data.message || "Failed to fetch posts");
   return (data.posts || []).map(mapApiPost);
 }
 
 async function fetchEventsFromApi() {
   const base = window.APP_CONFIG?.GAS_API_URL;
-  if (!base) return [];
+  if (!base) throw new Error("GAS_API_URL is not set");
   const url = `${base}?action=listEvents&t=${Date.now()}`;
   const res = await fetch(url, {
     cache: "no-store"
   });
-  const data = await res.json();
+  const data = await parseApiJson(res, "listEvents");
   if (!data.ok) throw new Error(data.message || "Failed to fetch events");
   return (data.events || []).map(mapApiEvent);
 }
 
 async function fetchAllEventsFromApi() {
   const base = window.APP_CONFIG?.GAS_API_URL;
-  if (!base) return [];
+  if (!base) throw new Error("GAS_API_URL is not set");
   const url = `${base}?action=listAllEvents&t=${Date.now()}`;
   const res = await fetch(url, {
     cache: "no-store"
   });
-  const data = await res.json();
+  const data = await parseApiJson(res, "listAllEvents");
   if (!data.ok) throw new Error(data.message || "Failed to fetch events");
   return (data.events || []).map(mapApiEvent);
 }
@@ -580,6 +609,17 @@ function renderFeed(){
 
   const cards = $("#cards");
   if(!cards) return;
+  if (items.length === 0) {
+    cards.innerHTML = `
+      <div class="empty">
+        <div class="empty__icon">🔎</div>
+        <div class="empty__title">該当する記事がありません</div>
+        <div class="empty__text">キーワードやチャンネルを変更して再検索してください。</div>
+      </div>
+    `;
+    renderPagination(totalPages);
+    return;
+  }
   cards.innerHTML = pagedItems.map(renderCard).join("");
 
   $$(".card", cards).forEach(el => {
@@ -699,6 +739,7 @@ function openDrawer(articleId){
 
   $("#drawer").classList.add("drawer--open");
   $("#drawer").setAttribute("aria-hidden", "false");
+  document.body.classList.add("no-scroll");
 
   // badge
   const badge = $("#drawerBadge");
@@ -737,6 +778,7 @@ function closeDrawer(){
   state.activeArticleId = null;
   $("#drawer").classList.remove("drawer--open");
   $("#drawer").setAttribute("aria-hidden","true");
+  document.body.classList.remove("no-scroll");
 }
 
 function renderSaveBtn(){
@@ -1637,25 +1679,40 @@ function hideNotifyBanner(){
   if (banner) banner.hidden = true;
 }
 
+function formatErrorMessage(err, fallback){
+  if (!err) return fallback;
+  if (typeof err === "string") return err;
+  return err.message || fallback;
+}
+
 async function refreshFromCloud(opts = {}){
-  const user = getCurrentUser();
-  const [posts, events] = await Promise.all([
-    user?.role === "admin"
-      ? fetchAllPostsFromApi()
-      : fetchPostsFromApi(),
-    user?.role === "admin"
-      ? fetchAllEventsFromApi()
-      : fetchEventsFromApi()
-  ]);
-  const prevKey = latestPostKey;
-  cloudPosts = posts;
-  cloudEvents = events;
-  saveCachedPosts(posts);
-  updateLatestPostKey(posts);
-  if (!opts.silent) renderAll();
-  setFeedLoading(false);
-  if (!opts.skipNotify && prevKey && prevKey !== latestPostKey) {
-    showNotifyBanner();
+  try {
+    const user = getCurrentUser();
+    const [posts, events] = await Promise.all([
+      user?.role === "admin"
+        ? fetchAllPostsFromApi()
+        : fetchPostsFromApi(),
+      user?.role === "admin"
+        ? fetchAllEventsFromApi()
+        : fetchEventsFromApi()
+    ]);
+    const prevKey = latestPostKey;
+    cloudPosts = posts;
+    cloudEvents = events;
+    saveCachedPosts(posts);
+    updateLatestPostKey(posts);
+    if (!opts.silent) renderAll();
+    setFeedLoading(false);
+    if (!opts.skipNotify && prevKey && prevKey !== latestPostKey) {
+      showNotifyBanner();
+    }
+  } catch (err) {
+    setFeedLoading(false, "記事の読み込みに失敗しました。時間をおいて再読み込みしてください。");
+    const msg = formatErrorMessage(err, "データの取得に失敗しました。");
+    if (!opts.silent && opts.showError !== false) {
+      alert(`データ更新に失敗しました。\n${msg}`);
+    }
+    throw err;
   }
 }
 
@@ -1676,7 +1733,7 @@ function setupInstallButton(){
 function setupPostWatcher(){
   setInterval(() => {
     if (!getCurrentUser()) return;
-    refreshFromCloud({ silent: true, skipNotify: false }).catch(() => {});
+    refreshFromCloud({ silent: true, skipNotify: false, showError: false }).catch(() => {});
   }, 60000);
 }
 
@@ -1974,10 +2031,10 @@ function bind(){
         renderAll();
         setFeedLoading(!hasCache);
 
-        refreshFromCloud({ silent: false, skipNotify: true }).catch((refreshErr) => {
+        refreshFromCloud({ silent: false, skipNotify: true, showError: !hasCache }).catch((refreshErr) => {
           console.warn(refreshErr);
-          if (!hasCache) {
-            setFeedLoading(false, "記事の読み込みに失敗しました。時間をおいて再読み込みしてください。");
+          if (msg && !hasCache) {
+            msg.textContent = formatErrorMessage(refreshErr, "記事の読み込みに失敗しました。");
           }
         });
         if (msg) msg.textContent = "";
@@ -2154,11 +2211,8 @@ async function init(){
   renderAll();
   setFeedLoading(!hasCache);
 
-  refreshFromCloud({ silent: false, skipNotify: true }).catch((err) => {
+  refreshFromCloud({ silent: false, skipNotify: true, showError: !hasCache }).catch((err) => {
     console.warn("Cloud refresh failed:", err);
-    if (!hasCache) {
-      setFeedLoading(false, "記事の読み込みに失敗しました。時間をおいて再読み込みしてください。");
-    }
   });
 }
 init();
