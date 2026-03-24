@@ -216,16 +216,18 @@ svg{ width:22px; height:22px; fill: currentColor; }
   border-radius: 999px;
   border: 1px solid rgba(176,125,79,.35);
   background: rgba(255,255,255,.88);
-  color: var(--accent);
+  color: var(--muted);
+  font-size: 17px;
+  line-height: 1;
+  font-weight: 700;
   display: grid;
   place-items: center;
   z-index: 2;
   pointer-events: none;
 }
 
-.card__saved svg{
-  width: 16px;
-  height: 16px;
+.card__saved--active{
+  color: var(--accent);
 }
 
 /* ===== Card Media (always shown) ===== */
@@ -841,7 +843,6 @@ svg{ width:22px; height:22px; fill: currentColor; }
 
 .media__img img{
   width:100%;
-  max-width:680px;   /* ← サイズ制限 */
   height:auto;
   display:block;
   margin: 0 auto;    /* ← 中央寄せ */
