@@ -188,7 +188,6 @@ function normalizePost(input){
   a.badge = a.badge || badgeTextFromChannel(a.channel);
   a.date = a.date || todayYMD();
   a.title = a.title || "(no title)";
-  a.desc = a.desc || "";
   a.tags = Array.isArray(a.tags) ? a.tags : [];
   a.summary = Array.isArray(a.summary) ? a.summary : [];
   a.body = Array.isArray(a.body) ? a.body : [];
@@ -208,7 +207,6 @@ function mapApiPost(post){
     badge: post.badge,
     date: post.date,
     title: post.title,
-    desc: post.desc,
     tags: post.tags || [],
     summary: post.summary || [],
     body: post.body || [],
@@ -262,7 +260,6 @@ async function savePostToApi(post) {
       tone: post.tone || "accent",
       badge: post.badge || "",
       title: post.title || "",
-      desc: post.desc || "",
       tags: post.tags || [],
       summary: post.summary || [],
       body: post.body || [],
@@ -423,7 +420,6 @@ function filteredArticles(){
       if(!q) return true;
       return (
         (a.title||"").toLowerCase().includes(q) ||
-        (a.desc||"").toLowerCase().includes(q) ||
         (a.tags||[]).join(" ").toLowerCase().includes(q) ||
         (a.badge||"").toLowerCase().includes(q)
       );
@@ -438,12 +434,19 @@ function filteredArticles(){
 }
 
 function renderCard(a){
+  const saved = isSaved(a.id);
   const thumb = (a.media?.images && a.media.images.length) ? a.media.images[0] : "";
   const mediaHtml = thumb
     ? `<div class="card__media"><img src="${escapeAttr(thumb)}" alt="" loading="lazy"></div>`
     : `<div class="card__media card__media--placeholder" aria-hidden="true"></div>`;
+  const savedBadge = saved
+    ? `<span class="card__saved" aria-label="保存済み" title="保存済み">
+         <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 2h12a2 2 0 0 1 2 2v18l-8-4-8 4V4a2 2 0 0 1 2-2z"/></svg>
+       </span>`
+    : "";
   return `
     <article class="card" data-article="${escapeAttr(a.id)}">
+      ${savedBadge}
       ${mediaHtml}
       <div class="card__content">
         <div class="card__title">${escapeHtml(a.title||"")}</div>
@@ -659,8 +662,7 @@ function scheduleItems(){
       date: normalizeDateForCalendar(a.date),
       time: "",
       tone: a.tone || "good",
-      label: a.badge || "イベント",
-      desc: a.desc || ""
+      label: a.badge || "イベント"
     }))
     .filter(it => !!it.date)
     .sort((a,b) => (a.date < b.date ? -1 : 1));
@@ -669,22 +671,6 @@ function scheduleItems(){
 function normalizeDateForCalendar(value){
   const parsed = parseDate(value);
   return parsed === "-" ? "" : parsed;
-}
-
-function renderLegend(){
-  const legend = $("#calLegend");
-  const tones = [
-    { tone:"good", label:"イベント" },
-    { tone:"warn", label:"締切" },
-    { tone:"accent", label:"運営" },
-    { tone:"danger", label:"重要" },
-  ];
-  legend.innerHTML = tones.map(t => `
-    <div class="leg">
-      <span class="leg__dot" style="background:${toneColor(t.tone)}"></span>
-      <span>${t.label}</span>
-    </div>
-  `).join("");
 }
 
 function addDays(date, n){
@@ -756,7 +742,6 @@ function openEventModal(dateStr, events){
     <div class="eventdetail">
       <div class="eventdetail__date">${formatDateJP(ev.date)}</div>
       <div class="eventdetail__name">${escapeHtml(ev.title || "")}</div>
-      <div class="eventdetail__desc">${escapeHtml(ev.desc || "")}</div>
       <div class="eventdetail__meta">${escapeHtml(ev.label || "イベント")}</div>
     </div>
   `).join("");
@@ -827,7 +812,6 @@ function renderCalendar(){
       const evHtml = evs.map(ev => `
         <button class="cal__ev" type="button" data-event-date="${dateStr}">
           <span class="cal__evtitle">${escapeHtml(ev.title || "")}</span>
-          <span class="cal__evdesc">${escapeHtml(ev.desc || "")}</span>
         </button>
       `).join("");
 
@@ -863,7 +847,6 @@ function renderCalendar(){
                 ${evs.length ? evs.map(ev => `
                   <button class="cal2w__event" type="button" data-event-date="${dateStr}">
                     <div class="cal2w__eventTitle">${escapeHtml(ev.title || "")}</div>
-                    <div class="cal2w__eventDesc">${escapeHtml(ev.desc || "")}</div>
                   </button>
                 `).join("") : `<div class="cal2w__empty">イベントなし</div>`}
               </div>
@@ -1074,7 +1057,6 @@ function collectForm(){
     badge: badgeTextFromChannel(channel),
     date,
     title,
-    desc: "",
     tags,
     summary: [],
     body,
@@ -1147,29 +1129,6 @@ async function saveEditor(status){
         btnSave.textContent = oldText || "投稿";
       }
     }
-  }
-}
-
-async function deleteEditor(){
-  if(!state.editingId) return;
-  const ok = confirm("この記事を削除しますか？");
-  if(!ok) return;
-
-  try {
-    await deletePostFromApi(state.editingId);
-
-    cloudPosts = cloudPosts.filter(x => x.id !== state.editingId);
-
-    const saved = loadSaved().filter(id => id !== state.editingId);
-    saveSaved(saved);
-
-    clearEditor();
-    renderAll();
-
-    alert("削除しました。");
-  } catch (err) {
-    console.error(err);
-    alert("削除に失敗しました。\n" + (err.message || err));
   }
 }
 
