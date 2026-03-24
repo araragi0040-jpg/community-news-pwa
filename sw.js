@@ -1,10 +1,10 @@
-const CACHE_NAME = "community-news-v1";
+const CACHE_NAME = "community-news-v2";
 const ASSETS = [
   "./",
   "./index.html",
-  "./styles.css",
-  "./app.js",
-  "./config.js",
+  "./styles.css?v=38",
+  "./app.js?v=38",
+  "./config.js?v=38",
   "./manifest.webmanifest"
 ];
 
@@ -22,6 +22,14 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
+  const url = new URL(event.request.url);
+  const isGasApi =
+    url.hostname.includes("script.google.com") ||
+    url.searchParams.has("action");
+  if (isGasApi) {
+    event.respondWith(fetch(event.request, { cache: "no-store" }));
+    return;
+  }
   event.respondWith(
     fetch(event.request)
       .then((response) => {
