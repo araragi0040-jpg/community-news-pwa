@@ -121,20 +121,20 @@
 </section>
 
     <!-- Saved Page -->
-<section class="page" data-page="saved">
-  <section class="pane">
-    <div class="pane__head">
-      <h2 class="pane__title">ブックマーク</h2>
-      <p class="pane__sub">あとで見返す記事</p>
-    </div>
-    <div class="cards" id="savedCards"></div>
-    <div class="empty" id="savedEmpty" style="display:none;">
-      <div class="empty__icon">☆</div>
-      <div class="empty__title">まだ保存した記事はありません</div>
-      <div class="empty__text">記事の☆マークから保存できます。</div>
-    </div>
-  </section>
-</section>
+    <section class="page" data-page="saved">
+      <section class="pane">
+        <div class="pane__head">
+          <h2 class="pane__title">保存</h2>
+          <p class="pane__sub">あとで読む記事</p>
+        </div>
+        <div class="cards" id="savedCards"></div>
+        <div class="empty" id="savedEmpty" style="display:none;">
+          <div class="empty__icon">🔖</div>
+          <div class="empty__title">保存がありません</div>
+          <div class="empty__text">記事を開いて「保存」してください。</div>
+        </div>
+      </section>
+    </section>
 
     <!-- Contact Page -->
     <section class="page" data-page="contact">
@@ -165,12 +165,13 @@
         <div class="admin-tabs" role="tablist" aria-label="Admin tabs">
           <button class="admin-tab admin-tab--active" id="adminTabEditor" type="button" role="tab" aria-selected="true">新規記事</button>
           <button class="admin-tab" id="adminTabList" type="button" role="tab" aria-selected="false">記事一覧</button>
+          <button class="admin-tab" id="adminTabEdit" type="button" role="tab" aria-selected="false" hidden>記事編集</button>
         </div>
 
         <div class="admin__row">
           <div class="admin__editor" id="adminPanelEditor">
             <div class="admin__editorhead">
-              <div class="admin__listh">記事作成 / 編集</div>
+              <div class="admin__listh">新規記事作成</div>
               <button class="btn" id="btnNewPost" type="button">＋ 新規記事</button>
             </div>
 
@@ -250,6 +251,81 @@
               <div class="admin__listhint" id="adminCount">0件</div>
             </div>
             <div class="admin__items" id="adminItems"></div>
+          </div>
+
+          <div class="admin__editor" id="adminPanelEdit" hidden>
+            <div class="admin__editorhead">
+              <div class="admin__listh">記事編集</div>
+            </div>
+
+            <form class="form" id="editForm">
+              <div class="grid2">
+                <label class="field">
+                  <div class="field__label">タイトル</div>
+                  <input class="input" id="eTitle" placeholder="例：コミュニティ限定の告知" required />
+                </label>
+
+                <label class="field">
+                  <div class="field__label">日付</div>
+                  <input class="input" id="eDate" type="date" required />
+                </label>
+              </div>
+
+              <label class="field">
+                <div class="field__label">チャンネル</div>
+                <select class="input" id="eChannel">
+                  <option value="article">記事</option>
+                  <option value="event">イベント概要</option>
+                  <option value="ops">運営</option>
+                </select>
+              </label>
+
+              <label class="field">
+                <div class="field__label">タグ（カンマ区切り）</div>
+                <input class="input" id="eTags" placeholder="例：固定,Zoom,必読" />
+              </label>
+
+              <label class="field">
+                <div class="field__label">本文（改行で段落）</div>
+                <textarea class="textarea" id="eBody" rows="8" placeholder="本文を入力"></textarea>
+              </label>
+
+              <label class="field">
+                <div class="field__label">画像追加</div>
+                <input class="input" id="eImageFiles" type="file" accept="image/*" multiple>
+              </label>
+
+              <label class="field">
+                <div class="field__label">画像URL（自動反映 / 手入力も可）</div>
+                <textarea class="textarea" id="eImages" rows="3" placeholder="https://..."></textarea>
+              </label>
+
+              <label class="field">
+                <div class="field__label">動画URL（YouTube等 / mp4直リンク）</div>
+                <input class="input" id="eVideo" placeholder="https://..." />
+              </label>
+
+              <div class="grid2">
+                <label class="field">
+                  <div class="field__label">CTAテキスト（任意）</div>
+                  <input class="input" id="eCtaText" placeholder="例：参加フォームへ" />
+                </label>
+
+                <label class="field">
+                  <div class="field__label">CTA URL（任意）</div>
+                  <input class="input" id="eCtaUrl" placeholder="https://..." />
+                </label>
+              </div>
+
+              <div class="hint">
+                現在の状態: <span id="eStatusView">未設定</span>
+              </div>
+              <div class="admin-actions">
+                <button class="btn" id="btnEditPublishPost" type="button" disabled>投稿</button>
+                <button class="btn" id="btnEditDraftPost" type="button" disabled>下書き</button>
+                <button class="btn" id="btnEditPrivatePost" type="button" disabled>非公開</button>
+              </div>
+            </form>
           </div>
         </div>
       </section>
