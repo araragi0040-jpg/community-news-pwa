@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#ffffff" />
   <title>語り場ニュース</title>
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=39" />
+  <link rel="stylesheet" href="./styles.css?v=38" />
 </head>
 <body>
   <div class="auth" id="authGate">
@@ -50,11 +50,19 @@
         </div>
       </div>
 
-      <button class="iconbtn" id="btnInstall" aria-label="Install" title="インストール" hidden>
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
-        </svg>
-      </button>
+      <div class="topbar__actions">
+        <button class="btn-app-download" id="btnAppDownload" aria-label="アプリダウンロード" title="アプリダウンロード">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+          </svg>
+          <span>アプリDL</span>
+        </button>
+        <button class="iconbtn" id="btnInstall" aria-label="Install" title="インストール" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+          </svg>
+        </button>
+      </div>
     </header>
     <div class="notify-banner" id="notifyBanner" hidden>
       <span>新しい記事があります</span>
@@ -98,6 +106,11 @@
           </div>
         </div>
         <div class="cards" id="cards"></div>
+        <div class="loading" id="feedLoading" hidden>
+          <div class="loading__spinner" aria-hidden="true"></div>
+          <div class="loading__text" id="feedLoadingText">記事を読み込んでいます...</div>
+        </div>
+        <div class="pagination" id="feedPagination" hidden></div>
       </section>
     </section>
 
@@ -117,6 +130,79 @@
     </div>
 
     <div id="cal"></div>
+
+    <div class="event-form-panel" id="eventFormPanel" hidden>
+      <div class="admin-tabs" role="tablist" aria-label="Event tabs">
+        <button class="admin-tab admin-tab--active" id="btnEventListTab" type="button">イベント一覧</button>
+        <button class="admin-tab" id="btnEventNewTab" type="button">新規イベント</button>
+      </div>
+
+      <div id="eventListPanel">
+        <div class="admin__items" id="eventAdminItems"></div>
+      </div>
+
+      <div id="eventEditor" hidden>
+        <form class="form" id="eventForm">
+          <label class="field">
+            <div class="field__label">イベント名</div>
+            <input class="input" id="evTitle" placeholder="例：交流会" required />
+          </label>
+
+          <div class="grid2">
+            <label class="field">
+              <div class="field__label">開催日</div>
+              <input class="input" id="evDate" type="date" required />
+            </label>
+            <label class="field">
+              <div class="field__label">開始時間</div>
+              <input class="input" id="evStartTime" type="time" required />
+            </label>
+          </div>
+
+          <label class="field">
+            <div class="field__label">終了時間（任意）</div>
+            <input class="input" id="evEndTime" type="time" />
+          </label>
+
+          <label class="field">
+            <div class="field__label">概要</div>
+            <textarea class="textarea" id="evDescription" rows="4" placeholder="イベント概要を入力"></textarea>
+          </label>
+
+          <label class="field">
+            <div class="field__label">場所</div>
+            <input class="input" id="evLocation" placeholder="例：渋谷 / Zoom" />
+          </label>
+
+          <label class="field">
+            <div class="field__label">画像追加</div>
+            <input class="input" id="evImageFiles" type="file" accept="image/*" multiple>
+          </label>
+
+          <label class="field">
+            <div class="field__label">画像URL（複数可・改行区切り）</div>
+            <textarea class="textarea" id="evImageUrls" rows="3" placeholder="https://..."></textarea>
+          </label>
+
+          <label class="field">
+            <div class="field__label">CTA URL（任意）</div>
+            <input class="input" id="evCtaUrl" placeholder="https://..." />
+          </label>
+
+          <div class="hint">
+            現在の状態: <span id="evStatusView">未設定</span>
+          </div>
+          <div class="admin-actions">
+            <button class="btn" id="btnEventPublish" type="button" disabled>投稿</button>
+            <button class="btn" id="btnEventDraft" type="button" disabled>下書き</button>
+            <button class="btn" id="btnEventPrivate" type="button" disabled>非公開</button>
+          </div>
+          <div class="admin-actions">
+            <button class="btn btn--danger" id="btnEventDelete" type="button" disabled>削除</button>
+          </div>
+        </form>
+      </div>
+    </div>
   </section>
 </section>
 
@@ -176,23 +262,15 @@
             </div>
 
             <form class="form" id="postForm">
-              <div class="grid2">
-                <label class="field">
-                  <div class="field__label">タイトル</div>
-                  <input class="input" id="pTitle" placeholder="例：コミュニティ限定の告知" required />
-                </label>
-
-                <label class="field">
-                  <div class="field__label">日付</div>
-                  <input class="input" id="pDate" type="date" required />
-                </label>
-              </div>
+              <label class="field">
+                <div class="field__label">タイトル</div>
+                <input class="input" id="pTitle" placeholder="例：コミュニティ限定の告知" required />
+              </label>
 
               <label class="field">
                 <div class="field__label">チャンネル</div>
                 <select class="input" id="pChannel">
                   <option value="article">記事</option>
-                  <option value="event">イベント概要</option>
                   <option value="ops">運営</option>
                 </select>
               </label>
@@ -259,23 +337,15 @@
             </div>
 
             <form class="form" id="editForm">
-              <div class="grid2">
-                <label class="field">
-                  <div class="field__label">タイトル</div>
-                  <input class="input" id="eTitle" placeholder="例：コミュニティ限定の告知" required />
-                </label>
-
-                <label class="field">
-                  <div class="field__label">日付</div>
-                  <input class="input" id="eDate" type="date" required />
-                </label>
-              </div>
+              <label class="field">
+                <div class="field__label">タイトル</div>
+                <input class="input" id="eTitle" placeholder="例：コミュニティ限定の告知" required />
+              </label>
 
               <label class="field">
                 <div class="field__label">チャンネル</div>
                 <select class="input" id="eChannel">
                   <option value="article">記事</option>
-                  <option value="event">イベント概要</option>
                   <option value="ops">運営</option>
                 </select>
               </label>
@@ -427,7 +497,7 @@
   </div>
 </div>
 
-  <script src="config.js?v=39"></script>
-  <script src="./app.js?v=39"></script>
+  <script src="config.js?v=38"></script>
+  <script src="./app.js?v=38"></script>
 </body>
 </html>
