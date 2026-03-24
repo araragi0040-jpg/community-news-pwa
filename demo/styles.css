@@ -59,6 +59,11 @@ svg{ width:22px; height:22px; fill: currentColor; }
   justify-content: space-between;
   gap: 10px;
 }
+.topbar__actions{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 
 .brand__logo{
   width: 80px;
@@ -85,6 +90,25 @@ svg{ width:22px; height:22px; fill: currentColor; }
 }
 .iconbtn:active{ transform: scale(.98); }
 .iconbtn:hover{ background: rgba(255,255,255,.72); }
+
+.btn-app-download{
+  border: 1px solid rgba(176,125,79,.32);
+  background: rgba(176,125,79,.12);
+  color: var(--text-strong);
+  border-radius: 999px;
+  height: 42px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 760;
+  cursor: pointer;
+  transition: background .12s ease, transform .12s ease;
+}
+.btn-app-download:hover{ background: rgba(176,125,79,.18); }
+.btn-app-download:active{ transform: scale(.98); }
+.btn-app-download svg{ width: 16px; height: 16px; }
 
 /* Pages */
 .page{ display:none !important; }
@@ -174,6 +198,61 @@ svg{ width:22px; height:22px; fill: currentColor; }
 }
 .feed__title{ font-weight: 800; letter-spacing:.2px; color: var(--text-strong); }
 .feed__hint{ font-size: 12px; color: var(--muted); }
+
+.loading{
+  margin-top: 12px;
+  border: 1px solid var(--stroke);
+  border-radius: 14px;
+  background: rgba(255,255,255,.72);
+  padding: 18px 14px;
+  text-align: center;
+}
+.loading__spinner{
+  width: 26px;
+  height: 26px;
+  border: 3px solid rgba(176,125,79,.18);
+  border-top-color: var(--accent);
+  border-radius: 999px;
+  margin: 0 auto 8px;
+  animation: spin .8s linear infinite;
+}
+.loading__text{
+  color: var(--muted);
+  font-size: 13px;
+}
+@keyframes spin{
+  to{ transform: rotate(360deg); }
+}
+
+.pagination{
+  margin-top: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.pagination__btn{
+  border: 1px solid var(--stroke);
+  background: #fff;
+  color: var(--text-strong);
+  border-radius: 12px;
+  padding: 7px 11px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.pagination__btn:hover{
+  background: rgba(176,125,79,.10);
+}
+.pagination__btn--active{
+  border-color: rgba(176,125,79,.45);
+  background: rgba(176,125,79,.16);
+  font-weight: 760;
+}
+.pagination__btn:disabled{
+  opacity: .45;
+  cursor: not-allowed;
+}
 
 /* ===== Layout container ===== */
 .page{
@@ -1415,6 +1494,39 @@ svg{ width:22px; height:22px; fill: currentColor; }
 
 #cal{
   width: 100%;
+}
+
+.cal__addEvent{
+  border: 1px solid rgba(176,125,79,.28);
+  background: rgba(176,125,79,.14);
+  color: var(--text-strong);
+  border-radius: 14px;
+  padding: 8px 12px;
+  font-weight: 760;
+  cursor: pointer;
+}
+
+.event-form-panel{
+  margin-top: 14px;
+  border: 1px solid var(--stroke);
+  border-radius: var(--radius);
+  background: rgba(255,255,255,.70);
+  box-shadow: 0 16px 34px rgba(75,50,30,.10);
+  padding: 12px;
+}
+
+.event-admin-item{
+  width: 100%;
+  text-align: left;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid rgba(176,125,79,.22);
+  background: rgba(255,255,255,.78);
+  border-radius: 14px;
+  padding: 10px;
+  color: var(--text-strong);
+  cursor: pointer;
 }
 
 [hidden]{
