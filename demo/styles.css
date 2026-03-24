@@ -580,6 +580,25 @@ svg{ width:22px; height:22px; fill: currentColor; }
   display:grid;
   gap: 12px;
 }
+.admin-tabs{
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.admin-tab{
+  border: 1px solid var(--stroke);
+  background: #fff;
+  color: var(--text);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.admin-tab--active{
+  color: var(--text-strong);
+  border-color: var(--accent);
+  background: rgba(217,179,140,.20);
+}
 .admin__list, .admin__editor{
   border: 1px solid var(--stroke);
   border-radius: var(--radius);
@@ -631,6 +650,12 @@ svg{ width:22px; height:22px; fill: currentColor; }
   display:grid;
   grid-template-columns: 1fr;
   gap: 10px;
+}
+.admin-actions{
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
 }
 
 .btn{
@@ -1375,18 +1400,13 @@ svg{ width:22px; height:22px; fill: currentColor; }
 
 .cards{
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 12px;
 }
 
-@media (min-width: 900px){
-  .cards{
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
 .card{
-  aspect-ratio: 1 / 1;
+  display: flex;
+  flex-direction: column;
   border: 1px solid var(--stroke);
   border-radius: 14px;
   overflow: hidden;
@@ -1396,7 +1416,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
 
 .card__media{
   flex: 6 0 0;
-  aspect-ratio: auto;
+  aspect-ratio: 16 / 10;
   border-bottom: 1px solid var(--stroke);
 }
 
