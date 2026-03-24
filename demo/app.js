@@ -80,7 +80,7 @@ let state = {
 
   // admin
   editingId: null, // post id
-  adminTab: "editor", // "editor" | "list"
+  adminTab: "editor", // "editor" | "list" | "edit"
 };
 
 let cloudPosts = [];
@@ -103,7 +103,7 @@ function isSaved(id){
 }
 
 function allArticles(){
-  return cloudPosts.slice();
+  return cloudPosts.filter(post => post.status === "public");
 }
 
 function parseDate(value){
@@ -241,6 +241,15 @@ async function fetchPostsFromApi() {
   const base = window.APP_CONFIG?.GAS_API_URL;
   if (!base) return [];
   const res = await fetch(`${base}?action=listPosts`);
+  const data = await res.json();
+  if (!data.ok) throw new Error(data.message || "Failed to fetch posts");
+  return (data.posts || []).map(mapApiPost);
+}
+
+async function fetchAllPostsFromApi() {
+  const base = window.APP_CONFIG?.GAS_API_URL;
+  if (!base) return [];
+  const res = await fetch(`${base}?action=listAllPosts`);
   const data = await res.json();
   if (!data.ok) throw new Error(data.message || "Failed to fetch posts");
   return (data.posts || []).map(mapApiPost);
@@ -435,15 +444,12 @@ function filteredArticles(){
 
 function renderCard(a){
   const saved = isSaved(a.id);
+  const savedMark = saved ? "★" : "☆";
   const thumb = (a.media?.images && a.media.images.length) ? a.media.images[0] : "";
   const mediaHtml = thumb
     ? `<div class="card__media"><img src="${escapeAttr(thumb)}" alt="" loading="lazy"></div>`
     : `<div class="card__media card__media--placeholder" aria-hidden="true"></div>`;
-  const savedBadge = saved
-    ? `<span class="card__saved" aria-label="保存済み" title="保存済み">
-         <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 2h12a2 2 0 0 1 2 2v18l-8-4-8 4V4a2 2 0 0 1 2-2z"/></svg>
-       </span>`
-    : "";
+  const savedBadge = `<span class="card__saved${saved ? " card__saved--active" : ""}" aria-label="${saved ? "保存済み" : "未保存"}" title="${saved ? "保存済み" : "未保存"}">${savedMark}</span>`;
   return `
     <article class="card" data-article="${escapeAttr(a.id)}">
       ${savedBadge}
@@ -583,9 +589,7 @@ function renderSaveBtn(){
   const btn = $("#btnSave");
   if(!id) return;
   const saved = isSaved(id);
-  btn.innerHTML = saved
-    ? `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 2h12a2 2 0 0 1 2 2v18l-8-4-8 4V4a2 2 0 0 1 2-2z"/></svg>`
-    : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 2h12a2 2 0 0 1 2 2v18l-8-4-8 4V4a2 2 0 0 1 2-2z"/></svg>`;
+  btn.textContent = saved ? "★" : "☆";
   btn.title = saved ? "保存済み" : "保存";
 }
 
@@ -931,17 +935,34 @@ function renderAdmin(){
   const list = $("#adminItems");
   const tabEditor = $("#adminTabEditor");
   const tabList = $("#adminTabList");
+  const tabEdit = $("#adminTabEdit");
   const panelEditor = $("#adminPanelEditor");
   const panelList = $("#adminPanelList");
+  const panelEdit = $("#adminPanelEdit");
   const pChannel = $("#pChannel");
+  const eChannel = $("#eChannel");
 
   if(!adminCount || !list) return;
+  if (state.adminTab === "edit" && !state.editingId) {
+    state.adminTab = "list";
+  }
+  const hasEditing = !!state.editingId;
   if (tabEditor) tabEditor.classList.toggle("admin-tab--active", state.adminTab === "editor");
   if (tabList) tabList.classList.toggle("admin-tab--active", state.adminTab === "list");
+  if (tabEdit) {
+    tabEdit.hidden = !hasEditing;
+    tabEdit.classList.toggle("admin-tab--active", state.adminTab === "edit");
+  }
   if (panelEditor) panelEditor.hidden = state.adminTab !== "editor";
   if (panelList) panelList.hidden = state.adminTab !== "list";
+  if (panelEdit) panelEdit.hidden = state.adminTab !== "edit";
   if (pChannel && pChannel.options.length === 0) {
     pChannel.innerHTML = ADMIN_CHANNELS
+      .map(({ key, label }) => `<option value="${escapeAttr(key)}">${escapeHtml(label)}</option>`)
+      .join("");
+  }
+  if (eChannel && eChannel.options.length === 0) {
+    eChannel.innerHTML = ADMIN_CHANNELS
       .map(({ key, label }) => `<option value="${escapeAttr(key)}">${escapeHtml(label)}</option>`)
       .join("");
   }
@@ -971,7 +992,6 @@ function renderAdmin(){
     $$(".aitem", list).forEach(el=>{
       el.addEventListener("click", ()=>{
         const id = el.dataset.eid;
-        state.adminTab = "editor";
         startEdit(id);
         renderAdmin();
       });
@@ -979,6 +999,7 @@ function renderAdmin(){
   }
 
   syncAdminButtons();
+  syncEditButtons();
 }
 
 function clearEditor(){
@@ -997,24 +1018,41 @@ function clearEditor(){
   syncAdminButtons();
 }
 
+function clearEditForm(){
+  const form = $("#editForm");
+  if(form) form.reset();
+  $("#eDate").value = todayYMD();
+  $("#eChannel").value = "article";
+  $("#eTags").value = "";
+  $("#eBody").value = "";
+  $("#eCtaText").value = "";
+  $("#eCtaUrl").value = "";
+  $("#eImages").value = "";
+  $("#eVideo").value = "";
+  const statusView = $("#eStatusView");
+  if (statusView) statusView.textContent = "未設定";
+  syncEditButtons();
+}
+
 function startEdit(id){
   const a = cloudPosts.find(x => x.id === id);
   if(!a) return;
 
   state.editingId = a.id;
+  state.adminTab = "edit";
 
-  $("#pTitle").value = a.title || "";
-  $("#pDate").value = a.date || todayYMD();
-  $("#pChannel").value = a.channel || "article";
-  $("#pTags").value = (a.tags || []).join(",");
-  $("#pBody").value = (a.body || []).join("\n\n");
-  $("#pCtaText").value = a.cta?.text || "";
-  $("#pCtaUrl").value = a.cta?.url || "";
-  $("#pImages").value = (a.media?.images || []).join("\n");
-  $("#pVideo").value = a.media?.video || "";
-  const statusView = $("#pStatusView");
+  $("#eTitle").value = a.title || "";
+  $("#eDate").value = a.date || todayYMD();
+  $("#eChannel").value = a.channel || "article";
+  $("#eTags").value = (a.tags || []).join(",");
+  $("#eBody").value = (a.body || []).join("\n\n");
+  $("#eCtaText").value = a.cta?.text || "";
+  $("#eCtaUrl").value = a.cta?.url || "";
+  $("#eImages").value = (a.media?.images || []).join("\n");
+  $("#eVideo").value = a.media?.video || "";
+  const statusView = $("#eStatusView");
   if (statusView) statusView.textContent = a.status || "public";
-  syncAdminButtons();
+  syncEditButtons();
 }
 
 function syncAdminButtons(){
@@ -1023,6 +1061,21 @@ function syncAdminButtons(){
   const btnPrivate = $("#btnPrivatePost");
   const titleInput = $("#pTitle");
   const dateInput = $("#pDate");
+
+  if(!btnPublish || !btnDraft || !btnPrivate) return;
+
+  const canSave = ((titleInput?.value || "").trim().length > 0) && !!(dateInput?.value || "");
+  btnPublish.disabled = !canSave;
+  btnDraft.disabled = !canSave;
+  btnPrivate.disabled = !canSave;
+}
+
+function syncEditButtons(){
+  const btnPublish = $("#btnEditPublishPost");
+  const btnDraft = $("#btnEditDraftPost");
+  const btnPrivate = $("#btnEditPrivatePost");
+  const titleInput = $("#eTitle");
+  const dateInput = $("#eDate");
 
   if(!btnPublish || !btnDraft || !btnPrivate) return;
 
@@ -1051,7 +1104,6 @@ function collectForm(){
   const video = ($("#pVideo").value || "").trim();
 
   const a = normalizePost({
-    id: state.editingId || undefined,
     channel,
     tone: "accent",
     badge: badgeTextFromChannel(channel),
@@ -1067,6 +1119,37 @@ function collectForm(){
   });
 
   return a;
+}
+
+function collectEditForm(){
+  const title = $("#eTitle").value.trim();
+  const date = $("#eDate").value;
+  const channel = $("#eChannel").value;
+  const tags = $("#eTags").value.split(",").map(s=>s.trim()).filter(Boolean);
+  const body = $("#eBody").value
+    .split("\n\n")
+    .map(s=>s.trim())
+    .filter(Boolean);
+
+  const ctaText = $("#eCtaText").value.trim();
+  const ctaUrl = $("#eCtaUrl").value.trim();
+  const images = ($("#eImages").value || "")
+    .split("\n").map(s=>s.trim()).filter(Boolean);
+  const video = ($("#eVideo").value || "").trim();
+
+  return normalizePost({
+    id: state.editingId || undefined,
+    channel,
+    tone: "accent",
+    badge: badgeTextFromChannel(channel),
+    date,
+    title,
+    tags,
+    summary: [],
+    body,
+    cta: ctaUrl ? { text: ctaText || "開く", url: ctaUrl } : null,
+    media: { images, video }
+  });
 }
 
 async function saveEditor(status){
@@ -1102,7 +1185,6 @@ async function saveEditor(status){
 
     renderAll();
 
-    state.editingId = normalized.id;
     const statusView = $("#pStatusView");
     if (statusView) statusView.textContent = normalized.status || a.status;
     syncAdminButtons();
@@ -1119,6 +1201,70 @@ async function saveEditor(status){
       console.warn("Cloud resync failed:", err);
     });
 
+  } catch (err) {
+    console.error(err);
+    alert("保存に失敗しました。\n" + (err.message || err));
+  } finally {
+    if (btnSave) {
+      btnSave.disabled = false;
+      if (btnSave.textContent === "保存中...") {
+        btnSave.textContent = oldText || "投稿";
+      }
+    }
+  }
+}
+
+async function saveEditForm(status){
+  if (!state.editingId) {
+    alert("編集対象の記事が見つかりません。");
+    return;
+  }
+
+  const a = collectEditForm();
+  if(!a.title || !a.date){
+    alert("タイトルと日付は必須です。");
+    return;
+  }
+  a.status = status || "public";
+
+  const statusBtnMap = {
+    public: "#btnEditPublishPost",
+    draft: "#btnEditDraftPost",
+    private: "#btnEditPrivatePost"
+  };
+  const btnSave = $(statusBtnMap[a.status] || "#btnEditPublishPost");
+  const oldText = btnSave ? btnSave.textContent : "";
+
+  try {
+    if (btnSave) {
+      btnSave.disabled = true;
+      btnSave.textContent = "保存中...";
+    }
+
+    const saved = await savePostToApi(a);
+    const normalized = mapApiPost(saved);
+
+    const cidx = cloudPosts.findIndex(x => x.id === normalized.id);
+    if(cidx >= 0) cloudPosts[cidx] = normalized;
+    else cloudPosts.unshift(normalized);
+
+    renderAll();
+
+    const statusView = $("#eStatusView");
+    if (statusView) statusView.textContent = normalized.status || a.status;
+    syncEditButtons();
+
+    if (btnSave) {
+      btnSave.textContent = "保存済み";
+    }
+
+    setTimeout(() => {
+      if (btnSave) btnSave.textContent = oldText || "投稿";
+    }, 1000);
+
+    refreshFromCloud({ silent: false, skipNotify: true }).catch(err => {
+      console.warn("Cloud resync failed:", err);
+    });
   } catch (err) {
     console.error(err);
     alert("保存に失敗しました。\n" + (err.message || err));
@@ -1166,7 +1312,10 @@ function hideNotifyBanner(){
 }
 
 async function refreshFromCloud(opts = {}){
-  const posts = await fetchPostsFromApi();
+  const user = getCurrentUser();
+  const posts = user?.role === "admin"
+    ? await fetchAllPostsFromApi()
+    : await fetchPostsFromApi();
   const prevKey = latestPostKey;
   cloudPosts = posts;
   updateLatestPostKey(posts);
@@ -1300,6 +1449,11 @@ function bind(){
     state.adminTab = "list";
     renderAdmin();
   });
+  on("#adminTabEdit", "click", () => {
+    if (!state.editingId) return;
+    state.adminTab = "edit";
+    renderAdmin();
+  });
 
   on("#btnPublishPost", "click", (e) => {
     e.preventDefault();
@@ -1313,6 +1467,18 @@ function bind(){
     e.preventDefault();
     saveEditor("private");
   });
+  on("#btnEditPublishPost", "click", (e) => {
+    e.preventDefault();
+    saveEditForm("public");
+  });
+  on("#btnEditDraftPost", "click", (e) => {
+    e.preventDefault();
+    saveEditForm("draft");
+  });
+  on("#btnEditPrivatePost", "click", (e) => {
+    e.preventDefault();
+    saveEditForm("private");
+  });
 
   ["pTitle","pDate","pChannel","pTags","pBody","pCtaText","pCtaUrl"].forEach(id=>{
     const el = document.getElementById(id);
@@ -1320,14 +1486,27 @@ function bind(){
     el.addEventListener("input", syncAdminButtons);
     el.addEventListener("change", syncAdminButtons);
   });
-
-   const postForm = document.getElementById("postForm");
-if (postForm) {
-  postForm.addEventListener("submit", (e) => {
-    e.preventDefault();
-    e.stopPropagation();
+  ["eTitle","eDate","eChannel","eTags","eBody","eCtaText","eCtaUrl"].forEach(id=>{
+    const el = document.getElementById(id);
+    if(!el) return;
+    el.addEventListener("input", syncEditButtons);
+    el.addEventListener("change", syncEditButtons);
   });
-}
+
+  const postForm = document.getElementById("postForm");
+  if (postForm) {
+    postForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    });
+  }
+  const editForm = document.getElementById("editForm");
+  if (editForm) {
+    editForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    });
+  }
 
   // contact
   const contactForm = document.getElementById("contactForm");
@@ -1476,18 +1655,15 @@ if (postForm) {
     });
   }
 
-   const pImageFiles = document.getElementById("pImageFiles");
-if (pImageFiles) {
-  pImageFiles.addEventListener("change", async (e) => {
-    const files = Array.from(e.target.files || []);
+  async function handleImageUpload(fileInput, textareaId){
+    const files = Array.from(fileInput.files || []);
     if (!files.length) return;
 
-    const textarea = document.getElementById("pImages");
+    const textarea = document.getElementById(textareaId);
     if (!textarea) return;
 
     try {
       const uploadedUrls = [];
-
       for (const file of files) {
         const url = await uploadImageToApi(file);
         uploadedUrls.push(url);
@@ -1502,10 +1678,22 @@ if (pImageFiles) {
       console.error(err);
       alert("画像アップロードに失敗しました。画像サイズを小さくして再試行してください。\n" + (err.message || err));
     } finally {
-      pImageFiles.value = "";
+      fileInput.value = "";
     }
-  });
-}
+  }
+
+  const pImageFiles = document.getElementById("pImageFiles");
+  if (pImageFiles) {
+    pImageFiles.addEventListener("change", () => {
+      handleImageUpload(pImageFiles, "pImages");
+    });
+  }
+  const eImageFiles = document.getElementById("eImageFiles");
+  if (eImageFiles) {
+    eImageFiles.addEventListener("change", () => {
+      handleImageUpload(eImageFiles, "eImages");
+    });
+  }
 
   on("#btnInstall", "click", async () => {
     if (!deferredInstallPrompt) return;
@@ -1534,6 +1722,7 @@ async function init(){
   setupPostWatcher();
 
   if($("#pDate")) $("#pDate").value = todayYMD();
+  if($("#eDate")) $("#eDate").value = todayYMD();
 
   applyAuthUI();
 
