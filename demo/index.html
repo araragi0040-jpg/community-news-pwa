@@ -162,26 +162,18 @@
     <section class="page" data-page="admin">
       <section class="pane">
         <div class="pane__head pane__head--row">
-          <h2 class="pane__title">管理（投稿・編集）</h2>
-          <button class="btn" id="btnNewPost">＋ 新規記事</button>
+          <h2 class="pane__title">管理</h2>
+        </div>
+        <div class="admin-tabs" role="tablist" aria-label="Admin tabs">
+          <button class="admin-tab admin-tab--active" id="adminTabEditor" type="button" role="tab" aria-selected="true">新規記事</button>
+          <button class="admin-tab" id="adminTabList" type="button" role="tab" aria-selected="false">記事一覧</button>
         </div>
 
         <div class="admin__row">
-          <div class="admin__list">
-            <div class="admin__listhead">
-              <div class="admin__listh">記事一覧</div>
-              <div class="admin__listhint" id="adminCount">0件</div>
-            </div>
-            <div class="admin__items" id="adminItems"></div>
-          </div>
-
-          <div class="admin__editor">
+          <div class="admin__editor" id="adminPanelEditor">
             <div class="admin__editorhead">
-              <div class="admin__listh">編集</div>
-              <div style="display:flex; gap:8px;">
-                <button class="btn btn--danger" id="btnDeletePost" disabled>削除</button>
-                <button class="btn" id="btnSavePost" disabled>保存</button>
-              </div>
+              <div class="admin__listh">記事作成 / 編集</div>
+              <button class="btn" id="btnNewPost" type="button">＋ 新規記事</button>
             </div>
 
             <form class="form" id="postForm">
@@ -201,10 +193,9 @@
                 <label class="field">
                   <div class="field__label">チャンネル</div>
                   <select class="input" id="pChannel">
-                    <option value="announce">告知</option>
-                    <option value="event">イベント</option>
+                    <option value="article">記事</option>
+                    <option value="event">イベント概要</option>
                     <option value="ops">運営</option>
-                    <option value="tips">Tips</option>
                   </select>
                 </label>
 
@@ -267,9 +258,22 @@
               </div>
 
               <div class="hint">
-                ※「保存」を押すと Home に即反映されます（検索/チップにも対応）。
+                現在の状態: <span id="pStatusView">未設定（投稿すると状態が反映されます）</span>
+              </div>
+              <div class="admin-actions">
+                <button class="btn" id="btnPublishPost" type="button" disabled>投稿</button>
+                <button class="btn" id="btnDraftPost" type="button" disabled>下書き</button>
+                <button class="btn" id="btnPrivatePost" type="button" disabled>非公開</button>
               </div>
             </form>
+          </div>
+
+          <div class="admin__list" id="adminPanelList" hidden>
+            <div class="admin__listhead">
+              <div class="admin__listh">記事一覧</div>
+              <div class="admin__listhint" id="adminCount">0件</div>
+            </div>
+            <div class="admin__items" id="adminItems"></div>
           </div>
         </div>
       </section>
