@@ -9,6 +9,8 @@ const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
 
 const LS_KEY_SAVED = "community_news_saved_v1";
 const LS_KEY_USER = "community_news_user_v1";
+const LS_KEY_POSTS_CACHE = "community_news_posts_cache_v1";
+const ITEMS_PER_PAGE = 10;
 
 const CHANNELS = [
   { key:"all", label:"All", tone:"accent" },
@@ -18,7 +20,6 @@ const CHANNELS = [
 
 const ADMIN_CHANNELS = [
   { key: "article", label: "記事" },
-  { key: "event", label: "イベント概要" },
   { key: "ops", label: "運営" },
 ];
 
@@ -68,6 +69,7 @@ let state = {
   channel: "all",
   query: "",
   sortOrder: "desc",
+  currentPage: 1,
   drawerOpen: false,
   activeArticleId: null,
 
@@ -81,9 +83,12 @@ let state = {
   // admin
   editingId: null, // post id
   adminTab: "editor", // "editor" | "list" | "edit"
+  eventAdminTab: "list", // "list" | "editor"
+  editingEventId: null,
 };
 
 let cloudPosts = [];
+let cloudEvents = [];
 let latestPostKey = "";
 let deferredInstallPrompt = null;
 
@@ -100,6 +105,15 @@ function saveSaved(arr){
 }
 function isSaved(id){
   return loadSaved().includes(id);
+}
+
+function loadCachedPosts(){
+  const posts = safeJsonParse(localStorage.getItem(LS_KEY_POSTS_CACHE) || "[]", []);
+  return Array.isArray(posts) ? posts.map(normalizePost) : [];
+}
+
+function saveCachedPosts(posts){
+  localStorage.setItem(LS_KEY_POSTS_CACHE, JSON.stringify(Array.isArray(posts) ? posts : []));
 }
 
 function allArticles(){
@@ -215,11 +229,27 @@ function mapApiPost(post){
       url: post.ctaUrl
     } : null,
     media: {
-      images: post.images || [],
+      images: post.imageUrls || post.images || [],
       video: post.video || ""
     },
     status: post.status || "public"
   });
+}
+
+function mapApiEvent(event){
+  return {
+    id: event.id || "",
+    title: event.title || "",
+    date: event.date || "",
+    startTime: event.startTime || "",
+    endTime: event.endTime || "",
+    description: event.description || "",
+    location: event.location || "",
+    imageUrls: Array.isArray(event.imageUrls) ? event.imageUrls : [],
+    ctaUrl: event.ctaUrl || "",
+    status: event.status || "public",
+    createdAt: event.createdAt || ""
+  };
 }
 
 async function callApi(action, payload = {}) {
@@ -255,8 +285,31 @@ async function fetchAllPostsFromApi() {
   return (data.posts || []).map(mapApiPost);
 }
 
+async function fetchEventsFromApi() {
+  const base = window.APP_CONFIG?.GAS_API_URL;
+  if (!base) return [];
+  const res = await fetch(`${base}?action=listEvents`);
+  const data = await res.json();
+  if (!data.ok) throw new Error(data.message || "Failed to fetch events");
+  return (data.events || []).map(mapApiEvent);
+}
+
+async function fetchAllEventsFromApi() {
+  const base = window.APP_CONFIG?.GAS_API_URL;
+  if (!base) return [];
+  const res = await fetch(`${base}?action=listAllEvents`);
+  const data = await res.json();
+  if (!data.ok) throw new Error(data.message || "Failed to fetch events");
+  return (data.events || []).map(mapApiEvent);
+}
+
 async function deletePostFromApi(id) {
   await callApi("deletePost", { id });
+  return true;
+}
+
+async function deleteEventFromApi(id) {
+  await callApi("deleteEvent", { id });
   return true;
 }
 
@@ -274,12 +327,31 @@ async function savePostToApi(post) {
       body: post.body || [],
       ctaText: post.cta?.text || "",
       ctaUrl: post.cta?.url || "",
-      images: post.media?.images || [],
+      imageUrls: post.media?.images || [],
       video: post.media?.video || "",
       status: post.status || "public"
     }
   });
   return data.post;
+}
+
+async function saveEventToApi(event) {
+  const data = await callApi("saveEvent", {
+    event: {
+      id: event.id || "",
+      title: event.title || "",
+      date: event.date || "",
+      startTime: event.startTime || "",
+      endTime: event.endTime || "",
+      description: event.description || "",
+      location: event.location || "",
+      imageUrls: event.imageUrls || [],
+      ctaUrl: event.ctaUrl || "",
+      status: event.status || "public",
+      createdAt: event.createdAt || ""
+    }
+  });
+  return mapApiEvent(data.event || {});
 }
 
 async function saveContactToApi(contact) {
@@ -411,6 +483,7 @@ function renderChips(){
   $$(".chip", row).forEach(btn => {
     btn.addEventListener("click", () => {
       state.channel = btn.dataset.chip;
+      state.currentPage = 1;
       renderChips();
       renderFeed();
     });
@@ -464,6 +537,12 @@ function renderCard(a){
 
 function renderFeed(){
   const items = filteredArticles();
+  const totalPages = Math.max(1, Math.ceil(items.length / ITEMS_PER_PAGE));
+  if (state.currentPage > totalPages) state.currentPage = totalPages;
+  if (state.currentPage < 1) state.currentPage = 1;
+  const start = (state.currentPage - 1) * ITEMS_PER_PAGE;
+  const pagedItems = items.slice(start, start + ITEMS_PER_PAGE);
+
   const hint = $("#feedHint");
   const title = $("#feedTitle");
   if(hint) hint.textContent = `${items.length}件`;
@@ -479,11 +558,65 @@ function renderFeed(){
 
   const cards = $("#cards");
   if(!cards) return;
-  cards.innerHTML = items.map(renderCard).join("");
+  cards.innerHTML = pagedItems.map(renderCard).join("");
 
   $$(".card", cards).forEach(el => {
     el.addEventListener("click", () => openDrawer(el.dataset.article));
   });
+
+  renderPagination(totalPages);
+}
+
+function renderPagination(totalPages){
+  const root = $("#feedPagination");
+  if (!root) return;
+
+  if (totalPages <= 1) {
+    root.innerHTML = "";
+    root.hidden = true;
+    return;
+  }
+
+  root.hidden = false;
+
+  const prevDisabled = state.currentPage <= 1 ? "disabled" : "";
+  const nextDisabled = state.currentPage >= totalPages ? "disabled" : "";
+  const pageButtons = Array.from({ length: totalPages }, (_, i) => {
+    const page = i + 1;
+    const active = page === state.currentPage ? " pagination__btn--active" : "";
+    return `<button class="pagination__btn${active}" type="button" data-page="${page}">${page}</button>`;
+  }).join("");
+
+  root.innerHTML = `
+    <button class="pagination__btn" type="button" data-page-nav="prev" ${prevDisabled}>前へ</button>
+    ${pageButtons}
+    <button class="pagination__btn" type="button" data-page-nav="next" ${nextDisabled}>次へ</button>
+  `;
+
+  $$(".pagination__btn", root).forEach(btn => {
+    btn.addEventListener("click", () => {
+      const nav = btn.dataset.pageNav;
+      const pageStr = btn.dataset.page;
+
+      if (nav === "prev" && state.currentPage > 1) {
+        state.currentPage -= 1;
+      } else if (nav === "next" && state.currentPage < totalPages) {
+        state.currentPage += 1;
+      } else if (pageStr) {
+        state.currentPage = Number(pageStr);
+      }
+      renderFeed();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+  });
+}
+
+function setFeedLoading(visible, text = "記事を読み込んでいます..."){
+  const loading = $("#feedLoading");
+  if (!loading) return;
+  const textNode = $("#feedLoadingText");
+  if (textNode) textNode.textContent = text;
+  loading.hidden = !visible;
 }
 
 function escapeHtml(s){
@@ -658,15 +791,19 @@ function setActivePage(key){
 
 // ===== Schedule =====
 function scheduleItems(){
-  return allArticles()
-    .filter(a => a.channel === "event")
-    .map(a => ({
-      id: a.id,
-      title: a.title || "",
-      date: normalizeDateForCalendar(a.date),
-      time: "",
-      tone: a.tone || "good",
-      label: a.badge || "イベント"
+  return cloudEvents
+    .filter(e => e.status === "public")
+    .map(e => ({
+      id: e.id,
+      title: e.title || "",
+      date: normalizeDateForCalendar(e.date),
+      startTime: e.startTime || "",
+      endTime: e.endTime || "",
+      description: e.description || "",
+      location: e.location || "",
+      imageUrls: Array.isArray(e.imageUrls) ? e.imageUrls : [],
+      ctaUrl: e.ctaUrl || "",
+      status: e.status || "public"
     }))
     .filter(it => !!it.date)
     .sort((a,b) => (a.date < b.date ? -1 : 1));
@@ -733,6 +870,158 @@ function eventsByDate(){
   return map;
 }
 
+function clearEventForm(){
+  const form = $("#eventForm");
+  if (form) form.reset();
+  const imageUrls = $("#evImageUrls");
+  if (imageUrls) imageUrls.value = "";
+  const statusView = $("#evStatusView");
+  if (statusView) statusView.textContent = "未設定";
+  state.editingEventId = null;
+  syncEventButtons();
+}
+
+function startEditEvent(id){
+  const event = cloudEvents.find(e => e.id === id);
+  if (!event) return;
+  state.editingEventId = event.id;
+  state.eventAdminTab = "editor";
+
+  $("#evTitle").value = event.title || "";
+  $("#evDate").value = event.date || "";
+  $("#evStartTime").value = event.startTime || "";
+  $("#evEndTime").value = event.endTime || "";
+  $("#evDescription").value = event.description || "";
+  $("#evLocation").value = event.location || "";
+  $("#evImageUrls").value = (event.imageUrls || []).join("\n");
+  $("#evCtaUrl").value = event.ctaUrl || "";
+  const statusView = $("#evStatusView");
+  if (statusView) statusView.textContent = event.status || "public";
+
+  syncEventButtons();
+  renderCalendar();
+}
+
+function syncEventButtons(){
+  const btnPublish = $("#btnEventPublish");
+  const btnDraft = $("#btnEventDraft");
+  const btnPrivate = $("#btnEventPrivate");
+  const titleInput = $("#evTitle");
+  const dateInput = $("#evDate");
+  const startInput = $("#evStartTime");
+  const btnDelete = $("#btnEventDelete");
+
+  const canSave = !!(titleInput?.value || "").trim() && !!(dateInput?.value || "") && !!(startInput?.value || "");
+  [btnPublish, btnDraft, btnPrivate].forEach(btn => {
+    if (btn) btn.disabled = !canSave;
+  });
+  if (btnDelete) btnDelete.disabled = !state.editingEventId;
+}
+
+function collectEventForm(){
+  return {
+    id: state.editingEventId || "",
+    title: ($("#evTitle").value || "").trim(),
+    date: $("#evDate").value || "",
+    startTime: $("#evStartTime").value || "",
+    endTime: $("#evEndTime").value || "",
+    description: ($("#evDescription").value || "").trim(),
+    location: ($("#evLocation").value || "").trim(),
+    imageUrls: ($("#evImageUrls").value || "").split("\n").map(s => s.trim()).filter(Boolean),
+    ctaUrl: ($("#evCtaUrl").value || "").trim(),
+    status: "public"
+  };
+}
+
+async function saveEventEditor(status){
+  const event = collectEventForm();
+  if (!event.title || !event.date || !event.startTime) {
+    alert("イベント名・開催日・開始時間は必須です。");
+    return;
+  }
+  event.status = status || "public";
+
+  const buttonMap = {
+    public: "#btnEventPublish",
+    draft: "#btnEventDraft",
+    private: "#btnEventPrivate"
+  };
+  const btn = $(buttonMap[event.status] || "#btnEventPublish");
+  const oldText = btn ? btn.textContent : "";
+
+  try {
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "保存中...";
+    }
+    const saved = await saveEventToApi(event);
+    const idx = cloudEvents.findIndex(e => e.id === saved.id);
+    if (idx >= 0) cloudEvents[idx] = saved;
+    else cloudEvents.unshift(saved);
+    const statusView = $("#evStatusView");
+    if (statusView) statusView.textContent = saved.status || event.status;
+    renderAll();
+  } catch (err) {
+    console.error(err);
+    alert("イベント保存に失敗しました。\n" + (err.message || err));
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = oldText || "保存";
+    }
+  }
+}
+
+async function deleteCurrentEvent(){
+  if (!state.editingEventId) return;
+  if (!confirm("このイベントを削除しますか？")) return;
+  try {
+    await deleteEventFromApi(state.editingEventId);
+    cloudEvents = cloudEvents.filter(e => e.id !== state.editingEventId);
+    clearEventForm();
+    state.eventAdminTab = "list";
+    renderAll();
+  } catch (err) {
+    console.error(err);
+    alert("イベント削除に失敗しました。\n" + (err.message || err));
+  }
+}
+
+function renderEventAdminPanel(){
+  const panel = $("#eventFormPanel");
+  const list = $("#eventAdminItems");
+  const btnList = $("#btnEventListTab");
+  const btnNew = $("#btnEventNewTab");
+  const user = getCurrentUser();
+  if (!panel || !list) return;
+
+  const isAdmin = user?.role === "admin";
+  panel.hidden = !isAdmin;
+  if (!isAdmin) return;
+
+  const events = cloudEvents
+    .slice()
+    .sort((a, b) => (parseDate(a.date) < parseDate(b.date) ? 1 : -1));
+
+  list.innerHTML = events.length ? events.map(ev => `
+    <button class="event-admin-item" type="button" data-evid="${escapeAttr(ev.id)}">
+      <span>${escapeHtml(ev.title || "(no title)")}</span>
+      <span>${escapeHtml(formatDateJP(ev.date))} / ${escapeHtml(ev.status || "public")}</span>
+    </button>
+  `).join("") : `<div class="empty__text">イベントがありません。</div>`;
+
+  $$(".event-admin-item", list).forEach(btn => {
+    btn.addEventListener("click", () => startEditEvent(btn.dataset.evid));
+  });
+
+  const editor = $("#eventEditor");
+  const listPanel = $("#eventListPanel");
+  if (btnList) btnList.classList.toggle("admin-tab--active", state.eventAdminTab === "list");
+  if (btnNew) btnNew.classList.toggle("admin-tab--active", state.eventAdminTab === "editor");
+  if (editor) editor.hidden = state.eventAdminTab !== "editor";
+  if (listPanel) listPanel.hidden = state.eventAdminTab !== "list";
+}
+
 function openEventModal(dateStr, events){
   const modal = $("#eventModal");
   const title = $("#eventModalTitle");
@@ -746,7 +1035,17 @@ function openEventModal(dateStr, events){
     <div class="eventdetail">
       <div class="eventdetail__date">${formatDateJP(ev.date)}</div>
       <div class="eventdetail__name">${escapeHtml(ev.title || "")}</div>
-      <div class="eventdetail__meta">${escapeHtml(ev.label || "イベント")}</div>
+      ${ev.startTime ? `<div class="eventdetail__meta">時間: ${escapeHtml(ev.startTime)}${ev.endTime ? ` - ${escapeHtml(ev.endTime)}` : ""}</div>` : ""}
+      ${ev.location ? `<div class="eventdetail__meta">場所: ${escapeHtml(ev.location)}</div>` : ""}
+      ${ev.description ? `<div class="eventdetail__desc">${escapeHtml(ev.description)}</div>` : ""}
+      ${(ev.imageUrls || []).length ? `
+        <div class="media media--images">
+          ${(ev.imageUrls || []).map(url => `
+            <div class="media__img"><img src="${escapeAttr(url)}" alt="" loading="lazy"></div>
+          `).join("")}
+        </div>
+      ` : ""}
+      ${ev.ctaUrl ? `<div class="eventdetail__meta"><a href="${escapeAttr(ev.ctaUrl)}" target="_blank" rel="noopener">詳細リンクを開く</a></div>` : ""}
     </div>
   `).join("");
 
@@ -785,6 +1084,7 @@ function renderCalendar(){
     title = `${formatDateJP(ymd(start))} 〜 ${formatDateJP(ymd(end))}`;
   }
 
+  const isAdmin = getCurrentUser()?.role === "admin";
   const head = `
     <div class="cal__head">
       <div class="cal__left">
@@ -795,6 +1095,7 @@ function renderCalendar(){
         <button class="cal__nav" id="calNext" type="button" aria-label="次へ">›</button>
         <div class="cal__month" id="calMonth">${title}</div>
       </div>
+      ${isAdmin ? `<button class="cal__addEvent" id="btnToggleEventEditor" type="button">イベント追加</button>` : ""}
     </div>
   `;
 
@@ -865,6 +1166,16 @@ function renderCalendar(){
     ${head}
     ${gridHtml}
   `;
+  renderEventAdminPanel();
+
+  const toggleEventEditorBtn = $("#btnToggleEventEditor", calRoot);
+  if (toggleEventEditorBtn) {
+    toggleEventEditorBtn.addEventListener("click", () => {
+      state.eventAdminTab = "editor";
+      clearEventForm();
+      renderCalendar();
+    });
+  }
 
   // イベント詳細ポップアップ
   $$(".cal__ev, .cal2w__event", calRoot).forEach(btn => {
@@ -1005,7 +1316,6 @@ function renderAdmin(){
 function clearEditor(){
   state.editingId = null;
   $("#postForm").reset();
-  $("#pDate").value = todayYMD();
   $("#pChannel").value = "article";
   $("#pTags").value = "";
   $("#pBody").value = "";
@@ -1021,7 +1331,6 @@ function clearEditor(){
 function clearEditForm(){
   const form = $("#editForm");
   if(form) form.reset();
-  $("#eDate").value = todayYMD();
   $("#eChannel").value = "article";
   $("#eTags").value = "";
   $("#eBody").value = "";
@@ -1042,7 +1351,6 @@ function startEdit(id){
   state.adminTab = "edit";
 
   $("#eTitle").value = a.title || "";
-  $("#eDate").value = a.date || todayYMD();
   $("#eChannel").value = a.channel || "article";
   $("#eTags").value = (a.tags || []).join(",");
   $("#eBody").value = (a.body || []).join("\n\n");
@@ -1060,11 +1368,10 @@ function syncAdminButtons(){
   const btnDraft = $("#btnDraftPost");
   const btnPrivate = $("#btnPrivatePost");
   const titleInput = $("#pTitle");
-  const dateInput = $("#pDate");
 
   if(!btnPublish || !btnDraft || !btnPrivate) return;
 
-  const canSave = ((titleInput?.value || "").trim().length > 0) && !!(dateInput?.value || "");
+  const canSave = ((titleInput?.value || "").trim().length > 0);
   btnPublish.disabled = !canSave;
   btnDraft.disabled = !canSave;
   btnPrivate.disabled = !canSave;
@@ -1075,11 +1382,10 @@ function syncEditButtons(){
   const btnDraft = $("#btnEditDraftPost");
   const btnPrivate = $("#btnEditPrivatePost");
   const titleInput = $("#eTitle");
-  const dateInput = $("#eDate");
 
   if(!btnPublish || !btnDraft || !btnPrivate) return;
 
-  const canSave = ((titleInput?.value || "").trim().length > 0) && !!(dateInput?.value || "");
+  const canSave = ((titleInput?.value || "").trim().length > 0);
   btnPublish.disabled = !canSave;
   btnDraft.disabled = !canSave;
   btnPrivate.disabled = !canSave;
@@ -1087,7 +1393,6 @@ function syncEditButtons(){
 
 function collectForm(){
   const title = $("#pTitle").value.trim();
-  const date = $("#pDate").value;
   const channel = $("#pChannel").value;
   const tags = $("#pTags").value.split(",").map(s=>s.trim()).filter(Boolean);
   const body = $("#pBody").value
@@ -1107,7 +1412,6 @@ function collectForm(){
     channel,
     tone: "accent",
     badge: badgeTextFromChannel(channel),
-    date,
     title,
     tags,
     summary: [],
@@ -1123,8 +1427,8 @@ function collectForm(){
 
 function collectEditForm(){
   const title = $("#eTitle").value.trim();
-  const date = $("#eDate").value;
   const channel = $("#eChannel").value;
+  const current = cloudPosts.find(x => x.id === state.editingId);
   const tags = $("#eTags").value.split(",").map(s=>s.trim()).filter(Boolean);
   const body = $("#eBody").value
     .split("\n\n")
@@ -1142,7 +1446,7 @@ function collectEditForm(){
     channel,
     tone: "accent",
     badge: badgeTextFromChannel(channel),
-    date,
+    date: current?.date || "",
     title,
     tags,
     summary: [],
@@ -1154,8 +1458,8 @@ function collectEditForm(){
 
 async function saveEditor(status){
   const a = collectForm();
-  if(!a.title || !a.date){
-    alert("タイトルと日付は必須です。");
+  if(!a.title){
+    alert("タイトルは必須です。");
     return;
   }
   a.status = status || "public";
@@ -1221,8 +1525,8 @@ async function saveEditForm(status){
   }
 
   const a = collectEditForm();
-  if(!a.title || !a.date){
-    alert("タイトルと日付は必須です。");
+  if(!a.title){
+    alert("タイトルは必須です。");
     return;
   }
   a.status = status || "public";
@@ -1313,13 +1617,21 @@ function hideNotifyBanner(){
 
 async function refreshFromCloud(opts = {}){
   const user = getCurrentUser();
-  const posts = user?.role === "admin"
-    ? await fetchAllPostsFromApi()
-    : await fetchPostsFromApi();
+  const [posts, events] = await Promise.all([
+    user?.role === "admin"
+      ? fetchAllPostsFromApi()
+      : fetchPostsFromApi(),
+    user?.role === "admin"
+      ? fetchAllEventsFromApi()
+      : fetchEventsFromApi()
+  ]);
   const prevKey = latestPostKey;
   cloudPosts = posts;
+  cloudEvents = events;
+  saveCachedPosts(posts);
   updateLatestPostKey(posts);
   if (!opts.silent) renderAll();
+  setFeedLoading(false);
   if (!opts.skipNotify && prevKey && prevKey !== latestPostKey) {
     showNotifyBanner();
   }
@@ -1363,6 +1675,7 @@ function bind(){
   // search
   on("#q", "input", (e) => {
     state.query = e.target.value;
+    state.currentPage = 1;
     renderFeed();
   });
 
@@ -1370,10 +1683,12 @@ function bind(){
     const q = $("#q");
     if(q) q.value = "";
     state.query = "";
+    state.currentPage = 1;
     renderFeed();
   });
   on("#btnSortToggle", "click", () => {
     state.sortOrder = state.sortOrder === "desc" ? "asc" : "desc";
+    state.currentPage = 1;
     renderFeed();
   });
 
@@ -1415,6 +1730,39 @@ function bind(){
     });
   }
 
+  on("#btnEventListTab", "click", () => {
+    state.eventAdminTab = "list";
+    renderCalendar();
+  });
+  on("#btnEventNewTab", "click", () => {
+    state.eventAdminTab = "editor";
+    clearEventForm();
+    renderCalendar();
+  });
+  on("#btnEventPublish", "click", (e) => {
+    e.preventDefault();
+    saveEventEditor("public");
+  });
+  on("#btnEventDraft", "click", (e) => {
+    e.preventDefault();
+    saveEventEditor("draft");
+  });
+  on("#btnEventPrivate", "click", (e) => {
+    e.preventDefault();
+    saveEventEditor("private");
+  });
+  on("#btnEventDelete", "click", (e) => {
+    e.preventDefault();
+    deleteCurrentEvent();
+  });
+
+  ["evTitle","evDate","evStartTime","evEndTime","evDescription","evLocation","evImageUrls","evCtaUrl"].forEach(id=>{
+    const el = document.getElementById(id);
+    if(!el) return;
+    el.addEventListener("input", syncEventButtons);
+    el.addEventListener("change", syncEventButtons);
+  });
+
   // drawer
   on("#drawerScrim", "click", closeDrawer);
   on("#btnClose", "click", closeDrawer);
@@ -1435,8 +1783,6 @@ function bind(){
   on("#btnNewPost", "click", () => {
     state.adminTab = "editor";
     clearEditor();
-    const pDate = $("#pDate");
-    if(pDate) pDate.value = todayYMD();
     syncAdminButtons();
     renderAdmin();
   });
@@ -1480,13 +1826,13 @@ function bind(){
     saveEditForm("private");
   });
 
-  ["pTitle","pDate","pChannel","pTags","pBody","pCtaText","pCtaUrl"].forEach(id=>{
+  ["pTitle","pChannel","pTags","pBody","pCtaText","pCtaUrl"].forEach(id=>{
     const el = document.getElementById(id);
     if(!el) return;
     el.addEventListener("input", syncAdminButtons);
     el.addEventListener("change", syncAdminButtons);
   });
-  ["eTitle","eDate","eChannel","eTags","eBody","eCtaText","eCtaUrl"].forEach(id=>{
+  ["eTitle","eChannel","eTags","eBody","eCtaText","eCtaUrl"].forEach(id=>{
     const el = document.getElementById(id);
     if(!el) return;
     el.addEventListener("input", syncEditButtons);
@@ -1503,6 +1849,13 @@ function bind(){
   const editForm = document.getElementById("editForm");
   if (editForm) {
     editForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    });
+  }
+  const eventForm = document.getElementById("eventForm");
+  if (eventForm) {
+    eventForm.addEventListener("submit", (e) => {
       e.preventDefault();
       e.stopPropagation();
     });
@@ -1590,7 +1943,21 @@ function bind(){
         saveCurrentUser(user);
         applyAuthUI();
         setActivePage("home");
-        await refreshFromCloud({ silent: false, skipNotify: true });
+        const cachedPosts = loadCachedPosts();
+        const hasCache = cachedPosts.length > 0;
+        if (hasCache) {
+          cloudPosts = cachedPosts;
+          updateLatestPostKey(cachedPosts);
+        }
+        renderAll();
+        setFeedLoading(!hasCache);
+
+        refreshFromCloud({ silent: false, skipNotify: true }).catch((refreshErr) => {
+          console.warn(refreshErr);
+          if (!hasCache) {
+            setFeedLoading(false, "記事の読み込みに失敗しました。時間をおいて再読み込みしてください。");
+          }
+        });
         if (msg) msg.textContent = "";
       } catch (err) {
         console.error(err);
@@ -1694,6 +2061,12 @@ function bind(){
       handleImageUpload(eImageFiles, "eImages");
     });
   }
+  const evImageFiles = document.getElementById("evImageFiles");
+  if (evImageFiles) {
+    evImageFiles.addEventListener("change", () => {
+      handleImageUpload(evImageFiles, "evImageUrls");
+    });
+  }
 
   on("#btnInstall", "click", async () => {
     if (!deferredInstallPrompt) return;
@@ -1702,6 +2075,27 @@ function bind(){
     deferredInstallPrompt = null;
     const btn = $("#btnInstall");
     if (btn) btn.hidden = true;
+  });
+  on("#btnAppDownload", "click", async () => {
+    if (deferredInstallPrompt) {
+      deferredInstallPrompt.prompt();
+      await deferredInstallPrompt.userChoice;
+      deferredInstallPrompt = null;
+      const btn = $("#btnInstall");
+      if (btn) btn.hidden = true;
+      return;
+    }
+
+    const ua = navigator.userAgent || "";
+    if (/iPhone|iPad|iPod/i.test(ua)) {
+      alert("Safariの共有ボタンから「ホーム画面に追加」を選んでください。");
+      return;
+    }
+    if (/Android/i.test(ua)) {
+      alert("ブラウザのメニューから「ホーム画面に追加」または「アプリをインストール」を選んでください。");
+      return;
+    }
+    alert("ブラウザメニューから「アプリをインストール」または「ホーム画面に追加」を選んでください。");
   });
   on("#notifyRefresh", "click", async () => {
     try {
@@ -1721,16 +2115,28 @@ async function init(){
   setupInstallButton();
   setupPostWatcher();
 
-  if($("#pDate")) $("#pDate").value = todayYMD();
-  if($("#eDate")) $("#eDate").value = todayYMD();
-
   applyAuthUI();
 
   if (!getCurrentUser()) {
     return;
   }
 
+  const cachedPosts = loadCachedPosts();
+  const hasCache = cachedPosts.length > 0;
+  if (hasCache) {
+    cloudPosts = cachedPosts;
+    updateLatestPostKey(cachedPosts);
+  }
+
   setActivePage("home");
-  await refreshFromCloud({ silent: false, skipNotify: true });
+  renderAll();
+  setFeedLoading(!hasCache);
+
+  refreshFromCloud({ silent: false, skipNotify: true }).catch((err) => {
+    console.warn("Cloud refresh failed:", err);
+    if (!hasCache) {
+      setFeedLoading(false, "記事の読み込みに失敗しました。時間をおいて再読み込みしてください。");
+    }
+  });
 }
 init();
