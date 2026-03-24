@@ -416,22 +416,17 @@ async function uploadImageToApi(file) {
   return data.url;
 }
 
-function compressImage(file, maxSize = 2200, quality = 0.9) {
+function compressImage(file, quality = 0.9) {
   return new Promise((resolve, reject) => {
     const objectUrl = URL.createObjectURL(file);
     const img = new Image();
     img.onload = () => {
-      let w = img.naturalWidth || img.width;
-      let h = img.naturalHeight || img.height;
+      const w = img.naturalWidth || img.width;
+      const h = img.naturalHeight || img.height;
       if (!w || !h) {
         URL.revokeObjectURL(objectUrl);
         reject(new Error("画像サイズの取得に失敗しました。"));
         return;
-      }
-      if (w > maxSize || h > maxSize) {
-        const ratio = Math.min(maxSize / w, maxSize / h);
-        w = Math.max(1, Math.round(w * ratio));
-        h = Math.max(1, Math.round(h * ratio));
       }
       const canvas = document.createElement("canvas");
       canvas.width = w;
@@ -557,30 +552,21 @@ function filteredArticles(){
 }
 
 function renderCard(a){
-  const saved = isSaved(a.id);
-  const savedMark = saved ? "★" : "☆";
   const thumb = (a.media?.images && a.media.images.length) ? a.media.images[0] : "";
   const mediaHtml = thumb
     ? `<div class="card__media"><img src="${escapeAttr(thumb)}" alt="" loading="lazy"></div>`
     : `<div class="card__media card__media--placeholder" aria-hidden="true"></div>`;
-  const savedBadge = `<span class="card__saved${saved ? " card__saved--active" : ""}" aria-label="${saved ? "保存済み" : "未保存"}" title="${saved ? "保存済み" : "未保存"}">${savedMark}</span>`;
-  const bodyPreview = (a.body && a.body.length) ? a.body.join(" ") : "";
-  const tagsHtml = (a.tags && a.tags.length)
-    ? `<div class="card__meta">${a.tags.map(t => `<span class="card__tag">${escapeHtml(t)}</span>`).join("")}</div>`
-    : "";
   return `
     <article class="card" data-article="${escapeAttr(a.id)}">
-      ${savedBadge}
       ${mediaHtml}
       <div class="card__content">
-        <div class="card__top">
-          <span class="card__badge">${escapeHtml(a.badge || "Info")}</span>
-          <span class="card__date">${relativeDate(a.date)}</span>
+        <div class="card__main">
+          <div class="card__top">
+            <span class="card__badge">${escapeHtml(channelLabel(a.channel))}</span>
+          </div>
+          <div class="card__title">${escapeHtml(a.title||"")}</div>
         </div>
-        <div class="card__title">${escapeHtml(a.title||"")}</div>
-        ${bodyPreview ? `<div class="card__desc">${escapeHtml(bodyPreview)}</div>` : ""}
-        ${tagsHtml}
-        <div class="card__author">#${escapeHtml(channelLabel(a.channel))}</div>
+        <div class="card__date">${relativeDate(a.date)}</div>
       </div>
     </article>
   `;
@@ -1148,7 +1134,6 @@ function renderCalendar(){
     title = `${formatDateJP(ymd(start))} 〜 ${formatDateJP(ymd(end))}`;
   }
 
-  const isAdmin = getCurrentUser()?.role === "admin";
   const head = `
     <div class="cal__head">
       <div class="cal__left">
@@ -1159,7 +1144,6 @@ function renderCalendar(){
         <button class="cal__nav" id="calNext" type="button" aria-label="次へ">›</button>
         <div class="cal__month" id="calMonth">${title}</div>
       </div>
-      ${isAdmin ? `<button class="cal__addEvent" id="btnToggleEventEditor" type="button">イベント追加</button>` : ""}
     </div>
   `;
 
@@ -1231,15 +1215,6 @@ function renderCalendar(){
     ${gridHtml}
   `;
   renderEventAdminPanel();
-
-  const toggleEventEditorBtn = $("#btnToggleEventEditor", calRoot);
-  if (toggleEventEditorBtn) {
-    toggleEventEditorBtn.addEventListener("click", () => {
-      state.eventAdminTab = "editor";
-      clearEventForm();
-      renderCalendar();
-    });
-  }
 
   // イベント詳細ポップアップ
   $$(".cal__ev, .cal2w__event", calRoot).forEach(btn => {
