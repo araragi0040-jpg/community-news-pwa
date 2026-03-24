@@ -270,7 +270,13 @@ svg{ width:22px; height:22px; fill: currentColor; }
 .cards{
   display: grid;
   grid-template-columns: 1fr;
-  gap: 12px;
+  gap: 14px;
+}
+@media (min-width: 540px){
+  .cards{ grid-template-columns: repeat(2, 1fr); }
+}
+@media (min-width: 960px){
+  .cards{ grid-template-columns: repeat(3, 1fr); }
 }
 
 .card{
@@ -280,10 +286,14 @@ svg{ width:22px; height:22px; fill: currentColor; }
   overflow: hidden;
   box-shadow: 0 4px 12px rgba(0,0,0,.04);
   position: relative;
-  aspect-ratio: 1 / 1;
   display: flex;
   flex-direction: column;
-  gap: 0px;   /* ← ここが記事間の余白 */
+  cursor: pointer;
+  transition: box-shadow .15s ease, transform .15s ease;
+}
+.card:hover{
+  box-shadow: 0 8px 24px rgba(0,0,0,.08);
+  transform: translateY(-2px);
 }
 
 .card__saved{
@@ -312,7 +322,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
 /* ===== Card Media (always shown) ===== */
 .card__media{
   width: 100%;
-  flex: 0 0 60%;
+  height: 180px;
   border-bottom: 1px solid var(--stroke);
   line-height:0;
   overflow: hidden;
@@ -354,10 +364,9 @@ svg{ width:22px; height:22px; fill: currentColor; }
 }
 
 .card__date{
-  margin-top: 6px;
   font-size: 12px;
   color: var(--muted);
-  text-align: right;
+  white-space: nowrap;
 }
 
 /* 投稿者表示制御（1行左寄せ） */
@@ -369,13 +378,13 @@ svg{ width:22px; height:22px; fill: currentColor; }
 
 /* 記事内の余白調整 */
 .card__content{
-  flex: 0 0 40%;
-  padding: 4px 12px 8px;
+  flex: 1;
+  padding: 10px 12px 10px;
   margin-top:0;
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  gap: 4px;
 }
 
 .card__content > *:first-child{
@@ -388,6 +397,33 @@ svg{ width:22px; height:22px; fill: currentColor; }
 
 .card__top{
   margin:0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.card__badge{
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent);
+  border: 1px solid rgba(176,125,79,.28);
+  background: rgba(176,125,79,.08);
+  border-radius: 999px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+
+.card__tag{
+  display: inline-block;
+  font-size: 11px;
+  color: var(--text-soft);
+  border: 1px solid var(--stroke);
+  background: rgba(255,255,255,.55);
+  border-radius: 999px;
+  padding: 2px 8px;
+  margin-right: 4px;
+  margin-bottom: 2px;
 }
 
 /* 画像が無い記事用のテンプレ（ダミー） */
@@ -511,7 +547,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
 .drawer{
   position: fixed;
   inset: 0;
-  z-index: 30;
+  z-index: 1300;
   display:none;
 }
 .drawer--open{ display:block; }
@@ -772,6 +808,9 @@ svg{ width:22px; height:22px; fill: currentColor; }
   grid-template-columns: 1fr;
   gap: 10px;
 }
+@media (min-width: 540px){
+  .grid2{ grid-template-columns: 1fr 1fr; }
+}
 .admin-actions{
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -835,7 +874,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 1200;            /* drawer(30)より上に */
+  z-index: 1200;
   pointer-events: auto;
 }
 
@@ -845,6 +884,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
 }
 .drawer--open{
   pointer-events: auto;
+  z-index: 1300;
 }
 
 /* scrimも閉じてるときはクリックを奪わない */
