@@ -1003,10 +1003,7 @@ function clearEditor(){
   $("#postForm").reset();
   $("#pDate").value = todayYMD();
   $("#pChannel").value = "article";
-  $("#pTone").value = "accent";
-  $("#pDesc").value = "";
   $("#pTags").value = "";
-  $("#pSummary").value = "";
   $("#pBody").value = "";
   $("#pCtaText").value = "";
   $("#pCtaUrl").value = "";
@@ -1026,10 +1023,7 @@ function startEdit(id){
   $("#pTitle").value = a.title || "";
   $("#pDate").value = a.date || todayYMD();
   $("#pChannel").value = a.channel || "article";
-  $("#pTone").value = a.tone || "accent";
-  $("#pDesc").value = a.desc || "";
   $("#pTags").value = (a.tags || []).join(",");
-  $("#pSummary").value = (a.summary || []).join("\n");
   $("#pBody").value = (a.body || []).join("\n\n");
   $("#pCtaText").value = a.cta?.text || "";
   $("#pCtaUrl").value = a.cta?.url || "";
@@ -1059,10 +1053,7 @@ function collectForm(){
   const title = $("#pTitle").value.trim();
   const date = $("#pDate").value;
   const channel = $("#pChannel").value;
-  const tone = $("#pTone").value;
-  const desc = $("#pDesc").value.trim();
   const tags = $("#pTags").value.split(",").map(s=>s.trim()).filter(Boolean);
-  const summary = $("#pSummary").value.split("\n").map(s=>s.trim()).filter(Boolean);
   const body = $("#pBody").value
     .split("\n\n")
     .map(s=>s.trim())
@@ -1079,13 +1070,13 @@ function collectForm(){
   const a = normalizePost({
     id: state.editingId || undefined,
     channel,
-    tone,
+    tone: "accent",
     badge: badgeTextFromChannel(channel),
     date,
     title,
-    desc,
+    desc: "",
     tags,
-    summary,
+    summary: [],
     body,
     cta: ctaUrl ? { text: ctaText || "開く", url: ctaUrl } : null,
 
@@ -1364,7 +1355,7 @@ function bind(){
     saveEditor("private");
   });
 
-  ["pTitle","pDate","pChannel","pTone","pDesc","pTags","pSummary","pBody","pCtaText","pCtaUrl"].forEach(id=>{
+  ["pTitle","pDate","pChannel","pTags","pBody","pCtaText","pCtaUrl"].forEach(id=>{
     const el = document.getElementById(id);
     if(!el) return;
     el.addEventListener("input", syncAdminButtons);
