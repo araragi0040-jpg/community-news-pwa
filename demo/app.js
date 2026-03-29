@@ -9,6 +9,7 @@ const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
 
 const LS_KEY_SAVED = "community_news_saved_v1";
 const LS_KEY_USER = "community_news_user_v1";
+const LS_KEY_TOKEN = "community_news_token_v1";
 const LS_KEY_POSTS_CACHE = "community_news_posts_cache_v1";
 const ITEMS_PER_PAGE = 10;
 
@@ -267,18 +268,68 @@ function mapApiEvent(event){
   };
 }
 
-async function callApi(action, payload = {}) {
+function getAuthToken() {
+  return (localStorage.getItem(LS_KEY_TOKEN) || "").trim();
+}
+
+function saveAuthToken(token) {
+  localStorage.setItem(LS_KEY_TOKEN, String(token || ""));
+}
+
+function clearAuthToken() {
+  localStorage.removeItem(LS_KEY_TOKEN);
+}
+
+function isAuthError(err){
+  const code = err?.code || "";
+  return code === "AUTH_REQUIRED" || code === "FORBIDDEN";
+}
+
+function buildApiGetUrl(action, includeAuth = true){
   const base = window.APP_CONFIG?.GAS_API_URL;
   if (!base) throw new Error("GAS_API_URL is not set");
+  const token = includeAuth ? getAuthToken() : "";
+  const params = new URLSearchParams({
+    action,
+    t: String(Date.now())
+  });
+  if (token) params.set("token", token);
+  return `${base}?${params.toString()}`;
+}
+
+function handleAuthFailure(message = "セッションの有効期限が切れました。再ログインしてください。"){
+  clearCurrentUser();
+  clearAuthToken();
+  applyAuthUI();
+  const msg = $("#loginMsg");
+  if (msg) msg.textContent = message;
+}
+
+async function callApi(action, payload = {}, opts = {}) {
+  const base = window.APP_CONFIG?.GAS_API_URL;
+  if (!base) throw new Error("GAS_API_URL is not set");
+  const includeAuth = opts.auth !== false;
+  const token = includeAuth ? getAuthToken() : "";
   const res = await fetch(base, {
     method: "POST",
     headers: {
       "Content-Type": "text/plain;charset=utf-8"
     },
-    body: JSON.stringify({ action, ...payload })
+    body: JSON.stringify({
+      action,
+      ...(token ? { token } : {}),
+      ...payload
+    })
   });
   const data = await parseApiJson(res, action);
-  if (!data.ok) throw new Error(data.message || "API error");
+  if (!data.ok) {
+    const err = new Error(data.message || "API error");
+    err.code = data.code || "";
+    if (includeAuth && isAuthError(err)) {
+      handleAuthFailure(err.message || "セッションの有効期限が切れました。");
+    }
+    throw err;
+  }
   return data;
 }
 
@@ -297,9 +348,7 @@ async function parseApiJson(res, actionLabel){
 }
 
 async function fetchPostsFromApi() {
-  const base = window.APP_CONFIG?.GAS_API_URL;
-  if (!base) throw new Error("GAS_API_URL is not set");
-  const url = `${base}?action=listPosts&t=${Date.now()}`;
+  const url = buildApiGetUrl("listPosts", true);
   const res = await fetch(url, {
     cache: "no-store"
   });
@@ -309,9 +358,7 @@ async function fetchPostsFromApi() {
 }
 
 async function fetchAllPostsFromApi() {
-  const base = window.APP_CONFIG?.GAS_API_URL;
-  if (!base) throw new Error("GAS_API_URL is not set");
-  const url = `${base}?action=listAllPosts&t=${Date.now()}`;
+  const url = buildApiGetUrl("listAllPosts", true);
   const res = await fetch(url, {
     cache: "no-store"
   });
@@ -321,9 +368,7 @@ async function fetchAllPostsFromApi() {
 }
 
 async function fetchEventsFromApi() {
-  const base = window.APP_CONFIG?.GAS_API_URL;
-  if (!base) throw new Error("GAS_API_URL is not set");
-  const url = `${base}?action=listEvents&t=${Date.now()}`;
+  const url = buildApiGetUrl("listEvents", true);
   const res = await fetch(url, {
     cache: "no-store"
   });
@@ -333,9 +378,7 @@ async function fetchEventsFromApi() {
 }
 
 async function fetchAllEventsFromApi() {
-  const base = window.APP_CONFIG?.GAS_API_URL;
-  if (!base) throw new Error("GAS_API_URL is not set");
-  const url = `${base}?action=listAllEvents&t=${Date.now()}`;
+  const url = buildApiGetUrl("listAllEvents", true);
   const res = await fetch(url, {
     cache: "no-store"
   });
@@ -452,15 +495,32 @@ function compressImage(file, quality = 0.9) {
 
 /* ログイン関数 */
 async function loginToApi(email, password) {
-  const data = await callApi("login", { email, password });
-  return data.user;
+  const data = await callApi("login", { email, password }, { auth: false });
+  return {
+    user: data.user,
+    token: data.token || ""
+  };
 }
 
 async function registerToApi(name, email, password) {
   const data = await callApi("register", {
     user: { name, email, password }
-  });
+  }, { auth: false });
   return data.user;
+}
+
+async function requestPasswordResetToApi(email){
+  await callApi("requestPasswordReset", {
+    email,
+    appBaseUrl: window.location.origin
+  }, { auth: false });
+}
+
+async function resetPasswordToApi(resetToken, newPassword){
+  await callApi("resetPassword", {
+    resetToken,
+    newPassword
+  }, { auth: false });
 }
 
 function getCurrentUser() {
@@ -473,6 +533,7 @@ function saveCurrentUser(user) {
 
 function clearCurrentUser() {
   localStorage.removeItem(LS_KEY_USER);
+  localStorage.removeItem(LS_KEY_TOKEN);
 }
 
 /* 画面切り替え関数 */
@@ -483,6 +544,7 @@ function applyAuthUI() {
   const appRoot = document.getElementById("appRoot");
   const adminNav = document.querySelector('.navitem[data-nav="admin"]');
   const adminPage = document.querySelector('.page[data-page="admin"]');
+  const logoutBtn = document.getElementById("btnLogout");
 
   if (!authGate || !appRoot) return;
 
@@ -491,6 +553,7 @@ function applyAuthUI() {
     appRoot.hidden = true;
     if (adminNav) adminNav.style.display = "none";
     if (adminPage) adminPage.style.display = "none";
+    if (logoutBtn) logoutBtn.hidden = true;
     return;
   }
 
@@ -501,6 +564,7 @@ function applyAuthUI() {
 
   if (adminNav) adminNav.style.display = isAdmin ? "flex" : "none";
   if (adminPage) adminPage.style.display = isAdmin ? "" : "none";
+  if (logoutBtn) logoutBtn.hidden = false;
 }
 
 // ===== Rendering: Chips =====
@@ -1682,6 +1746,10 @@ async function refreshFromCloud(opts = {}){
       showNotifyBanner();
     }
   } catch (err) {
+    if (isAuthError(err)) {
+      handleAuthFailure(err.message || "セッションが無効です。再ログインしてください。");
+      throw err;
+    }
     setFeedLoading(false, "記事の読み込みに失敗しました。時間をおいて再読み込みしてください。");
     const msg = formatErrorMessage(err, "データの取得に失敗しました。");
     if (!opts.silent && opts.showError !== false) {
@@ -1757,6 +1825,16 @@ function bind(){
       setActivePage(key);
     });
   }
+
+  on("#btnLogout", "click", () => {
+    if (!confirm("ログアウトしますか？")) return;
+    clearCurrentUser();
+    clearAuthToken();
+    hideNotifyBanner();
+    applyAuthUI();
+    const msg = $("#loginMsg");
+    if (msg) msg.textContent = "ログアウトしました。";
+  });
 
   // schedule view switch
   const schedViewSeg = $("#schedViewSeg");
@@ -1936,65 +2014,85 @@ function bind(){
         contactForm.reset();
       } catch (err) {
         console.error(err);
+        if (isAuthError(err)) {
+          handleAuthFailure(err.message || "セッションの有効期限が切れました。");
+          return;
+        }
         alert("送信に失敗しました。\n" + (err.message || err));
       }
     });
   }
 
-  // login / register switch
+  // login / register / reset switch
   const showRegisterBtn = $("#showRegisterBtn");
   const showLoginBtn = $("#showLoginBtn");
+  const showResetRequestBtn = $("#showResetRequestBtn");
   const loginForm = $("#loginForm");
   const registerForm = $("#registerForm");
+  const resetRequestForm = $("#resetRequestForm");
+  const resetPasswordForm = $("#resetPasswordForm");
+  const resetTokenInput = $("#resetToken");
   const loginMsg = $("#loginMsg");
 
-  if (showRegisterBtn) {
-    showRegisterBtn.addEventListener("click", () => {
-      if (loginForm) loginForm.style.display = "none";
-      if (registerForm) registerForm.style.display = "grid";
-      showRegisterBtn.style.display = "none";
-      if (showLoginBtn) showLoginBtn.style.display = "inline-block";
-      if (loginMsg) loginMsg.textContent = "";
-    });
+  function setAuthView(view){
+    if (loginForm) loginForm.style.display = view === "login" ? "grid" : "none";
+    if (registerForm) registerForm.style.display = view === "register" ? "grid" : "none";
+    if (resetRequestForm) resetRequestForm.style.display = view === "reset-request" ? "grid" : "none";
+    if (resetPasswordForm) resetPasswordForm.style.display = view === "reset-password" ? "grid" : "none";
+    if (showRegisterBtn) showRegisterBtn.style.display = view === "login" ? "inline-block" : "none";
+    if (showResetRequestBtn) showResetRequestBtn.style.display = view === "login" ? "inline-block" : "none";
+    if (showLoginBtn) showLoginBtn.style.display = view === "login" ? "none" : "inline-block";
+    if (loginMsg) loginMsg.textContent = "";
   }
 
-  if (showLoginBtn) {
-    showLoginBtn.addEventListener("click", () => {
-      if (loginForm) loginForm.style.display = "grid";
-      if (registerForm) registerForm.style.display = "none";
-      if (showRegisterBtn) showRegisterBtn.style.display = "inline-block";
-      showLoginBtn.style.display = "none";
-      if (loginMsg) loginMsg.textContent = "";
-    });
+  const resetTokenFromUrl = new URLSearchParams(window.location.search).get("resetToken");
+  if (resetTokenFromUrl && resetTokenInput) {
+    resetTokenInput.value = resetTokenFromUrl;
+    setAuthView("reset-password");
+  } else {
+    setAuthView("login");
   }
+
+  if (showRegisterBtn) {
+    showRegisterBtn.addEventListener("click", () => setAuthView("register"));
+  }
+  if (showLoginBtn) {
+    showLoginBtn.addEventListener("click", () => setAuthView("login"));
+  }
+  if (showResetRequestBtn) {
+    showResetRequestBtn.addEventListener("click", () => setAuthView("reset-request"));
+  }
+  on("#cancelResetRequestBtn", "click", () => setAuthView("login"));
+  on("#cancelResetPasswordBtn", "click", () => {
+    const url = new URL(window.location.href);
+    url.searchParams.delete("resetToken");
+    window.history.replaceState({}, "", url.toString());
+    setAuthView("login");
+  });
 
   // login
   if (loginForm) {
     loginForm.addEventListener("submit", async (e) => {
       e.preventDefault();
-
       const email = ($("#loginEmail")?.value || "").trim();
       const password = ($("#loginPassword")?.value || "").trim();
       const msg = $("#loginMsg");
       const btn = $("#loginBtn");
-
       if (msg) msg.textContent = "";
-
       if (!email || !password) {
         if (msg) msg.textContent = "メールアドレスとパスワードを入力してください。";
         return;
       }
 
       const oldText = btn ? btn.textContent : "";
-
       try {
         if (btn) {
           btn.disabled = true;
           btn.textContent = "ログイン中...";
         }
-
-        const user = await loginToApi(email, password);
-        saveCurrentUser(user);
+        const auth = await loginToApi(email, password);
+        saveCurrentUser(auth.user);
+        saveAuthToken(auth.token || "");
         applyAuthUI();
         setActivePage("home");
         const cachedPosts = loadCachedPosts();
@@ -2005,12 +2103,9 @@ function bind(){
         }
         renderAll();
         setFeedLoading(!hasCache);
-
         refreshFromCloud({ silent: false, skipNotify: true, showError: !hasCache }).catch((refreshErr) => {
           console.warn(refreshErr);
-          if (msg && !hasCache) {
-            msg.textContent = formatErrorMessage(refreshErr, "記事の読み込みに失敗しました。");
-          }
+          if (msg && !hasCache) msg.textContent = formatErrorMessage(refreshErr, "記事の読み込みに失敗しました。");
         });
         if (msg) msg.textContent = "";
       } catch (err) {
@@ -2029,41 +2124,28 @@ function bind(){
   if (registerForm) {
     registerForm.addEventListener("submit", async (e) => {
       e.preventDefault();
-
       const name = ($("#registerName")?.value || "").trim();
       const email = ($("#registerEmail")?.value || "").trim();
       const password = ($("#registerPassword")?.value || "").trim();
       const msg = $("#loginMsg");
       const btn = $("#registerBtn");
-
       if (msg) msg.textContent = "";
-
       if (!name || !email || !password) {
         if (msg) msg.textContent = "お名前・メールアドレス・パスワードを入力してください。";
         return;
       }
-
       const oldText = btn ? btn.textContent : "";
-
       try {
         if (btn) {
           btn.disabled = true;
           btn.textContent = "登録中...";
         }
-
         await registerToApi(name, email, password);
-
         if (msg) msg.textContent = "登録が完了しました。ログインしてください。";
         registerForm.reset();
-
-        if (loginForm) loginForm.style.display = "grid";
-        registerForm.style.display = "none";
-        if (showRegisterBtn) showRegisterBtn.style.display = "inline-block";
-        if (showLoginBtn) showLoginBtn.style.display = "none";
-
+        setAuthView("login");
         const loginEmail = $("#loginEmail");
         if (loginEmail) loginEmail.value = email;
-
       } catch (err) {
         console.error(err);
         if (msg) msg.textContent = err.message || "新規登録に失敗しました。";
@@ -2071,6 +2153,82 @@ function bind(){
         if (btn) {
           btn.disabled = false;
           btn.textContent = oldText || "新規登録";
+        }
+      }
+    });
+  }
+
+  // reset request
+  if (resetRequestForm) {
+    resetRequestForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const email = ($("#resetRequestEmail")?.value || "").trim();
+      const msg = $("#loginMsg");
+      const btn = $("#resetRequestBtn");
+      if (msg) msg.textContent = "";
+      if (!email) {
+        if (msg) msg.textContent = "メールアドレスを入力してください。";
+        return;
+      }
+      const oldText = btn ? btn.textContent : "";
+      try {
+        if (btn) {
+          btn.disabled = true;
+          btn.textContent = "送信中...";
+        }
+        await requestPasswordResetToApi(email);
+        if (msg) msg.textContent = "再設定メールを送信しました。";
+        resetRequestForm.reset();
+      } catch (err) {
+        console.error(err);
+        if (msg) msg.textContent = err.message || "再設定メールの送信に失敗しました。";
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = oldText || "再設定メールを送る";
+        }
+      }
+    });
+  }
+
+  // reset password
+  if (resetPasswordForm) {
+    resetPasswordForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const token = ($("#resetToken")?.value || "").trim();
+      const next = ($("#resetPasswordNew")?.value || "").trim();
+      const confirm = ($("#resetPasswordConfirm")?.value || "").trim();
+      const msg = $("#loginMsg");
+      const btn = $("#resetPasswordBtn");
+      if (msg) msg.textContent = "";
+      if (!token || !next || !confirm) {
+        if (msg) msg.textContent = "必要な項目を入力してください。";
+        return;
+      }
+      if (next !== confirm) {
+        if (msg) msg.textContent = "パスワード確認が一致しません。";
+        return;
+      }
+      const oldText = btn ? btn.textContent : "";
+      try {
+        if (btn) {
+          btn.disabled = true;
+          btn.textContent = "更新中...";
+        }
+        await resetPasswordToApi(token, next);
+        const url = new URL(window.location.href);
+        url.searchParams.delete("resetToken");
+        window.history.replaceState({}, "", url.toString());
+        resetPasswordForm.reset();
+        setAuthView("login");
+        if (msg) msg.textContent = "パスワードを更新しました。ログインしてください。";
+      } catch (err) {
+        console.error(err);
+        if (msg) msg.textContent = err.message || "パスワード更新に失敗しました。";
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = oldText || "パスワードを更新";
         }
       }
     });
@@ -2097,6 +2255,10 @@ function bind(){
       alert("画像をアップロードしました");
     } catch (err) {
       console.error(err);
+      if (isAuthError(err)) {
+        handleAuthFailure(err.message || "セッションの有効期限が切れました。");
+        return;
+      }
       alert("画像アップロードに失敗しました。画像サイズを小さくして再試行してください。\n" + (err.message || err));
     } finally {
       fileInput.value = "";
@@ -2171,7 +2333,9 @@ async function init(){
 
   applyAuthUI();
 
-  if (!getCurrentUser()) {
+  if (!getCurrentUser() || !getAuthToken()) {
+    clearCurrentUser();
+    applyAuthUI();
     return;
   }
 
