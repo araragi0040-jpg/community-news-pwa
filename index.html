@@ -5,8 +5,10 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <meta name="theme-color" content="#ffffff" />
   <title>語り場ニュース</title>
+  <link rel="icon" href="./favicon.png" type="image/png">
+  <link rel="apple-touch-icon" href="./favicon.png">
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=41" />
+  <link rel="stylesheet" href="./styles.css?v=38" />
 </head>
 <body>
   <div class="auth" id="authGate">
@@ -22,6 +24,7 @@
 
       <div class="auth__switch">
         <button type="button" id="showRegisterBtn" class="auth__linkbtn">新規登録はこちら</button>
+        <button type="button" id="showResetRequestBtn" class="auth__linkbtn">パスワードをお忘れですか？</button>
       </div>
 
       <form id="registerForm" class="auth__form" style="display:none;">
@@ -35,6 +38,20 @@
         <button type="button" id="showLoginBtn" class="auth__linkbtn" style="display:none;">ログイン画面に戻る</button>
       </div>
 
+      <form id="resetRequestForm" class="auth__form" style="display:none;">
+        <input type="email" id="resetRequestEmail" placeholder="登録済みメールアドレス" required>
+        <button type="submit" id="resetRequestBtn">再設定メールを送る</button>
+        <button type="button" id="cancelResetRequestBtn" class="auth__ghostbtn">戻る</button>
+      </form>
+
+      <form id="resetPasswordForm" class="auth__form" style="display:none;">
+        <input type="hidden" id="resetToken">
+        <input type="password" id="resetPasswordNew" placeholder="新しいパスワード（8文字以上）" required minlength="8">
+        <input type="password" id="resetPasswordConfirm" placeholder="新しいパスワード（確認）" required minlength="8">
+        <button type="submit" id="resetPasswordBtn">パスワードを更新</button>
+        <button type="button" id="cancelResetPasswordBtn" class="auth__ghostbtn">戻る</button>
+      </form>
+
       <div class="auth__msg" id="loginMsg"></div>
     </div>
   </div>
@@ -44,6 +61,7 @@
     <!-- Topbar -->
     <header class="topbar">
       <div class="brand">
+        <img class="brand__logo" src="./logo.png" alt="語り場ニュース" width="36" height="36">
         <div class="brand__texts">
           <div class="brand__name">語り場ニュース</div>
           <div class="brand__sub">限定配信</div>
@@ -60,6 +78,11 @@
         <button class="iconbtn" id="btnInstall" aria-label="Install" title="インストール" hidden>
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+          </svg>
+        </button>
+        <button class="iconbtn" id="btnLogout" aria-label="Logout" title="ログアウト" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M10 17l1.41-1.41L8.83 13H20v-2H8.83l2.58-2.59L10 7l-5 5 5 5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/>
           </svg>
         </button>
       </div>
@@ -497,7 +520,7 @@
   </div>
 </div>
 
-  <script src="config.js?v=41"></script>
-  <script src="./app.js?v=41"></script>
+  <script src="config.js?v=38"></script>
+  <script src="./app.js?v=38"></script>
 </body>
 </html>
