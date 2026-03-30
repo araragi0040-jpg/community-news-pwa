@@ -1,0 +1,730 @@
+const SHEET_NAME = "posts";
+const EVENTS_SHEET_NAME = "events";
+const CONTACT_SHEET_NAME = "contacts";
+const USERS_SHEET_NAME = "users";
+
+/**
+ * GET
+ * 例:
+ * ?action=listPosts
+ */
+function doGet(e) {
+  try {
+    const action = (e && e.parameter && e.parameter.action) || "listPosts";
+
+    if (action === "listPosts") {
+      return outputJson({
+        ok: true,
+        posts: getPosts()
+      });
+    }
+
+    if (action === "listAllPosts") {
+      return outputJson({
+        ok: true,
+        posts: getPosts(true)
+      });
+    }
+
+    if (action === "listEvents") {
+      return outputJson({
+        ok: true,
+        events: getEvents(false)
+      });
+    }
+
+    if (action === "listAllEvents") {
+      return outputJson({
+        ok: true,
+        events: getEvents(true)
+      });
+    }
+
+    return outputJson({
+      ok: false,
+      message: "Unknown action"
+    });
+  } catch (err) {
+    return outputJson({
+      ok: false,
+      message: err.message || String(err)
+    });
+  }
+}
+
+/**
+ * POST
+ * body(JSON):
+ * {
+ *   "action": "savePost",
+ *   "post": {...}
+ * }
+ */
+function doPost(e) {
+  try {
+    const body = JSON.parse(e.postData.contents || "{}");
+    const action = body.action || "";
+
+    if (action === "savePost") {
+      const result = savePost(body.post || {});
+      return outputJson({
+        ok: true,
+        post: result
+      });
+    }
+
+    if (action === "deletePost") {
+      const id = body.id || "";
+      deletePost(id);
+      return outputJson({
+        ok: true
+      });
+    }
+
+    if (action === "saveEvent") {
+      const result = saveEvent(body.event || {});
+      return outputJson({
+        ok: true,
+        event: result
+      });
+    }
+
+    if (action === "deleteEvent") {
+      const id = body.id || "";
+      deleteEvent(id);
+      return outputJson({
+        ok: true
+      });
+    }
+
+    if (action === "login") {
+      const result = loginUser(body.email || "", body.password || "");
+      return outputJson({
+        ok: true,
+        user: result
+      });
+    }
+
+    if (action === "uploadImage") {
+      const result = uploadImage(body);
+      return outputJson({
+        ok: true,
+        url: result.url
+      });
+    }
+
+    if (action === "register") {
+      const result = registerUser(body.user || {});
+      return outputJson({
+        ok: true,
+        user: result
+      });
+    }
+
+    if (action === "saveContact") {
+      const result = saveContact(body.contact || {});
+      return outputJson({
+        ok: true,
+        contact: result
+      });
+    }
+
+    return outputJson({
+      ok: false,
+      message: "Unknown action"
+    });
+  } catch (err) {
+    return outputJson({
+      ok: false,
+      message: err.message || String(err)
+    });
+  }
+}
+
+function uploadImage(body) {
+  const fileName = body.fileName || ("image_" + Date.now() + ".png");
+  const mimeType = body.mimeType || "image/png";
+  const dataUrl = body.dataUrl || "";
+
+  if (!dataUrl) throw new Error("dataUrl is required");
+
+  const base64 = dataUrl.split(",")[1];
+  if (!base64) throw new Error("Invalid dataUrl");
+
+  const bytes = Utilities.base64Decode(base64);
+  const blob = Utilities.newBlob(bytes, mimeType, fileName);
+
+  const folderId = "1ZmhtBMhwa5nyDmAObnW0WRsfYqRds_-7";
+  const folder = DriveApp.getFolderById(folderId);
+  const file = folder.createFile(blob);
+
+  return {
+    ok: true,
+    url: "https://drive.google.com/thumbnail?id=" + file.getId() + "&sz=w2400"
+  };
+}
+
+function getSheet() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
+  if (!sheet) throw new Error(`Sheet not found: ${SHEET_NAME}`);
+  return sheet;
+}
+
+function getEventsSheet() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(EVENTS_SHEET_NAME);
+  if (!sheet) throw new Error(`Sheet not found: ${EVENTS_SHEET_NAME}`);
+  return sheet;
+}
+
+function ensureEventsSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(EVENTS_SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(EVENTS_SHEET_NAME);
+  }
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow([
+      "id",
+      "title",
+      "date",
+      "startTime",
+      "endTime",
+      "description",
+      "location",
+      "imageUrls",
+      "ctaUrl",
+      "status",
+      "createdAt"
+    ]);
+  }
+  return sheet;
+}
+
+function getUsersSheet() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(USERS_SHEET_NAME);
+  if (!sheet) throw new Error(`Sheet not found: ${USERS_SHEET_NAME}`);
+  return sheet;
+}
+
+function loginUser(email, password) {
+  if (!email) throw new Error("email is required");
+  if (!password) throw new Error("password is required");
+
+  const sheet = getUsersSheet();
+  const values = sheet.getDataRange().getValues();
+
+  if (values.length < 2) {
+    throw new Error("No users found");
+  }
+
+  const headers = values[0];
+  const rows = values.slice(1);
+
+  const emailCol = headers.indexOf("email");
+  const passwordCol = headers.indexOf("password");
+  const statusCol = headers.indexOf("status");
+
+  if (emailCol === -1) throw new Error("email column not found");
+  if (passwordCol === -1) throw new Error("password column not found");
+  if (statusCol === -1) throw new Error("status column not found");
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+
+    const rowEmail = String(row[emailCol] || "").trim().toLowerCase();
+    const rowPassword = String(row[passwordCol] || "").trim();
+    const rowStatus = String(row[statusCol] || "").trim().toLowerCase();
+
+    if (
+      rowEmail === String(email).trim().toLowerCase() &&
+      rowPassword === String(password).trim()
+    ) {
+      if (rowStatus !== "active") {
+        throw new Error("This account is inactive");
+      }
+
+      const obj = {};
+      headers.forEach((h, idx) => {
+        obj[h] = row[idx];
+      });
+
+      return {
+        id: obj.id || "",
+        email: obj.email || "",
+        name: obj.name || "",
+        role: obj.role || "member",
+        status: obj.status || "active"
+      };
+    }
+  }
+
+  throw new Error("Invalid email or password");
+}
+
+function registerUser(user) {
+  const sheet = getUsersSheet();
+  const values = sheet.getDataRange().getValues();
+
+  if (values.length === 0) {
+    throw new Error("users sheet headers not found");
+  }
+
+  const headers = values[0];
+  const emailCol = headers.indexOf("email");
+  const passwordCol = headers.indexOf("password");
+  const idCol = headers.indexOf("id");
+  const nameCol = headers.indexOf("name");
+  const roleCol = headers.indexOf("role");
+  const statusCol = headers.indexOf("status");
+  const updatedAtCol = headers.indexOf("updatedAt");
+
+  if (emailCol === -1) throw new Error("email column not found");
+  if (passwordCol === -1) throw new Error("password column not found");
+  if (idCol === -1) throw new Error("id column not found");
+  if (nameCol === -1) throw new Error("name column not found");
+  if (roleCol === -1) throw new Error("role column not found");
+  if (statusCol === -1) throw new Error("status column not found");
+  if (updatedAtCol === -1) throw new Error("updatedAt column not found");
+
+  const email = String(user.email || "").trim().toLowerCase();
+  const password = String(user.password || "").trim();
+  const name = String(user.name || "").trim();
+
+  if (!name) throw new Error("name is required");
+  if (!email) throw new Error("email is required");
+  if (!password) throw new Error("password is required");
+
+  // 重複チェック
+  for (let i = 1; i < values.length; i++) {
+    const rowEmail = String(values[i][emailCol] || "").trim().toLowerCase();
+    if (rowEmail === email) {
+      throw new Error("This email is already registered");
+    }
+  }
+
+  const now = Utilities.formatDate(
+    new Date(),
+    Session.getScriptTimeZone(),
+    "yyyy-MM-dd HH:mm:ss"
+  );
+
+  const newUser = {
+    id: "u_" + new Date().getTime().toString(36),
+    email: email,
+    password: password,
+    name: name,
+    role: "member",
+    status: "active",
+    updatedAt: now
+  };
+
+  const rowData = headers.map(h => newUser[h] || "");
+  sheet.appendRow(rowData);
+
+  return {
+    id: newUser.id,
+    email: newUser.email,
+    name: newUser.name,
+    role: newUser.role,
+    status: newUser.status
+  };
+}
+
+function getContactSheet() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONTACT_SHEET_NAME);
+  if (!sheet) throw new Error(`Sheet not found: ${CONTACT_SHEET_NAME}`);
+  return sheet;
+}
+
+function getPosts(includeAll) {
+  const sheet = getSheet();
+  const values = sheet.getDataRange().getValues();
+  if (values.length < 2) return [];
+
+  const headers = values[0];
+  const rows = values.slice(1);
+
+  const posts = rows
+    .map(row => {
+      const obj = {};
+      headers.forEach((h, i) => {
+        obj[h] = row[i];
+      });
+      return normalizePostRow(obj);
+    });
+  return includeAll ? posts : posts.filter(post => post.status === "public");
+}
+
+function getEvents(includeAll) {
+  const sheet = getEventsSheet();
+  const values = sheet.getDataRange().getValues();
+  if (values.length < 2) return [];
+
+  const headers = values[0];
+  const rows = values.slice(1);
+
+  const events = rows.map(row => {
+    const obj = {};
+    headers.forEach((h, i) => {
+      obj[h] = row[i];
+    });
+    return normalizeEventRow(obj);
+  });
+
+  return includeAll ? events : events.filter(event => event.status === "public");
+}
+
+function savePost(post) {
+  const sheet = getSheet();
+  const values = sheet.getDataRange().getValues();
+  const headers = values[0];
+
+  const normalized = normalizeIncomingPost(post);
+  const idCol = headers.indexOf("id");
+  if (idCol === -1) throw new Error("id column not found");
+
+  const existingRowIndex = findRowIndexById(values, normalized.id, idCol);
+  if (existingRowIndex < 0 && !normalized.date) {
+    normalized.date = formatDateYMD(new Date());
+  }
+  const rowData = headers.map(h => {
+    const key = h === "images" ? "imageUrls" : h;
+    return serializeFieldForSheet(h, normalized[key]);
+  });
+
+  if (existingRowIndex >= 0) {
+    // 更新
+    sheet.getRange(existingRowIndex + 1, 1, 1, headers.length).setValues([rowData]);
+  } else {
+    // 新規追加
+    sheet.appendRow(rowData);
+  }
+
+  return normalized;
+}
+
+function saveEvent(event) {
+  const sheet = ensureEventsSheet();
+  const values = sheet.getDataRange().getValues();
+  const headers = values[0];
+
+  const normalized = normalizeIncomingEvent(event);
+  const idCol = headers.indexOf("id");
+  if (idCol === -1) throw new Error("id column not found");
+
+  const existingRowIndex = findRowIndexById(values, normalized.id, idCol);
+
+  if (existingRowIndex < 0) {
+    if (!normalized.id) normalized.id = createEventId();
+    if (!normalized.createdAt) normalized.createdAt = formatDateTime(new Date());
+  } else if (!normalized.createdAt) {
+    const createdAtCol = headers.indexOf("createdAt");
+    if (createdAtCol >= 0) {
+      normalized.createdAt = String(values[existingRowIndex][createdAtCol] || "");
+    }
+  }
+
+  const rowData = headers.map(h => serializeFieldForSheet(h, normalized[h]));
+
+  if (existingRowIndex >= 0) {
+    sheet.getRange(existingRowIndex + 1, 1, 1, headers.length).setValues([rowData]);
+  } else {
+    sheet.appendRow(rowData);
+  }
+
+  return normalized;
+}
+
+function deletePost(id) {
+  if (!id) throw new Error("id is required");
+
+  const sheet = getSheet();
+  const values = sheet.getDataRange().getValues();
+  const headers = values[0];
+  const idCol = headers.indexOf("id");
+  if (idCol === -1) throw new Error("id column not found");
+
+  const existingRowIndex = findRowIndexById(values, id, idCol);
+  if (existingRowIndex < 0) return;
+
+  sheet.deleteRow(existingRowIndex + 1);
+}
+
+function deleteEvent(id) {
+  if (!id) throw new Error("id is required");
+
+  const sheet = getEventsSheet();
+  const values = sheet.getDataRange().getValues();
+  const headers = values[0];
+  const idCol = headers.indexOf("id");
+  if (idCol === -1) throw new Error("id column not found");
+
+  const existingRowIndex = findRowIndexById(values, id, idCol);
+  if (existingRowIndex < 0) return;
+
+  sheet.deleteRow(existingRowIndex + 1);
+}
+
+function saveContact(contact) {
+  const sheet = getContactSheet();
+  const values = sheet.getDataRange().getValues();
+
+  if (values.length === 0) {
+    sheet.appendRow(["id", "name", "email", "message", "createdAt"]);
+  }
+
+  const normalized = normalizeIncomingContact(contact);
+
+  sheet.appendRow([
+    normalized.id,
+    normalized.name,
+    normalized.email,
+    normalized.message,
+    normalized.createdAt
+  ]);
+
+  return normalized;
+}
+
+function normalizeIncomingContact(contact) {
+  const now = new Date();
+  const createdAt = Utilities.formatDate(
+    now,
+    Session.getScriptTimeZone(),
+    "yyyy-MM-dd HH:mm:ss"
+  );
+
+  const name = String(contact.name || "").trim();
+  const email = String(contact.email || "").trim();
+  const message = String(contact.message || "").trim();
+
+  if (!name) throw new Error("name is required");
+  if (!email) throw new Error("email is required");
+  if (!message) throw new Error("message is required");
+
+  return {
+    id: "c_" + new Date().getTime().toString(36),
+    name: name,
+    email: email,
+    message: message,
+    createdAt: createdAt
+  };
+}
+
+function findRowIndexById(values, id, idCol) {
+  for (let i = 1; i < values.length; i++) {
+    if (String(values[i][idCol]) === String(id)) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+function normalizePostRow(row) {
+  const status = normalizeStatus(row.status, "public");
+  return {
+    id: row.id || "",
+    date: row.date || "",
+    channel: row.channel || "article",
+    tone: row.tone || "accent",
+    badge: row.badge || "",
+    title: row.title || "",
+    tags: splitField(row.tags),
+    summary: splitField(row.summary),
+    body: splitBodyField(row.body),
+    ctaText: row.ctaText || "",
+    ctaUrl: row.ctaUrl || "",
+    imageUrls: splitField(row.imageUrls || row.images),
+    video: row.video || "",
+    status,
+    updatedAt: row.updatedAt || ""
+  };
+}
+
+function normalizeIncomingPost(post) {
+  const now = new Date();
+  const isoNow = formatDateTime(now);
+  const status = normalizeStatus(post.status, "public");
+
+  return {
+    id: post.id || createId(),
+    date: post.date || "",
+    channel: post.channel || "article",
+    tone: post.tone || "accent",
+    badge: post.badge || "",
+    title: post.title || "",
+    tags: Array.isArray(post.tags) ? post.tags : [],
+    summary: Array.isArray(post.summary) ? post.summary : [],
+    body: Array.isArray(post.body) ? post.body : [],
+    ctaText: post.ctaText || "",
+    ctaUrl: post.ctaUrl || "",
+    imageUrls: Array.isArray(post.imageUrls) ? post.imageUrls : (Array.isArray(post.images) ? post.images : []),
+    video: post.video || "",
+    status,
+    updatedAt: isoNow
+  };
+}
+
+function normalizeEventRow(row) {
+  const status = normalizeStatus(row.status, "public");
+  return {
+    id: row.id || "",
+    title: row.title || "",
+    date: row.date || "",
+    startTime: row.startTime || "",
+    endTime: row.endTime || "",
+    description: row.description || "",
+    location: row.location || "",
+    imageUrls: splitField(row.imageUrls),
+    ctaUrl: row.ctaUrl || "",
+    status,
+    createdAt: row.createdAt || ""
+  };
+}
+
+function normalizeIncomingEvent(event) {
+  const status = normalizeStatus(event.status, "public");
+  return {
+    id: event.id || "",
+    title: String(event.title || "").trim(),
+    date: String(event.date || "").trim(),
+    startTime: String(event.startTime || "").trim(),
+    endTime: String(event.endTime || "").trim(),
+    description: String(event.description || "").trim(),
+    location: String(event.location || "").trim(),
+    imageUrls: Array.isArray(event.imageUrls) ? event.imageUrls : [],
+    ctaUrl: String(event.ctaUrl || "").trim(),
+    status,
+    createdAt: String(event.createdAt || "").trim()
+  };
+}
+
+function normalizeStatus(raw, fallback) {
+  const s = String(raw || "").trim().toLowerCase();
+  if (!s) return fallback || "public";
+  if (s === "public" || s === "published" || s === "公開") return "public";
+  if (s === "draft" || s === "下書き") return "draft";
+  if (s === "private" || s === "非公開") return "private";
+  return fallback || "public";
+}
+
+function migratePostsImageColumn() {
+  const sheet = getSheet();
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const imageUrlsCol = headers.indexOf("imageUrls");
+  if (imageUrlsCol >= 0) {
+    return { ok: true, message: "imageUrls column already exists" };
+  }
+  const imagesCol = headers.indexOf("images");
+  if (imagesCol === -1) {
+    throw new Error("images column not found");
+  }
+  sheet.getRange(1, imagesCol + 1).setValue("imageUrls");
+  return { ok: true, message: "Renamed images to imageUrls" };
+}
+
+function migrateEventsFromPosts() {
+  const postSheet = getSheet();
+  const eventSheet = ensureEventsSheet();
+
+  const postValues = postSheet.getDataRange().getValues();
+  if (postValues.length < 2) {
+    return { ok: true, moved: 0 };
+  }
+
+  const headers = postValues[0];
+  const rows = postValues.slice(1);
+  const eventHeaders = eventSheet.getRange(1, 1, 1, eventSheet.getLastColumn()).getValues()[0];
+  const channelCol = headers.indexOf("channel");
+  if (channelCol === -1) throw new Error("channel column not found");
+
+  const appendRows = [];
+  const deleteRowNumbers = [];
+
+  rows.forEach((row, idx) => {
+    const channel = String(row[channelCol] || "").trim();
+    if (channel !== "event") return;
+
+    const obj = {};
+    headers.forEach((h, i) => {
+      obj[h] = row[i];
+    });
+    const post = normalizePostRow(obj);
+
+    const description = post.body && post.body.length ? post.body.join("\n\n") : "";
+    const mapped = normalizeIncomingEvent({
+      id: post.id || createEventId(),
+      title: post.title || "",
+      date: post.date || "",
+      startTime: "",
+      endTime: "",
+      description: description,
+      location: "",
+      imageUrls: post.imageUrls || [],
+      ctaUrl: post.ctaUrl || "",
+      status: post.status || "public",
+      createdAt: post.updatedAt || formatDateTime(new Date())
+    });
+
+    appendRows.push(eventHeaders.map(h => serializeFieldForSheet(h, mapped[h])));
+    deleteRowNumbers.push(idx + 2);
+  });
+
+  if (appendRows.length) {
+    eventSheet
+      .getRange(eventSheet.getLastRow() + 1, 1, appendRows.length, eventHeaders.length)
+      .setValues(appendRows);
+  }
+
+  deleteRowNumbers
+    .sort((a, b) => b - a)
+    .forEach(rowNumber => postSheet.deleteRow(rowNumber));
+
+  return { ok: true, moved: appendRows.length };
+}
+
+function serializeFieldForSheet(key, value) {
+  if (Array.isArray(value)) {
+    if (key === "body") return value.join("\n\n");
+    return value.join("||");
+  }
+  return value;
+}
+
+function splitField(value) {
+  if (!value) return [];
+  return String(value)
+    .split("||")
+    .map(s => s.trim())
+    .filter(Boolean);
+}
+
+function splitBodyField(value) {
+  if (!value) return [];
+  return String(value)
+    .split("\n\n")
+    .map(s => s.trim())
+    .filter(Boolean);
+}
+
+function createId() {
+  return "p_" + new Date().getTime().toString(36);
+}
+
+function createEventId() {
+  return "e_" + new Date().getTime().toString(36);
+}
+
+function formatDateTime(date) {
+  return Utilities.formatDate(date, Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss");
+}
+
+function formatDateYMD(date) {
+  return Utilities.formatDate(date, Session.getScriptTimeZone(), "yyyy-MM-dd");
+}
+
+function outputJson(data) {
+  return ContentService
+    .createTextOutput(JSON.stringify(data))
+    .setMimeType(ContentService.MimeType.JSON);
+}
