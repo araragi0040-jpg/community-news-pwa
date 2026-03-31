@@ -11,12 +11,15 @@ const LOGIN_LOCK_SECONDS = 15 * 60;
 const RESET_REQ_LIMIT = 3;
 const RESET_REQ_WINDOW_SECONDS = 60 * 60;
 const CONTACT_INTERVAL_SECONDS = 5 * 60;
-const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 
 function doGet(e) {
   try {
     const action = (e && e.parameter && e.parameter.action) || "listPosts";
     const token = getTokenFromGet(e);
+
+    if (action === "ping") {
+      return outputJson({ ok: true });
+    }
 
     if (action === "listPosts") {
       requireAuth(token);
@@ -149,7 +152,6 @@ function uploadImage(body) {
   const base64 = dataUrl.split(",")[1];
   if (!base64) throw fail("Invalid dataUrl", "BAD_REQUEST");
   const bytes = Utilities.base64Decode(base64);
-  if (bytes.length > MAX_UPLOAD_BYTES) throw fail("Image is too large (max 5MB)", "BAD_REQUEST");
 
   const blob = Utilities.newBlob(bytes, mimeType, fileName);
   const folderId = "1ZmhtBMhwa5nyDmAObnW0WRsfYqRds_-7";
@@ -241,6 +243,9 @@ function loginUser(email, password) {
   const plainPassword = String(password || "");
   if (!normalizedEmail) throw fail("email is required", "BAD_REQUEST");
   if (!plainPassword) throw fail("password is required", "BAD_REQUEST");
+  if (isLoginLocked(normalizedEmail)) {
+    throw fail("Too many login attempts. Please try again later.", "RATE_LIMITED");
+  }
 
   const sheet = getUsersSheet();
   const values = sheet.getDataRange().getValues();
@@ -249,6 +254,7 @@ function loginUser(email, password) {
   const headers = values[0];
   const userIndex = findUserRowIndexByEmail(values, headers, normalizedEmail);
   if (userIndex < 1) {
+    recordLoginFailure(normalizedEmail);
     throw fail("Invalid email or password", "INVALID_CREDENTIALS");
   }
 
@@ -260,12 +266,26 @@ function loginUser(email, password) {
   if (rowStatus !== "active") throw fail("This account is inactive", "ACCOUNT_INACTIVE");
 
   if (!salt) {
-    throw fail("Password migration is required. Please contact admin.", "PASSWORD_NOT_MIGRATED");
-  }
-
-  const computed = hashPassword(plainPassword, salt);
-  if (!safeEquals(String(obj.password || ""), computed)) {
-    throw fail("Invalid email or password", "INVALID_CREDENTIALS");
+    if (!safeEquals(String(obj.password || ""), plainPassword)) {
+      recordLoginFailure(normalizedEmail);
+      throw fail("Invalid email or password", "INVALID_CREDENTIALS");
+    }
+    const newSalt = generateSalt();
+    const newHash = hashPassword(plainPassword, newSalt);
+    const passwordCol = headers.indexOf("password");
+    const saltCol = headers.indexOf("salt");
+    const updatedAtCol = headers.indexOf("updatedAt");
+    sheet.getRange(userIndex + 1, passwordCol + 1).setValue(newHash);
+    sheet.getRange(userIndex + 1, saltCol + 1).setValue(newSalt);
+    if (updatedAtCol >= 0) {
+      sheet.getRange(userIndex + 1, updatedAtCol + 1).setValue(formatDateTime(new Date()));
+    }
+  } else {
+    const computed = hashPassword(plainPassword, salt);
+    if (!safeEquals(String(obj.password || ""), computed)) {
+      recordLoginFailure(normalizedEmail);
+      throw fail("Invalid email or password", "INVALID_CREDENTIALS");
+    }
   }
 
   const user = {
@@ -275,6 +295,7 @@ function loginUser(email, password) {
     role: obj.role || "member",
     status: obj.status || "active"
   };
+  clearLoginFailure(normalizedEmail);
   const token = createToken(user.id, user.role);
   return { user, token };
 }
@@ -632,8 +653,8 @@ function normalizeEventRow(row) {
     id: row.id || "",
     title: row.title || "",
     date: row.date || "",
-    startTime: row.startTime || "",
-    endTime: row.endTime || "",
+    startTime: normalizeTimeField(row.startTime),
+    endTime: normalizeTimeField(row.endTime),
     description: row.description || "",
     location: row.location || "",
     imageUrls: splitField(row.imageUrls),
@@ -641,6 +662,26 @@ function normalizeEventRow(row) {
     status: status,
     createdAt: row.createdAt || ""
   };
+}
+
+function normalizeTimeField(value) {
+  if (value === null || value === undefined || value === "") return "";
+  if (Object.prototype.toString.call(value) === "[object Date]" && !isNaN(value.getTime())) {
+    return Utilities.formatDate(value, Session.getScriptTimeZone(), "HH:mm");
+  }
+  if (typeof value === "number" && isFinite(value)) {
+    const totalMinutes = Math.max(0, Math.round((value % 1) * 24 * 60));
+    const hour = Math.floor(totalMinutes / 60) % 24;
+    const minute = totalMinutes % 60;
+    return String(hour).padStart(2, "0") + ":" + String(minute).padStart(2, "0");
+  }
+  const text = String(value).trim();
+  if (!text) return "";
+  const dateCandidate = new Date(text);
+  if (!isNaN(dateCandidate.getTime()) && text.indexOf("T") >= 0) {
+    return Utilities.formatDate(dateCandidate, Session.getScriptTimeZone(), "HH:mm");
+  }
+  return text;
 }
 
 function normalizeIncomingEvent(event) {
