@@ -183,6 +183,16 @@ function relativeDate(value){
   return formatDateJP(parsed);
 }
 
+function formatEventTime(timeStr){
+  if (!timeStr) return "";
+  const parts = String(timeStr).split(":");
+  if (parts.length < 2) return String(timeStr);
+  const hour = Number(parts[0]);
+  const minute = Number(parts[1]);
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return String(timeStr);
+  return `${hour}時${String(minute).padStart(2, "0")}分`;
+}
+
 function ymd(d){
   const y = d.getFullYear();
   const m = String(d.getMonth()+1).padStart(2,"0");
@@ -475,17 +485,21 @@ async function uploadImageToApi(file) {
   return data.url;
 }
 
-function compressImage(file, quality = 0.9) {
+function compressImage(file, quality = 0.9, maxWidth = 2400) {
   return new Promise((resolve, reject) => {
     const objectUrl = URL.createObjectURL(file);
     const img = new Image();
     img.onload = () => {
-      const w = img.naturalWidth || img.width;
-      const h = img.naturalHeight || img.height;
+      let w = img.naturalWidth || img.width;
+      let h = img.naturalHeight || img.height;
       if (!w || !h) {
         URL.revokeObjectURL(objectUrl);
         reject(new Error("画像サイズの取得に失敗しました。"));
         return;
+      }
+      if (w > maxWidth) {
+        h = Math.round(h * (maxWidth / w));
+        w = maxWidth;
       }
       const canvas = document.createElement("canvas");
       canvas.width = w;
@@ -815,14 +829,11 @@ function openDrawer(articleId){
 
   $("#aTitle").textContent = a.title || "";
   const meta = $("#aMeta");
-  const tagText = (a.tags || []).join("・");
+  const tags = a.tags || [];
   if (meta) {
-    meta.textContent = tagText;
-    meta.style.display = tagText ? "" : "none";
+    meta.innerHTML = tags.map(t => `<span class="pill">${escapeHtml(t)}</span>`).join("");
+    meta.style.display = tags.length ? "" : "none";
   }
-
-  const stats = $("#aStats");
-  stats.innerHTML = (a.tags||[]).map(t => `<span class="pill">${escapeHtml(t)}</span>`).join("");
 
   const sum = $("#aSummaryList");
   sum.innerHTML = (a.summary||[]).map(x => `<li>${escapeHtml(x)}</li>`).join("");
@@ -1171,7 +1182,8 @@ function openEventModal(dateStr, events){
     <div class="eventdetail">
       <div class="eventdetail__date">${formatDateJP(ev.date)}</div>
       <div class="eventdetail__name">${escapeHtml(ev.title || "")}</div>
-      ${ev.startTime ? `<div class="eventdetail__meta">時間: ${escapeHtml(ev.startTime)}${ev.endTime ? ` - ${escapeHtml(ev.endTime)}` : ""}</div>` : ""}
+      ${ev.startTime ? `<div class="eventdetail__meta">開始：${escapeHtml(formatEventTime(ev.startTime))}</div>` : ""}
+      ${ev.endTime ? `<div class="eventdetail__meta">終了：${escapeHtml(formatEventTime(ev.endTime))}</div>` : ""}
       ${ev.location ? `<div class="eventdetail__meta">場所: ${escapeHtml(ev.location)}</div>` : ""}
       ${ev.description ? `<div class="eventdetail__desc">${escapeHtml(ev.description)}</div>` : ""}
       ${(ev.imageUrls || []).length ? `
@@ -2311,27 +2323,6 @@ function bind(){
     const btn = $("#btnInstall");
     if (btn) btn.hidden = true;
   });
-  on("#btnAppDownload", "click", async () => {
-    if (deferredInstallPrompt) {
-      deferredInstallPrompt.prompt();
-      await deferredInstallPrompt.userChoice;
-      deferredInstallPrompt = null;
-      const btn = $("#btnInstall");
-      if (btn) btn.hidden = true;
-      return;
-    }
-
-    const ua = navigator.userAgent || "";
-    if (/iPhone|iPad|iPod/i.test(ua)) {
-      alert("Safariの共有ボタンから「ホーム画面に追加」を選んでください。");
-      return;
-    }
-    if (/Android/i.test(ua)) {
-      alert("ブラウザのメニューから「ホーム画面に追加」または「アプリをインストール」を選んでください。");
-      return;
-    }
-    alert("ブラウザメニューから「アプリをインストール」または「ホーム画面に追加」を選んでください。");
-  });
   on("#notifyRefresh", "click", async () => {
     try {
       await refreshFromCloud({ silent: false, skipNotify: true });
@@ -2359,6 +2350,12 @@ async function init(){
   applyAuthUI();
 
   if (!getCurrentUser() || !getAuthToken()) {
+    const base = window.APP_CONFIG?.GAS_API_URL;
+    if (base) {
+      fetch(`${base}?action=ping&t=${Date.now()}`, {
+        mode: "no-cors"
+      }).catch(() => {});
+    }
     clearCurrentUser();
     applyAuthUI();
     return;
