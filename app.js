@@ -107,6 +107,7 @@ let state = {
 let cloudPosts = [];
 let cloudEvents = [];
 let latestPostKey = "";
+let latestPostSnapshot = null;
 let deferredInstallPrompt = null;
 
 // ===== Helpers =====
@@ -181,6 +182,16 @@ function relativeDate(value){
   if (diff < 7) return `${diff}日前`;
   if (diff < 30) return `${Math.floor(diff / 7)}週間前`;
   return formatDateJP(parsed);
+}
+
+function formatEventTime(timeStr){
+  if (!timeStr) return "";
+  const parts = String(timeStr).split(":");
+  if (parts.length < 2) return String(timeStr);
+  const hour = Number(parts[0]);
+  const minute = Number(parts[1]);
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return String(timeStr);
+  return `${hour}時${String(minute).padStart(2, "0")}分`;
 }
 
 function ymd(d){
@@ -475,17 +486,21 @@ async function uploadImageToApi(file) {
   return data.url;
 }
 
-function compressImage(file, quality = 0.9) {
+function compressImage(file, quality = 0.9, maxWidth = 2400) {
   return new Promise((resolve, reject) => {
     const objectUrl = URL.createObjectURL(file);
     const img = new Image();
     img.onload = () => {
-      const w = img.naturalWidth || img.width;
-      const h = img.naturalHeight || img.height;
+      let w = img.naturalWidth || img.width;
+      let h = img.naturalHeight || img.height;
       if (!w || !h) {
         URL.revokeObjectURL(objectUrl);
         reject(new Error("画像サイズの取得に失敗しました。"));
         return;
+      }
+      if (w > maxWidth) {
+        h = Math.round(h * (maxWidth / w));
+        w = maxWidth;
       }
       const canvas = document.createElement("canvas");
       canvas.width = w;
@@ -561,6 +576,7 @@ function applyAuthUI() {
   const adminNav = document.querySelector('.navitem[data-nav="admin"]');
   const adminPage = document.querySelector('.page[data-page="admin"]');
   const logoutBtn = document.getElementById("btnLogout");
+  const installBtn = document.getElementById("btnInstall");
 
   if (!authGate || !appRoot) return;
 
@@ -570,6 +586,7 @@ function applyAuthUI() {
     if (adminNav) adminNav.style.display = "none";
     if (adminPage) adminPage.style.display = "none";
     if (logoutBtn) logoutBtn.hidden = true;
+    if (installBtn) installBtn.hidden = true;
     return;
   }
 
@@ -581,6 +598,7 @@ function applyAuthUI() {
   if (adminNav) adminNav.style.display = isAdmin ? "flex" : "none";
   if (adminPage) adminPage.style.display = isAdmin ? "" : "none";
   if (logoutBtn) logoutBtn.hidden = false;
+  if (installBtn) installBtn.hidden = isStandaloneMode();
 }
 
 // ===== Rendering: Chips =====
@@ -815,14 +833,11 @@ function openDrawer(articleId){
 
   $("#aTitle").textContent = a.title || "";
   const meta = $("#aMeta");
-  const tagText = (a.tags || []).join("・");
+  const tags = a.tags || [];
   if (meta) {
-    meta.textContent = tagText;
-    meta.style.display = tagText ? "" : "none";
+    meta.innerHTML = tags.map(t => `<span class="pill">${escapeHtml(t)}</span>`).join("");
+    meta.style.display = tags.length ? "" : "none";
   }
-
-  const stats = $("#aStats");
-  stats.innerHTML = (a.tags||[]).map(t => `<span class="pill">${escapeHtml(t)}</span>`).join("");
 
   const sum = $("#aSummaryList");
   sum.innerHTML = (a.summary||[]).map(x => `<li>${escapeHtml(x)}</li>`).join("");
@@ -1171,7 +1186,8 @@ function openEventModal(dateStr, events){
     <div class="eventdetail">
       <div class="eventdetail__date">${formatDateJP(ev.date)}</div>
       <div class="eventdetail__name">${escapeHtml(ev.title || "")}</div>
-      ${ev.startTime ? `<div class="eventdetail__meta">時間: ${escapeHtml(ev.startTime)}${ev.endTime ? ` - ${escapeHtml(ev.endTime)}` : ""}</div>` : ""}
+      ${ev.startTime ? `<div class="eventdetail__meta">開始：${escapeHtml(formatEventTime(ev.startTime))}</div>` : ""}
+      ${ev.endTime ? `<div class="eventdetail__meta">終了：${escapeHtml(formatEventTime(ev.endTime))}</div>` : ""}
       ${ev.location ? `<div class="eventdetail__meta">場所: ${escapeHtml(ev.location)}</div>` : ""}
       ${ev.description ? `<div class="eventdetail__desc">${escapeHtml(ev.description)}</div>` : ""}
       ${(ev.imageUrls || []).length ? `
@@ -1707,6 +1723,7 @@ function renderAll(){
 function updateLatestPostKey(posts){
   if(!Array.isArray(posts) || posts.length === 0){
     latestPostKey = "";
+    latestPostSnapshot = null;
     return;
   }
   const sorted = posts
@@ -1714,10 +1731,21 @@ function updateLatestPostKey(posts){
     .sort((a, b) => (parseDate(a.date) < parseDate(b.date) ? 1 : -1));
   const top = sorted[0];
   latestPostKey = `${top.id}:${parseDate(top.date)}`;
+  latestPostSnapshot = {
+    id: top.id || "",
+    title: top.title || "",
+    date: parseDate(top.date)
+  };
 }
 
-function showNotifyBanner(){
+function showNotifyBanner(postTitle = ""){
   const banner = $("#notifyBanner");
+  const text = $("#notifyBannerText");
+  if (text) {
+    text.textContent = postTitle
+      ? `新しい記事が投稿されました。「${postTitle}」を読む`
+      : "新しい記事があります";
+  }
   if (banner) banner.hidden = false;
 }
 
@@ -1743,6 +1771,35 @@ function showToast(message, duration = 2500){
   }, duration);
 }
 
+function isStandaloneMode() {
+  return window.matchMedia?.("(display-mode: standalone)")?.matches || window.navigator.standalone === true;
+}
+
+function requestSystemNotificationPermission() {
+  if (!("Notification" in window)) return;
+  if (Notification.permission !== "default") return;
+  Notification.requestPermission().catch(() => {});
+}
+
+function showNewPostSystemNotification(post) {
+  if (!post?.title) return;
+  if (!("Notification" in window)) return;
+  if (Notification.permission !== "granted") return;
+  const notification = new Notification("新しい記事が投稿されました。", {
+    body: `「${post.title}」を読む`,
+    icon: "./favicon.png",
+    badge: "./favicon.png",
+    tag: `new-post-${post.id || post.date || Date.now()}`
+  });
+  notification.onclick = () => {
+    window.focus();
+    const target = allArticles().find(a => a.id === post.id);
+    if (target) openDrawer(target.id);
+    notification.close();
+  };
+  setTimeout(() => notification.close(), 12000);
+}
+
 async function refreshFromCloud(opts = {}){
   try {
     const user = getCurrentUser();
@@ -1762,7 +1819,8 @@ async function refreshFromCloud(opts = {}){
     if (!opts.silent) renderAll();
     setFeedLoading(false);
     if (!opts.skipNotify && prevKey && prevKey !== latestPostKey) {
-      showNotifyBanner();
+      showNotifyBanner(latestPostSnapshot?.title || "");
+      showNewPostSystemNotification(latestPostSnapshot);
     }
   } catch (err) {
     if (isAuthError(err)) {
@@ -1782,13 +1840,10 @@ function setupInstallButton(){
   window.addEventListener("beforeinstallprompt", (e) => {
     e.preventDefault();
     deferredInstallPrompt = e;
-    const btn = $("#btnInstall");
-    if (btn) btn.hidden = false;
   });
   window.addEventListener("appinstalled", () => {
     deferredInstallPrompt = null;
-    const btn = $("#btnInstall");
-    if (btn) btn.hidden = true;
+    applyAuthUI();
   });
 }
 
@@ -2113,6 +2168,7 @@ function bind(){
         saveCurrentUser(auth.user);
         saveAuthToken(auth.token || "");
         applyAuthUI();
+        requestSystemNotificationPermission();
         setActivePage("home");
         const cachedPosts = loadCachedPosts();
         const hasCache = cachedPosts.length > 0;
@@ -2304,33 +2360,13 @@ function bind(){
   }
 
   on("#btnInstall", "click", async () => {
-    if (!deferredInstallPrompt) return;
+    if (!deferredInstallPrompt) {
+      showToast("この端末・ブラウザではアプリのインストールに対応していません。");
+      return;
+    }
     deferredInstallPrompt.prompt();
     await deferredInstallPrompt.userChoice;
     deferredInstallPrompt = null;
-    const btn = $("#btnInstall");
-    if (btn) btn.hidden = true;
-  });
-  on("#btnAppDownload", "click", async () => {
-    if (deferredInstallPrompt) {
-      deferredInstallPrompt.prompt();
-      await deferredInstallPrompt.userChoice;
-      deferredInstallPrompt = null;
-      const btn = $("#btnInstall");
-      if (btn) btn.hidden = true;
-      return;
-    }
-
-    const ua = navigator.userAgent || "";
-    if (/iPhone|iPad|iPod/i.test(ua)) {
-      alert("Safariの共有ボタンから「ホーム画面に追加」を選んでください。");
-      return;
-    }
-    if (/Android/i.test(ua)) {
-      alert("ブラウザのメニューから「ホーム画面に追加」または「アプリをインストール」を選んでください。");
-      return;
-    }
-    alert("ブラウザメニューから「アプリをインストール」または「ホーム画面に追加」を選んでください。");
   });
   on("#notifyRefresh", "click", async () => {
     try {
@@ -2359,6 +2395,12 @@ async function init(){
   applyAuthUI();
 
   if (!getCurrentUser() || !getAuthToken()) {
+    const base = window.APP_CONFIG?.GAS_API_URL;
+    if (base) {
+      fetch(`${base}?action=ping&t=${Date.now()}`, {
+        mode: "no-cors"
+      }).catch(() => {});
+    }
     clearCurrentUser();
     applyAuthUI();
     return;
@@ -2371,6 +2413,7 @@ async function init(){
     updateLatestPostKey(cachedPosts);
   }
 
+  requestSystemNotificationPermission();
   setActivePage("home");
   renderAll();
   setFeedLoading(!hasCache);
