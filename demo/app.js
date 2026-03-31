@@ -1212,6 +1212,62 @@ function closeEventModal(){
   modal.setAttribute("aria-hidden", "true");
 }
 
+function isIOSDevice() {
+  const ua = window.navigator.userAgent || "";
+  const isIOSUA = /iPad|iPhone|iPod/.test(ua);
+  const isIPadOS = window.navigator.platform === "MacIntel" && window.navigator.maxTouchPoints > 1;
+  return isIOSUA || isIPadOS;
+}
+
+function openInstallHelpModal(){
+  const modal = $("#installHelpModal");
+  const title = $("#installHelpTitle");
+  const body = $("#installHelpBody");
+
+  const lines = isIOSDevice()
+    ? [
+        "この端末ではアプリの自動インストールに対応していません。",
+        "",
+        "ホーム画面に追加する手順",
+        "1. Safariの共有ボタン（□↑）をタップ",
+        "2. 「ホーム画面に追加」を選択",
+        "3. 右上の「追加」をタップ"
+      ]
+    : [
+        "この端末・ブラウザではアプリの自動インストールに対応していません。",
+        "",
+        "ホーム画面に追加する手順",
+        "1. ブラウザ右上のメニュー（⋮ / ⋯）を開く",
+        "2. 「ホーム画面に追加」または「アプリをインストール」を選択",
+        "3. 画面の案内に沿って追加する"
+      ];
+
+  if (!modal || !title || !body) {
+    alert(lines.join("\n"));
+    return;
+  }
+
+  title.textContent = "インストールのご案内";
+  body.innerHTML = `
+    <div class="installhelp__lead">${escapeHtml(lines[0])}</div>
+    <div class="installhelp__sub">${escapeHtml(lines[2])}</div>
+    <ol class="installhelp__list">
+      <li>${escapeHtml(lines[3])}</li>
+      <li>${escapeHtml(lines[4])}</li>
+      <li>${escapeHtml(lines[5])}</li>
+    </ol>
+  `;
+  modal.classList.add("eventmodal--open");
+  modal.setAttribute("aria-hidden", "false");
+}
+
+function closeInstallHelpModal(){
+  const modal = $("#installHelpModal");
+  if(!modal) return;
+  modal.classList.remove("eventmodal--open");
+  modal.setAttribute("aria-hidden", "true");
+}
+
 function renderCalendar(){
   const calRoot = $("#cal");
   if(!calRoot) return;
@@ -1867,6 +1923,8 @@ function bind(){
   // Event modal
   on("#eventModalScrim", "click", closeEventModal);
   on("#eventModalClose", "click", closeEventModal);
+  on("#installHelpModalScrim", "click", closeInstallHelpModal);
+  on("#installHelpModalClose", "click", closeInstallHelpModal);
 
   // search
   on("#q", "input", (e) => {
@@ -2361,7 +2419,7 @@ function bind(){
 
   on("#btnInstall", "click", async () => {
     if (!deferredInstallPrompt) {
-      showToast("この端末・ブラウザではアプリのインストールに対応していません。");
+      openInstallHelpModal();
       return;
     }
     deferredInstallPrompt.prompt();
