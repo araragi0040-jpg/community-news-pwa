@@ -75,9 +75,10 @@
             <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
           </svg>
         </button>
-        <button class="iconbtn" id="btnLogout" aria-label="Logout" title="ログアウト" hidden>
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M10 17l1.41-1.41L8.83 13H20v-2H8.83l2.58-2.59L10 7l-5 5 5 5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/>
+        <button class="iconbtn profile-btn" id="btnProfile" aria-label="Profile" title="プロフィール" hidden>
+          <img id="profileBtnIcon" class="profile-btn__img" src="./favicon.png" alt="プロフィールアイコン" hidden>
+          <svg id="profileBtnFallback" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4zm0 2c-4.42 0-8 2-8 4v2h16v-2c0-2-3.58-4-8-4z"/>
           </svg>
         </button>
       </div>
@@ -523,6 +524,52 @@
       <button class="iconbtn" id="installHelpModalClose" aria-label="Close" type="button">×</button>
     </div>
     <div class="eventmodal__body" id="installHelpBody"></div>
+  </div>
+</div>
+
+<!-- Profile Modal -->
+<div class="eventmodal" id="profileModal" aria-hidden="true">
+  <div class="eventmodal__scrim" id="profileModalScrim"></div>
+
+  <div class="eventmodal__panel" role="dialog" aria-modal="true" aria-label="Profile settings">
+    <div class="eventmodal__head">
+      <div class="eventmodal__title">ユーザープロフィール</div>
+      <button class="iconbtn" id="profileModalClose" aria-label="Close" type="button">×</button>
+    </div>
+    <div class="eventmodal__body">
+      <form class="form profile-form" id="profileForm">
+        <div class="profile__iconrow">
+          <img class="profile__icon-preview" id="profileIconPreview" src="./favicon.png" alt="プロフィールアイコン">
+          <div class="profile__iconmeta">
+            <div class="profile__points" id="profilePoints">0pt</div>
+            <div class="profile__iconhint">アイコンをタップして変更</div>
+          </div>
+          <input class="profile__uploadinput" id="profileIconFile" type="file" accept="image/*">
+        </div>
+        <input id="profileIconUrl" type="hidden">
+
+        <label class="field">
+          <div class="field__label">ニックネーム</div>
+          <input class="input" id="profileNickname" placeholder="表示名を入力">
+        </label>
+
+        <label class="field">
+          <div class="field__label">趣味</div>
+          <textarea class="textarea" id="profileHobby" rows="3" placeholder="趣味を入力"></textarea>
+        </label>
+
+        <label class="field">
+          <div class="field__label">気になること</div>
+          <textarea class="textarea" id="profileInterests" rows="3" placeholder="気になることを入力"></textarea>
+        </label>
+
+        <div class="profile__actions">
+          <button class="btn" id="profileSaveBtn" type="button">保存</button>
+          <button class="btn btn--danger profile__logout" id="btnProfileLogout" type="button">ログアウト</button>
+        </div>
+        <div class="auth__msg profile__msg" id="profileMsg"></div>
+      </form>
+    </div>
   </div>
 </div>
 
