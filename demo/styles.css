@@ -69,11 +69,11 @@ svg{ width:22px; height:22px; fill: currentColor; }
 }
 
 .brand__logo{
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
+  width: 43px;
+  height: 43px;
+  border-radius: 50%;
   object-fit: cover;
-  border: 1px solid rgba(176,125,79,.18);
+  border: 2px solid #fff;
   background: #fff;
 }
 .brand__name{ font-weight: 760; letter-spacing:.2px; color: var(--text-strong); }
