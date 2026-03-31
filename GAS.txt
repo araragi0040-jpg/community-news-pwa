@@ -2,158 +2,156 @@ const SHEET_NAME = "posts";
 const EVENTS_SHEET_NAME = "events";
 const CONTACT_SHEET_NAME = "contacts";
 const USERS_SHEET_NAME = "users";
+const AUTH_SECRET_PROP = "AUTH_SECRET";
+const APP_BASE_URL_PROP = "community-news-pwa.vercel.app";
+const TOKEN_TTL_SECONDS = 60 * 60 * 24 * 7;
+const RESET_TOKEN_TTL_MS = 60 * 60 * 1000;
+const LOGIN_FAIL_LIMIT = 5;
+const LOGIN_LOCK_SECONDS = 15 * 60;
+const RESET_REQ_LIMIT = 3;
+const RESET_REQ_WINDOW_SECONDS = 60 * 60;
+const CONTACT_INTERVAL_SECONDS = 5 * 60;
+const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 
-/**
- * GET
- * 例:
- * ?action=listPosts
- */
 function doGet(e) {
   try {
     const action = (e && e.parameter && e.parameter.action) || "listPosts";
+    const token = getTokenFromGet(e);
 
     if (action === "listPosts") {
-      return outputJson({
-        ok: true,
-        posts: getPosts()
-      });
+      requireAuth(token);
+      return outputJson({ ok: true, posts: getPosts(false) });
     }
 
     if (action === "listAllPosts") {
-      return outputJson({
-        ok: true,
-        posts: getPosts(true)
-      });
+      requireAdmin(token);
+      return outputJson({ ok: true, posts: getPosts(true) });
     }
 
     if (action === "listEvents") {
-      return outputJson({
-        ok: true,
-        events: getEvents(false)
-      });
+      requireAuth(token);
+      return outputJson({ ok: true, events: getEvents(false) });
     }
 
     if (action === "listAllEvents") {
-      return outputJson({
-        ok: true,
-        events: getEvents(true)
-      });
+      requireAdmin(token);
+      return outputJson({ ok: true, events: getEvents(true) });
     }
 
-    return outputJson({
-      ok: false,
-      message: "Unknown action"
-    });
+    throw fail("Unknown action", "BAD_REQUEST");
   } catch (err) {
-    return outputJson({
-      ok: false,
-      message: err.message || String(err)
-    });
+    return outputError(err);
   }
 }
 
-/**
- * POST
- * body(JSON):
- * {
- *   "action": "savePost",
- *   "post": {...}
- * }
- */
 function doPost(e) {
   try {
-    const body = JSON.parse(e.postData.contents || "{}");
+    const body = parseRequestBody(e);
     const action = body.action || "";
+    const token = getTokenFromPost(body);
 
     if (action === "savePost") {
-      const result = savePost(body.post || {});
-      return outputJson({
-        ok: true,
-        post: result
-      });
+      requireAdmin(token);
+      return outputJson({ ok: true, post: savePost(body.post || {}) });
     }
 
     if (action === "deletePost") {
-      const id = body.id || "";
-      deletePost(id);
-      return outputJson({
-        ok: true
-      });
+      requireAdmin(token);
+      deletePost(body.id || "");
+      return outputJson({ ok: true });
     }
 
     if (action === "saveEvent") {
-      const result = saveEvent(body.event || {});
-      return outputJson({
-        ok: true,
-        event: result
-      });
+      requireAdmin(token);
+      return outputJson({ ok: true, event: saveEvent(body.event || {}) });
     }
 
     if (action === "deleteEvent") {
-      const id = body.id || "";
-      deleteEvent(id);
-      return outputJson({
-        ok: true
-      });
+      requireAdmin(token);
+      deleteEvent(body.id || "");
+      return outputJson({ ok: true });
+    }
+
+    if (action === "uploadImage") {
+      requireAdmin(token);
+      const result = uploadImage(body);
+      return outputJson({ ok: true, url: result.url });
+    }
+
+    if (action === "saveContact") {
+      requireAuth(token);
+      return outputJson({ ok: true, contact: saveContact(body.contact || {}) });
     }
 
     if (action === "login") {
       const result = loginUser(body.email || "", body.password || "");
-      return outputJson({
-        ok: true,
-        user: result
-      });
-    }
-
-    if (action === "uploadImage") {
-      const result = uploadImage(body);
-      return outputJson({
-        ok: true,
-        url: result.url
-      });
+      return outputJson({ ok: true, user: result.user, token: result.token });
     }
 
     if (action === "register") {
       const result = registerUser(body.user || {});
-      return outputJson({
-        ok: true,
-        user: result
-      });
+      return outputJson({ ok: true, user: result });
     }
 
-    if (action === "saveContact") {
-      const result = saveContact(body.contact || {});
-      return outputJson({
-        ok: true,
-        contact: result
-      });
+    if (action === "requestPasswordReset") {
+      const email = String(body.email || "").trim();
+      const appBaseUrl = String(body.appBaseUrl || "").trim();
+      requestPasswordReset(email, appBaseUrl);
+      return outputJson({ ok: true });
     }
 
-    return outputJson({
-      ok: false,
-      message: "Unknown action"
-    });
+    if (action === "resetPassword") {
+      const resetToken = String(body.resetToken || "").trim();
+      const newPassword = String(body.newPassword || "").trim();
+      resetPassword(resetToken, newPassword);
+      return outputJson({ ok: true });
+    }
+
+    throw fail("Unknown action", "BAD_REQUEST");
   } catch (err) {
-    return outputJson({
-      ok: false,
-      message: err.message || String(err)
-    });
+    return outputError(err);
   }
 }
 
-function uploadImage(body) {
-  const fileName = body.fileName || ("image_" + Date.now() + ".png");
-  const mimeType = body.mimeType || "image/png";
-  const dataUrl = body.dataUrl || "";
+function parseRequestBody(e) {
+  try {
+    const raw = e && e.postData && e.postData.contents ? e.postData.contents : "{}";
+    return JSON.parse(raw);
+  } catch (_err) {
+    throw fail("Invalid JSON body", "BAD_REQUEST");
+  }
+}
 
-  if (!dataUrl) throw new Error("dataUrl is required");
+function getTokenFromGet(e) {
+  return String((e && e.parameter && e.parameter.token) || "").trim();
+}
+
+function getTokenFromPost(body) {
+  return String((body && body.token) || "").trim();
+}
+
+function uploadImage(body) {
+  const fileName = sanitizeFileName(String(body.fileName || ("image_" + Date.now() + ".jpg")));
+  const mimeType = String(body.mimeType || "image/jpeg").toLowerCase();
+  const dataUrl = String(body.dataUrl || "");
+  const allowedMimes = {
+    "image/jpeg": true,
+    "image/jpg": true,
+    "image/png": true,
+    "image/webp": true,
+    "image/gif": true
+  };
+
+  if (!dataUrl) throw fail("dataUrl is required", "BAD_REQUEST");
+  if (!allowedMimes[mimeType]) throw fail("Unsupported image type", "BAD_REQUEST");
+  if (!/^data:image\/[a-z0-9.+-]+;base64,/.test(dataUrl)) throw fail("Invalid dataUrl", "BAD_REQUEST");
 
   const base64 = dataUrl.split(",")[1];
-  if (!base64) throw new Error("Invalid dataUrl");
-
+  if (!base64) throw fail("Invalid dataUrl", "BAD_REQUEST");
   const bytes = Utilities.base64Decode(base64);
-  const blob = Utilities.newBlob(bytes, mimeType, fileName);
+  if (bytes.length > MAX_UPLOAD_BYTES) throw fail("Image is too large (max 5MB)", "BAD_REQUEST");
 
+  const blob = Utilities.newBlob(bytes, mimeType, fileName);
   const folderId = "1ZmhtBMhwa5nyDmAObnW0WRsfYqRds_-7";
   const folder = DriveApp.getFolderById(folderId);
   const file = folder.createFile(blob);
@@ -164,24 +162,28 @@ function uploadImage(body) {
   };
 }
 
+function sanitizeFileName(name) {
+  return String(name || "image.jpg")
+    .replace(/[\\/:*?"<>|]/g, "_")
+    .slice(0, 120);
+}
+
 function getSheet() {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
-  if (!sheet) throw new Error(`Sheet not found: ${SHEET_NAME}`);
+  if (!sheet) throw fail(`Sheet not found: ${SHEET_NAME}`, "SERVER_ERROR");
   return sheet;
 }
 
 function getEventsSheet() {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(EVENTS_SHEET_NAME);
-  if (!sheet) throw new Error(`Sheet not found: ${EVENTS_SHEET_NAME}`);
+  if (!sheet) throw fail(`Sheet not found: ${EVENTS_SHEET_NAME}`, "SERVER_ERROR");
   return sheet;
 }
 
 function ensureEventsSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sheet = ss.getSheetByName(EVENTS_SHEET_NAME);
-  if (!sheet) {
-    sheet = ss.insertSheet(EVENTS_SHEET_NAME);
-  }
+  if (!sheet) sheet = ss.insertSheet(EVENTS_SHEET_NAME);
   if (sheet.getLastRow() === 0) {
     sheet.appendRow([
       "id",
@@ -201,121 +203,116 @@ function ensureEventsSheet() {
 }
 
 function getUsersSheet() {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(USERS_SHEET_NAME);
-  if (!sheet) throw new Error(`Sheet not found: ${USERS_SHEET_NAME}`);
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(USERS_SHEET_NAME);
+  if (!sheet) sheet = ss.insertSheet(USERS_SHEET_NAME);
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(["id", "email", "password", "name", "role", "status", "updatedAt"]);
+  }
+  ensureUsersColumns(sheet);
+  return sheet;
+}
+
+function ensureUsersColumns(sheet) {
+  const required = ["id", "email", "password", "name", "role", "status", "updatedAt", "salt", "resetToken", "resetExpiry"];
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  required.forEach(col => {
+    if (headers.indexOf(col) === -1) {
+      sheet.insertColumnAfter(sheet.getLastColumn());
+      sheet.getRange(1, sheet.getLastColumn()).setValue(col);
+      headers.push(col);
+    }
+  });
+  return headers;
+}
+
+function getContactSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(CONTACT_SHEET_NAME);
+  if (!sheet) sheet = ss.insertSheet(CONTACT_SHEET_NAME);
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(["id", "name", "email", "message", "createdAt"]);
+  }
   return sheet;
 }
 
 function loginUser(email, password) {
-  if (!email) throw new Error("email is required");
-  if (!password) throw new Error("password is required");
+  const normalizedEmail = String(email || "").trim().toLowerCase();
+  const plainPassword = String(password || "");
+  if (!normalizedEmail) throw fail("email is required", "BAD_REQUEST");
+  if (!plainPassword) throw fail("password is required", "BAD_REQUEST");
 
   const sheet = getUsersSheet();
   const values = sheet.getDataRange().getValues();
-
-  if (values.length < 2) {
-    throw new Error("No users found");
-  }
+  if (values.length < 2) throw fail("No users found", "INVALID_CREDENTIALS");
 
   const headers = values[0];
-  const rows = values.slice(1);
-
-  const emailCol = headers.indexOf("email");
-  const passwordCol = headers.indexOf("password");
-  const statusCol = headers.indexOf("status");
-
-  if (emailCol === -1) throw new Error("email column not found");
-  if (passwordCol === -1) throw new Error("password column not found");
-  if (statusCol === -1) throw new Error("status column not found");
-
-  for (let i = 0; i < rows.length; i++) {
-    const row = rows[i];
-
-    const rowEmail = String(row[emailCol] || "").trim().toLowerCase();
-    const rowPassword = String(row[passwordCol] || "").trim();
-    const rowStatus = String(row[statusCol] || "").trim().toLowerCase();
-
-    if (
-      rowEmail === String(email).trim().toLowerCase() &&
-      rowPassword === String(password).trim()
-    ) {
-      if (rowStatus !== "active") {
-        throw new Error("This account is inactive");
-      }
-
-      const obj = {};
-      headers.forEach((h, idx) => {
-        obj[h] = row[idx];
-      });
-
-      return {
-        id: obj.id || "",
-        email: obj.email || "",
-        name: obj.name || "",
-        role: obj.role || "member",
-        status: obj.status || "active"
-      };
-    }
+  const userIndex = findUserRowIndexByEmail(values, headers, normalizedEmail);
+  if (userIndex < 1) {
+    throw fail("Invalid email or password", "INVALID_CREDENTIALS");
   }
 
-  throw new Error("Invalid email or password");
+  const row = values[userIndex];
+  const obj = rowToObj(headers, row);
+  const salt = String(obj.salt || "").trim();
+  const rowStatus = String(obj.status || "").trim().toLowerCase();
+
+  if (rowStatus !== "active") throw fail("This account is inactive", "ACCOUNT_INACTIVE");
+
+  if (!salt) {
+    throw fail("Password migration is required. Please contact admin.", "PASSWORD_NOT_MIGRATED");
+  }
+
+  const computed = hashPassword(plainPassword, salt);
+  if (!safeEquals(String(obj.password || ""), computed)) {
+    throw fail("Invalid email or password", "INVALID_CREDENTIALS");
+  }
+
+  const user = {
+    id: obj.id || "",
+    email: obj.email || "",
+    name: obj.name || "",
+    role: obj.role || "member",
+    status: obj.status || "active"
+  };
+  const token = createToken(user.id, user.role);
+  return { user, token };
 }
 
 function registerUser(user) {
   const sheet = getUsersSheet();
   const values = sheet.getDataRange().getValues();
-
-  if (values.length === 0) {
-    throw new Error("users sheet headers not found");
-  }
-
   const headers = values[0];
-  const emailCol = headers.indexOf("email");
-  const passwordCol = headers.indexOf("password");
-  const idCol = headers.indexOf("id");
-  const nameCol = headers.indexOf("name");
-  const roleCol = headers.indexOf("role");
-  const statusCol = headers.indexOf("status");
-  const updatedAtCol = headers.indexOf("updatedAt");
-
-  if (emailCol === -1) throw new Error("email column not found");
-  if (passwordCol === -1) throw new Error("password column not found");
-  if (idCol === -1) throw new Error("id column not found");
-  if (nameCol === -1) throw new Error("name column not found");
-  if (roleCol === -1) throw new Error("role column not found");
-  if (statusCol === -1) throw new Error("status column not found");
-  if (updatedAtCol === -1) throw new Error("updatedAt column not found");
 
   const email = String(user.email || "").trim().toLowerCase();
-  const password = String(user.password || "").trim();
+  const password = String(user.password || "");
   const name = String(user.name || "").trim();
 
-  if (!name) throw new Error("name is required");
-  if (!email) throw new Error("email is required");
-  if (!password) throw new Error("password is required");
+  if (!name) throw fail("name is required", "BAD_REQUEST");
+  if (!email) throw fail("email is required", "BAD_REQUEST");
+  if (!isValidEmail(email)) throw fail("Invalid email format", "BAD_REQUEST");
+  validatePassword(password);
 
-  // 重複チェック
+  const emailCol = headers.indexOf("email");
   for (let i = 1; i < values.length; i++) {
     const rowEmail = String(values[i][emailCol] || "").trim().toLowerCase();
-    if (rowEmail === email) {
-      throw new Error("This email is already registered");
-    }
+    if (rowEmail === email) throw fail("This email is already registered", "CONFLICT");
   }
 
-  const now = Utilities.formatDate(
-    new Date(),
-    Session.getScriptTimeZone(),
-    "yyyy-MM-dd HH:mm:ss"
-  );
-
+  const now = formatDateTime(new Date());
+  const salt = generateSalt();
+  const passwordHash = hashPassword(password, salt);
   const newUser = {
     id: "u_" + new Date().getTime().toString(36),
     email: email,
-    password: password,
+    password: passwordHash,
     name: name,
     role: "member",
     status: "active",
-    updatedAt: now
+    updatedAt: now,
+    salt: salt,
+    resetToken: "",
+    resetExpiry: ""
   };
 
   const rowData = headers.map(h => newUser[h] || "");
@@ -330,10 +327,125 @@ function registerUser(user) {
   };
 }
 
-function getContactSheet() {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONTACT_SHEET_NAME);
-  if (!sheet) throw new Error(`Sheet not found: ${CONTACT_SHEET_NAME}`);
-  return sheet;
+function migratePasswordsToHash() {
+  const sheet = getUsersSheet();
+  const values = sheet.getDataRange().getValues();
+  if (values.length < 2) return { ok: true, migrated: 0 };
+
+  const headers = values[0];
+  const passwordCol = headers.indexOf("password");
+  const saltCol = headers.indexOf("salt");
+  const updatedAtCol = headers.indexOf("updatedAt");
+  let migrated = 0;
+
+  for (let i = 1; i < values.length; i++) {
+    const row = values[i];
+    const currentSalt = String(row[saltCol] || "").trim();
+    const currentPassword = String(row[passwordCol] || "");
+    if (!currentPassword || currentSalt) continue;
+    const salt = generateSalt();
+    const hash = hashPassword(currentPassword, salt);
+    sheet.getRange(i + 1, passwordCol + 1).setValue(hash);
+    sheet.getRange(i + 1, saltCol + 1).setValue(salt);
+    if (updatedAtCol >= 0) sheet.getRange(i + 1, updatedAtCol + 1).setValue(formatDateTime(new Date()));
+    migrated += 1;
+  }
+
+  return { ok: true, migrated: migrated };
+}
+
+function requestPasswordReset(email, appBaseUrl) {
+  const normalizedEmail = String(email || "").trim().toLowerCase();
+  if (!normalizedEmail) throw fail("email is required", "BAD_REQUEST");
+  if (!isValidEmail(normalizedEmail)) throw fail("Invalid email format", "BAD_REQUEST");
+  const reqCount = incrementCounter("reset:req:" + normalizedEmail, RESET_REQ_WINDOW_SECONDS);
+  if (reqCount > RESET_REQ_LIMIT) throw fail("Too many password reset requests", "RATE_LIMITED");
+
+  const sheet = getUsersSheet();
+  const values = sheet.getDataRange().getValues();
+  const headers = values[0];
+  const rowIndex = findUserRowIndexByEmail(values, headers, normalizedEmail);
+  if (rowIndex < 1) return { ok: true };
+
+  const row = values[rowIndex];
+  const obj = rowToObj(headers, row);
+  if (String(obj.status || "").toLowerCase() !== "active") return { ok: true };
+
+  const resetToken = Utilities.base64EncodeWebSafe(Utilities.computeDigest(
+    Utilities.DigestAlgorithm.SHA_256,
+    Utilities.getUuid() + ":" + Date.now()
+  )).replace(/=+$/, "");
+  const resetExpiry = Date.now() + RESET_TOKEN_TTL_MS;
+
+  const resetTokenCol = headers.indexOf("resetToken");
+  const resetExpiryCol = headers.indexOf("resetExpiry");
+  const updatedAtCol = headers.indexOf("updatedAt");
+  sheet.getRange(rowIndex + 1, resetTokenCol + 1).setValue(resetToken);
+  sheet.getRange(rowIndex + 1, resetExpiryCol + 1).setValue(String(resetExpiry));
+  if (updatedAtCol >= 0) sheet.getRange(rowIndex + 1, updatedAtCol + 1).setValue(formatDateTime(new Date()));
+
+  const baseUrl = resolveAppBaseUrl(appBaseUrl);
+  const separator = baseUrl.indexOf("?") >= 0 ? "&" : "?";
+  const resetLink = baseUrl + separator + "resetToken=" + encodeURIComponent(resetToken);
+  const subject = "【語り場ニュース】パスワード再設定";
+  const bodyText = [
+    "パスワード再設定のリクエストを受け付けました。",
+    "",
+    "以下のリンクから1時間以内に再設定してください。",
+    resetLink,
+    "",
+    "心当たりがない場合はこのメールを破棄してください。"
+  ].join("\n");
+  MailApp.sendEmail(normalizedEmail, subject, bodyText);
+
+  return { ok: true };
+}
+
+function resetPassword(resetToken, newPassword) {
+  const token = String(resetToken || "").trim();
+  if (!token) throw fail("resetToken is required", "BAD_REQUEST");
+  validatePassword(String(newPassword || ""));
+
+  const sheet = getUsersSheet();
+  const values = sheet.getDataRange().getValues();
+  if (values.length < 2) throw fail("Invalid reset token", "BAD_REQUEST");
+  const headers = values[0];
+  const tokenCol = headers.indexOf("resetToken");
+  const expiryCol = headers.indexOf("resetExpiry");
+  const passwordCol = headers.indexOf("password");
+  const saltCol = headers.indexOf("salt");
+  const updatedAtCol = headers.indexOf("updatedAt");
+
+  let targetRow = -1;
+  for (let i = 1; i < values.length; i++) {
+    const rowToken = String(values[i][tokenCol] || "").trim();
+    if (rowToken && safeEquals(rowToken, token)) {
+      targetRow = i;
+      break;
+    }
+  }
+  if (targetRow < 1) throw fail("Invalid reset token", "BAD_REQUEST");
+
+  const expiry = Number(values[targetRow][expiryCol] || 0);
+  if (!expiry || Date.now() > expiry) throw fail("Reset token has expired", "BAD_REQUEST");
+
+  const salt = generateSalt();
+  const hash = hashPassword(String(newPassword || ""), salt);
+  sheet.getRange(targetRow + 1, passwordCol + 1).setValue(hash);
+  sheet.getRange(targetRow + 1, saltCol + 1).setValue(salt);
+  sheet.getRange(targetRow + 1, tokenCol + 1).setValue("");
+  sheet.getRange(targetRow + 1, expiryCol + 1).setValue("");
+  if (updatedAtCol >= 0) sheet.getRange(targetRow + 1, updatedAtCol + 1).setValue(formatDateTime(new Date()));
+
+  return { ok: true };
+}
+
+function resolveAppBaseUrl(appBaseUrl) {
+  const fromRequest = String(appBaseUrl || "").trim();
+  if (fromRequest) return fromRequest.replace(/\/+$/, "/");
+  const fromProps = String(PropertiesService.getScriptProperties().getProperty(APP_BASE_URL_PROP) || "").trim();
+  if (fromProps) return fromProps.replace(/\/+$/, "/");
+  throw fail("APP_BASE_URL is not configured", "SERVER_ERROR");
 }
 
 function getPosts(includeAll) {
@@ -343,15 +455,7 @@ function getPosts(includeAll) {
 
   const headers = values[0];
   const rows = values.slice(1);
-
-  const posts = rows
-    .map(row => {
-      const obj = {};
-      headers.forEach((h, i) => {
-        obj[h] = row[i];
-      });
-      return normalizePostRow(obj);
-    });
+  const posts = rows.map(row => normalizePostRow(rowToObj(headers, row)));
   return includeAll ? posts : posts.filter(post => post.status === "public");
 }
 
@@ -362,15 +466,7 @@ function getEvents(includeAll) {
 
   const headers = values[0];
   const rows = values.slice(1);
-
-  const events = rows.map(row => {
-    const obj = {};
-    headers.forEach((h, i) => {
-      obj[h] = row[i];
-    });
-    return normalizeEventRow(obj);
-  });
-
+  const events = rows.map(row => normalizeEventRow(rowToObj(headers, row)));
   return includeAll ? events : events.filter(event => event.status === "public");
 }
 
@@ -378,28 +474,20 @@ function savePost(post) {
   const sheet = getSheet();
   const values = sheet.getDataRange().getValues();
   const headers = values[0];
-
   const normalized = normalizeIncomingPost(post);
   const idCol = headers.indexOf("id");
-  if (idCol === -1) throw new Error("id column not found");
-
+  if (idCol === -1) throw fail("id column not found", "SERVER_ERROR");
   const existingRowIndex = findRowIndexById(values, normalized.id, idCol);
-  if (existingRowIndex < 0 && !normalized.date) {
-    normalized.date = formatDateYMD(new Date());
-  }
+  if (existingRowIndex < 0 && !normalized.date) normalized.date = formatDateYMD(new Date());
   const rowData = headers.map(h => {
     const key = h === "images" ? "imageUrls" : h;
     return serializeFieldForSheet(h, normalized[key]);
   });
-
   if (existingRowIndex >= 0) {
-    // 更新
     sheet.getRange(existingRowIndex + 1, 1, 1, headers.length).setValues([rowData]);
   } else {
-    // 新規追加
     sheet.appendRow(rowData);
   }
-
   return normalized;
 }
 
@@ -407,74 +495,57 @@ function saveEvent(event) {
   const sheet = ensureEventsSheet();
   const values = sheet.getDataRange().getValues();
   const headers = values[0];
-
   const normalized = normalizeIncomingEvent(event);
   const idCol = headers.indexOf("id");
-  if (idCol === -1) throw new Error("id column not found");
-
+  if (idCol === -1) throw fail("id column not found", "SERVER_ERROR");
   const existingRowIndex = findRowIndexById(values, normalized.id, idCol);
-
   if (existingRowIndex < 0) {
     if (!normalized.id) normalized.id = createEventId();
     if (!normalized.createdAt) normalized.createdAt = formatDateTime(new Date());
   } else if (!normalized.createdAt) {
     const createdAtCol = headers.indexOf("createdAt");
-    if (createdAtCol >= 0) {
-      normalized.createdAt = String(values[existingRowIndex][createdAtCol] || "");
-    }
+    if (createdAtCol >= 0) normalized.createdAt = String(values[existingRowIndex][createdAtCol] || "");
   }
-
   const rowData = headers.map(h => serializeFieldForSheet(h, normalized[h]));
-
   if (existingRowIndex >= 0) {
     sheet.getRange(existingRowIndex + 1, 1, 1, headers.length).setValues([rowData]);
   } else {
     sheet.appendRow(rowData);
   }
-
   return normalized;
 }
 
 function deletePost(id) {
-  if (!id) throw new Error("id is required");
-
+  if (!id) throw fail("id is required", "BAD_REQUEST");
   const sheet = getSheet();
   const values = sheet.getDataRange().getValues();
   const headers = values[0];
   const idCol = headers.indexOf("id");
-  if (idCol === -1) throw new Error("id column not found");
-
+  if (idCol === -1) throw fail("id column not found", "SERVER_ERROR");
   const existingRowIndex = findRowIndexById(values, id, idCol);
   if (existingRowIndex < 0) return;
-
   sheet.deleteRow(existingRowIndex + 1);
 }
 
 function deleteEvent(id) {
-  if (!id) throw new Error("id is required");
-
+  if (!id) throw fail("id is required", "BAD_REQUEST");
   const sheet = getEventsSheet();
   const values = sheet.getDataRange().getValues();
   const headers = values[0];
   const idCol = headers.indexOf("id");
-  if (idCol === -1) throw new Error("id column not found");
-
+  if (idCol === -1) throw fail("id column not found", "SERVER_ERROR");
   const existingRowIndex = findRowIndexById(values, id, idCol);
   if (existingRowIndex < 0) return;
-
   sheet.deleteRow(existingRowIndex + 1);
 }
 
 function saveContact(contact) {
-  const sheet = getContactSheet();
-  const values = sheet.getDataRange().getValues();
-
-  if (values.length === 0) {
-    sheet.appendRow(["id", "name", "email", "message", "createdAt"]);
-  }
-
   const normalized = normalizeIncomingContact(contact);
+  const emailKey = "contact:last:" + normalized.email.toLowerCase();
+  if (isKeyPresent(emailKey)) throw fail("Please wait before sending another message", "RATE_LIMITED");
+  putKey(emailKey, "1", CONTACT_INTERVAL_SECONDS);
 
+  const sheet = getContactSheet();
   sheet.appendRow([
     normalized.id,
     normalized.name,
@@ -482,26 +553,20 @@ function saveContact(contact) {
     normalized.message,
     normalized.createdAt
   ]);
-
   return normalized;
 }
 
 function normalizeIncomingContact(contact) {
-  const now = new Date();
-  const createdAt = Utilities.formatDate(
-    now,
-    Session.getScriptTimeZone(),
-    "yyyy-MM-dd HH:mm:ss"
-  );
-
+  const createdAt = formatDateTime(new Date());
   const name = String(contact.name || "").trim();
   const email = String(contact.email || "").trim();
   const message = String(contact.message || "").trim();
-
-  if (!name) throw new Error("name is required");
-  if (!email) throw new Error("email is required");
-  if (!message) throw new Error("message is required");
-
+  if (!name) throw fail("name is required", "BAD_REQUEST");
+  if (!email) throw fail("email is required", "BAD_REQUEST");
+  if (!isValidEmail(email)) throw fail("Invalid email format", "BAD_REQUEST");
+  if (!message) throw fail("message is required", "BAD_REQUEST");
+  assertMaxLength(name, 100, "name");
+  assertMaxLength(message, 2000, "message");
   return {
     id: "c_" + new Date().getTime().toString(36),
     name: name,
@@ -509,15 +574,6 @@ function normalizeIncomingContact(contact) {
     message: message,
     createdAt: createdAt
   };
-}
-
-function findRowIndexById(values, id, idCol) {
-  for (let i = 1; i < values.length; i++) {
-    if (String(values[i][idCol]) === String(id)) {
-      return i;
-    }
-  }
-  return -1;
 }
 
 function normalizePostRow(row) {
@@ -536,32 +592,37 @@ function normalizePostRow(row) {
     ctaUrl: row.ctaUrl || "",
     imageUrls: splitField(row.imageUrls || row.images),
     video: row.video || "",
-    status,
+    status: status,
     updatedAt: row.updatedAt || ""
   };
 }
 
 function normalizeIncomingPost(post) {
-  const now = new Date();
-  const isoNow = formatDateTime(now);
   const status = normalizeStatus(post.status, "public");
+  const title = String(post.title || "").trim();
+  const badge = String(post.badge || "").trim();
+  const body = Array.isArray(post.body) ? post.body.map(v => String(v || "").trim()).filter(Boolean) : [];
+  const joinedBody = body.join("\n\n");
+  assertMaxLength(title, 200, "title");
+  assertMaxLength(badge, 80, "badge");
+  assertMaxLength(joinedBody, 10000, "body");
 
   return {
     id: post.id || createId(),
-    date: post.date || "",
-    channel: post.channel || "article",
-    tone: post.tone || "accent",
-    badge: post.badge || "",
-    title: post.title || "",
-    tags: Array.isArray(post.tags) ? post.tags : [],
-    summary: Array.isArray(post.summary) ? post.summary : [],
-    body: Array.isArray(post.body) ? post.body : [],
-    ctaText: post.ctaText || "",
-    ctaUrl: post.ctaUrl || "",
+    date: String(post.date || "").trim(),
+    channel: String(post.channel || "article").trim(),
+    tone: String(post.tone || "accent").trim(),
+    badge: badge,
+    title: title,
+    tags: Array.isArray(post.tags) ? post.tags.map(v => String(v || "").trim()).filter(Boolean) : [],
+    summary: Array.isArray(post.summary) ? post.summary.map(v => String(v || "").trim()).filter(Boolean) : [],
+    body: body,
+    ctaText: String(post.ctaText || "").trim(),
+    ctaUrl: String(post.ctaUrl || "").trim(),
     imageUrls: Array.isArray(post.imageUrls) ? post.imageUrls : (Array.isArray(post.images) ? post.images : []),
-    video: post.video || "",
-    status,
-    updatedAt: isoNow
+    video: String(post.video || "").trim(),
+    status: status,
+    updatedAt: formatDateTime(new Date())
   };
 }
 
@@ -577,24 +638,28 @@ function normalizeEventRow(row) {
     location: row.location || "",
     imageUrls: splitField(row.imageUrls),
     ctaUrl: row.ctaUrl || "",
-    status,
+    status: status,
     createdAt: row.createdAt || ""
   };
 }
 
 function normalizeIncomingEvent(event) {
   const status = normalizeStatus(event.status, "public");
+  const title = String(event.title || "").trim();
+  const description = String(event.description || "").trim();
+  assertMaxLength(title, 200, "title");
+  assertMaxLength(description, 5000, "description");
   return {
-    id: event.id || "",
-    title: String(event.title || "").trim(),
+    id: String(event.id || "").trim(),
+    title: title,
     date: String(event.date || "").trim(),
     startTime: String(event.startTime || "").trim(),
     endTime: String(event.endTime || "").trim(),
-    description: String(event.description || "").trim(),
+    description: description,
     location: String(event.location || "").trim(),
     imageUrls: Array.isArray(event.imageUrls) ? event.imageUrls : [],
     ctaUrl: String(event.ctaUrl || "").trim(),
-    status,
+    status: status,
     createdAt: String(event.createdAt || "").trim()
   };
 }
@@ -608,17 +673,195 @@ function normalizeStatus(raw, fallback) {
   return fallback || "public";
 }
 
+function validatePassword(password) {
+  const p = String(password || "");
+  if (!p) throw fail("password is required", "BAD_REQUEST");
+  if (p.length < 8) throw fail("Password must be at least 8 characters", "BAD_REQUEST");
+}
+
+function isValidEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email || "").trim());
+}
+
+function assertMaxLength(value, max, field) {
+  if (String(value || "").length > max) {
+    throw fail(field + " is too long (max " + max + " chars)", "BAD_REQUEST");
+  }
+}
+
+function hashPassword(password, salt) {
+  const bytes = Utilities.computeDigest(
+    Utilities.DigestAlgorithm.SHA_256,
+    String(salt || "") + String(password || "")
+  );
+  return toHex(bytes);
+}
+
+function generateSalt() {
+  return Utilities.getUuid().replace(/-/g, "");
+}
+
+function toHex(bytes) {
+  return bytes.map(b => {
+    const v = b < 0 ? b + 256 : b;
+    const h = v.toString(16);
+    return h.length === 1 ? "0" + h : h;
+  }).join("");
+}
+
+function createToken(userId, role) {
+  const payloadObj = {
+    uid: String(userId || ""),
+    role: String(role || "member"),
+    exp: Math.floor(Date.now() / 1000) + TOKEN_TTL_SECONDS
+  };
+  const payload = JSON.stringify(payloadObj);
+  const payloadB64 = Utilities.base64EncodeWebSafe(Utilities.newBlob(payload).getBytes()).replace(/=+$/, "");
+  const sigBytes = Utilities.computeHmacSha256Signature(payloadB64, getAuthSecret());
+  const sigB64 = Utilities.base64EncodeWebSafe(sigBytes).replace(/=+$/, "");
+  return payloadB64 + "." + sigB64;
+}
+
+function verifyToken(token) {
+  const t = String(token || "").trim();
+  if (!t) throw fail("Authentication required", "AUTH_REQUIRED");
+  const parts = t.split(".");
+  if (parts.length !== 2) throw fail("Invalid token", "AUTH_REQUIRED");
+  const payloadB64 = parts[0];
+  const sigB64 = parts[1];
+  const expectedSig = Utilities.base64EncodeWebSafe(
+    Utilities.computeHmacSha256Signature(payloadB64, getAuthSecret())
+  ).replace(/=+$/, "");
+  if (!safeEquals(sigB64, expectedSig)) throw fail("Invalid token signature", "AUTH_REQUIRED");
+  let payloadObj = null;
+  try {
+    const payloadText = Utilities.newBlob(Utilities.base64DecodeWebSafe(payloadB64)).getDataAsString();
+    payloadObj = JSON.parse(payloadText);
+  } catch (_err) {
+    throw fail("Invalid token payload", "AUTH_REQUIRED");
+  }
+  if (!payloadObj || !payloadObj.uid || !payloadObj.exp) throw fail("Invalid token payload", "AUTH_REQUIRED");
+  if (Math.floor(Date.now() / 1000) > Number(payloadObj.exp)) throw fail("Token expired", "AUTH_REQUIRED");
+  return payloadObj;
+}
+
+function requireAuth(token) {
+  const payload = verifyToken(token);
+  const user = findUserById(payload.uid);
+  if (!user) throw fail("User not found", "AUTH_REQUIRED");
+  if (String(user.status || "").toLowerCase() !== "active") throw fail("This account is inactive", "AUTH_REQUIRED");
+  return user;
+}
+
+function requireAdmin(token) {
+  const user = requireAuth(token);
+  if (String(user.role || "member") !== "admin") throw fail("Admin privileges required", "FORBIDDEN");
+  return user;
+}
+
+function findUserById(userId) {
+  const sheet = getUsersSheet();
+  const values = sheet.getDataRange().getValues();
+  if (values.length < 2) return null;
+  const headers = values[0];
+  const idCol = headers.indexOf("id");
+  for (let i = 1; i < values.length; i++) {
+    if (String(values[i][idCol] || "") === String(userId || "")) {
+      const obj = rowToObj(headers, values[i]);
+      return {
+        id: obj.id || "",
+        email: obj.email || "",
+        name: obj.name || "",
+        role: obj.role || "member",
+        status: obj.status || "active"
+      };
+    }
+  }
+  return null;
+}
+
+function getAuthSecret() {
+  const secret = String(PropertiesService.getScriptProperties().getProperty(AUTH_SECRET_PROP) || "").trim();
+  if (!secret) throw fail("AUTH_SECRET is not configured", "SERVER_ERROR");
+  return secret;
+}
+
+function safeEquals(a, b) {
+  const s1 = String(a || "");
+  const s2 = String(b || "");
+  if (s1.length !== s2.length) return false;
+  let diff = 0;
+  for (let i = 0; i < s1.length; i++) diff |= (s1.charCodeAt(i) ^ s2.charCodeAt(i));
+  return diff === 0;
+}
+
+function recordLoginFailure(email) {
+  const key = "login:fail:" + String(email || "").toLowerCase();
+  const count = incrementCounter(key, LOGIN_LOCK_SECONDS);
+  if (count >= LOGIN_FAIL_LIMIT) putKey("login:lock:" + String(email || "").toLowerCase(), "1", LOGIN_LOCK_SECONDS);
+}
+
+function clearLoginFailure(email) {
+  removeKey("login:fail:" + String(email || "").toLowerCase());
+  removeKey("login:lock:" + String(email || "").toLowerCase());
+}
+
+function isLoginLocked(email) {
+  return isKeyPresent("login:lock:" + String(email || "").toLowerCase());
+}
+
+function incrementCounter(key, ttlSeconds) {
+  const cache = CacheService.getScriptCache();
+  const raw = cache.get(key);
+  const current = raw ? Number(raw) : 0;
+  const next = current + 1;
+  cache.put(key, String(next), ttlSeconds);
+  return next;
+}
+
+function isKeyPresent(key) {
+  return !!CacheService.getScriptCache().get(key);
+}
+
+function putKey(key, value, ttlSeconds) {
+  CacheService.getScriptCache().put(key, String(value), ttlSeconds);
+}
+
+function removeKey(key) {
+  CacheService.getScriptCache().remove(key);
+}
+
+function rowToObj(headers, row) {
+  const obj = {};
+  headers.forEach((h, i) => {
+    obj[h] = row[i];
+  });
+  return obj;
+}
+
+function findUserRowIndexByEmail(values, headers, email) {
+  const emailCol = headers.indexOf("email");
+  for (let i = 1; i < values.length; i++) {
+    const rowEmail = String(values[i][emailCol] || "").trim().toLowerCase();
+    if (rowEmail === String(email || "").trim().toLowerCase()) return i;
+  }
+  return -1;
+}
+
+function findRowIndexById(values, id, idCol) {
+  for (let i = 1; i < values.length; i++) {
+    if (String(values[i][idCol]) === String(id)) return i;
+  }
+  return -1;
+}
+
 function migratePostsImageColumn() {
   const sheet = getSheet();
   const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
   const imageUrlsCol = headers.indexOf("imageUrls");
-  if (imageUrlsCol >= 0) {
-    return { ok: true, message: "imageUrls column already exists" };
-  }
+  if (imageUrlsCol >= 0) return { ok: true, message: "imageUrls column already exists" };
   const imagesCol = headers.indexOf("images");
-  if (imagesCol === -1) {
-    throw new Error("images column not found");
-  }
+  if (imagesCol === -1) throw fail("images column not found", "SERVER_ERROR");
   sheet.getRange(1, imagesCol + 1).setValue("imageUrls");
   return { ok: true, message: "Renamed images to imageUrls" };
 }
@@ -626,60 +869,39 @@ function migratePostsImageColumn() {
 function migrateEventsFromPosts() {
   const postSheet = getSheet();
   const eventSheet = ensureEventsSheet();
-
   const postValues = postSheet.getDataRange().getValues();
-  if (postValues.length < 2) {
-    return { ok: true, moved: 0 };
-  }
-
+  if (postValues.length < 2) return { ok: true, moved: 0 };
   const headers = postValues[0];
   const rows = postValues.slice(1);
   const eventHeaders = eventSheet.getRange(1, 1, 1, eventSheet.getLastColumn()).getValues()[0];
   const channelCol = headers.indexOf("channel");
-  if (channelCol === -1) throw new Error("channel column not found");
-
+  if (channelCol === -1) throw fail("channel column not found", "SERVER_ERROR");
   const appendRows = [];
   const deleteRowNumbers = [];
-
   rows.forEach((row, idx) => {
     const channel = String(row[channelCol] || "").trim();
     if (channel !== "event") return;
-
-    const obj = {};
-    headers.forEach((h, i) => {
-      obj[h] = row[i];
-    });
-    const post = normalizePostRow(obj);
-
-    const description = post.body && post.body.length ? post.body.join("\n\n") : "";
+    const post = normalizePostRow(rowToObj(headers, row));
     const mapped = normalizeIncomingEvent({
       id: post.id || createEventId(),
       title: post.title || "",
       date: post.date || "",
       startTime: "",
       endTime: "",
-      description: description,
+      description: post.body && post.body.length ? post.body.join("\n\n") : "",
       location: "",
       imageUrls: post.imageUrls || [],
       ctaUrl: post.ctaUrl || "",
       status: post.status || "public",
       createdAt: post.updatedAt || formatDateTime(new Date())
     });
-
     appendRows.push(eventHeaders.map(h => serializeFieldForSheet(h, mapped[h])));
     deleteRowNumbers.push(idx + 2);
   });
-
   if (appendRows.length) {
-    eventSheet
-      .getRange(eventSheet.getLastRow() + 1, 1, appendRows.length, eventHeaders.length)
-      .setValues(appendRows);
+    eventSheet.getRange(eventSheet.getLastRow() + 1, 1, appendRows.length, eventHeaders.length).setValues(appendRows);
   }
-
-  deleteRowNumbers
-    .sort((a, b) => b - a)
-    .forEach(rowNumber => postSheet.deleteRow(rowNumber));
-
+  deleteRowNumbers.sort((a, b) => b - a).forEach(rowNumber => postSheet.deleteRow(rowNumber));
   return { ok: true, moved: appendRows.length };
 }
 
@@ -693,18 +915,12 @@ function serializeFieldForSheet(key, value) {
 
 function splitField(value) {
   if (!value) return [];
-  return String(value)
-    .split("||")
-    .map(s => s.trim())
-    .filter(Boolean);
+  return String(value).split("||").map(s => s.trim()).filter(Boolean);
 }
 
 function splitBodyField(value) {
   if (!value) return [];
-  return String(value)
-    .split("\n\n")
-    .map(s => s.trim())
-    .filter(Boolean);
+  return String(value).split("\n\n").map(s => s.trim()).filter(Boolean);
 }
 
 function createId() {
@@ -723,8 +939,20 @@ function formatDateYMD(date) {
   return Utilities.formatDate(date, Session.getScriptTimeZone(), "yyyy-MM-dd");
 }
 
+function fail(message, code) {
+  const err = new Error(message);
+  err.code = code || "BAD_REQUEST";
+  return err;
+}
+
+function outputError(err) {
+  return outputJson({
+    ok: false,
+    message: err && err.message ? err.message : String(err),
+    code: err && err.code ? err.code : "INTERNAL_ERROR"
+  });
+}
+
 function outputJson(data) {
-  return ContentService
-    .createTextOutput(JSON.stringify(data))
-    .setMimeType(ContentService.MimeType.JSON);
+  return ContentService.createTextOutput(JSON.stringify(data)).setMimeType(ContentService.MimeType.JSON);
 }
