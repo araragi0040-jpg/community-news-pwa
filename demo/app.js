@@ -109,6 +109,7 @@ let cloudEvents = [];
 let latestPostKey = "";
 let latestPostSnapshot = null;
 let deferredInstallPrompt = null;
+let installHelpTimerId = null;
 
 // ===== Helpers =====
 function safeJsonParse(s, fallback){
@@ -476,6 +477,23 @@ async function saveContactToApi(contact) {
   return data.contact;
 }
 
+async function fetchProfileFromApi() {
+  const data = await callApi("getProfile");
+  return data.profile || {};
+}
+
+async function saveProfileToApi(profile) {
+  const data = await callApi("saveProfile", {
+    profile: {
+      nickname: profile.nickname || "",
+      iconUrl: profile.iconUrl || "",
+      hobby: profile.hobby || "",
+      interests: profile.interests || ""
+    }
+  });
+  return data.profile || {};
+}
+
 async function uploadImageToApi(file) {
   const dataUrl = await compressImage(file);
   const data = await callApi("uploadImage", {
@@ -559,12 +577,68 @@ function getCurrentUser() {
 }
 
 function saveCurrentUser(user) {
-  localStorage.setItem(LS_KEY_USER, JSON.stringify(user));
+  const u = user || {};
+  const safeUser = {
+    ...u,
+    nickname: String(u.nickname || "").trim(),
+    iconUrl: String(u.iconUrl || "").trim(),
+    hobby: String(u.hobby || "").trim(),
+    interests: String(u.interests || "").trim()
+  };
+  localStorage.setItem(LS_KEY_USER, JSON.stringify(safeUser));
 }
 
 function clearCurrentUser() {
   localStorage.removeItem(LS_KEY_USER);
   localStorage.removeItem(LS_KEY_TOKEN);
+}
+
+function updateProfileButton(user = getCurrentUser()) {
+  const btn = $("#btnProfile");
+  const img = $("#profileBtnIcon");
+  const fallback = $("#profileBtnFallback");
+  if (!btn || !img || !fallback) return;
+  if (!user) {
+    btn.hidden = true;
+    return;
+  }
+  btn.hidden = false;
+  const iconUrl = String(user.iconUrl || "").trim();
+  if (iconUrl) {
+    img.src = iconUrl;
+    img.hidden = false;
+    fallback.hidden = true;
+  } else {
+    img.hidden = true;
+    fallback.hidden = false;
+  }
+}
+
+function clearInstallHelpTimer() {
+  if (!installHelpTimerId) return;
+  clearTimeout(installHelpTimerId);
+  installHelpTimerId = null;
+}
+
+function scheduleInstallButtonVisibility() {
+  const btn = $("#btnInstall");
+  clearInstallHelpTimer();
+  if (!btn) return;
+  btn.hidden = true;
+
+  if (!getCurrentUser() || isStandaloneMode()) return;
+
+  if (deferredInstallPrompt) {
+    btn.hidden = false;
+    return;
+  }
+
+  installHelpTimerId = setTimeout(() => {
+    installHelpTimerId = null;
+    if (!getCurrentUser() || isStandaloneMode() || deferredInstallPrompt) return;
+    const installBtn = $("#btnInstall");
+    if (installBtn) installBtn.hidden = false;
+  }, 3000);
 }
 
 /* 画面切り替え関数 */
@@ -575,8 +649,6 @@ function applyAuthUI() {
   const appRoot = document.getElementById("appRoot");
   const adminNav = document.querySelector('.navitem[data-nav="admin"]');
   const adminPage = document.querySelector('.page[data-page="admin"]');
-  const logoutBtn = document.getElementById("btnLogout");
-  const installBtn = document.getElementById("btnInstall");
 
   if (!authGate || !appRoot) return;
 
@@ -585,8 +657,10 @@ function applyAuthUI() {
     appRoot.hidden = true;
     if (adminNav) adminNav.style.display = "none";
     if (adminPage) adminPage.style.display = "none";
-    if (logoutBtn) logoutBtn.hidden = true;
+    updateProfileButton(null);
+    const installBtn = document.getElementById("btnInstall");
     if (installBtn) installBtn.hidden = true;
+    clearInstallHelpTimer();
     return;
   }
 
@@ -597,8 +671,8 @@ function applyAuthUI() {
 
   if (adminNav) adminNav.style.display = isAdmin ? "flex" : "none";
   if (adminPage) adminPage.style.display = isAdmin ? "" : "none";
-  if (logoutBtn) logoutBtn.hidden = false;
-  if (installBtn) installBtn.hidden = isStandaloneMode();
+  updateProfileButton(user);
+  scheduleInstallButtonVisibility();
 }
 
 // ===== Rendering: Chips =====
@@ -1268,6 +1342,104 @@ function closeInstallHelpModal(){
   modal.setAttribute("aria-hidden", "true");
 }
 
+function updateProfilePreview(url) {
+  const preview = $("#profileIconPreview");
+  if (!preview) return;
+  const safe = String(url || "").trim();
+  preview.src = safe || "./favicon.png";
+}
+
+async function loadProfileIntoModal() {
+  const user = getCurrentUser();
+  if (!user) return;
+
+  const profile = await fetchProfileFromApi();
+  const merged = {
+    ...user,
+    nickname: String(profile.nickname ?? user.nickname ?? "").trim(),
+    iconUrl: String(profile.iconUrl ?? user.iconUrl ?? "").trim(),
+    hobby: String(profile.hobby ?? user.hobby ?? "").trim(),
+    interests: String(profile.interests ?? user.interests ?? "").trim()
+  };
+  saveCurrentUser(merged);
+  updateProfileButton(merged);
+
+  const nicknameInput = $("#profileNickname");
+  const iconUrlInput = $("#profileIconUrl");
+  const hobbyInput = $("#profileHobby");
+  const interestsInput = $("#profileInterests");
+
+  if (nicknameInput) nicknameInput.value = merged.nickname || "";
+  if (iconUrlInput) iconUrlInput.value = merged.iconUrl || "";
+  if (hobbyInput) hobbyInput.value = merged.hobby || "";
+  if (interestsInput) interestsInput.value = merged.interests || "";
+  updateProfilePreview(merged.iconUrl || "");
+}
+
+async function openProfileModal() {
+  const modal = $("#profileModal");
+  if (!modal) return;
+  modal.classList.add("eventmodal--open");
+  modal.setAttribute("aria-hidden", "false");
+  const msg = $("#profileMsg");
+  if (msg) msg.textContent = "";
+  try {
+    await loadProfileIntoModal();
+  } catch (err) {
+    console.warn(err);
+    const msgText = formatErrorMessage(err, "プロフィールの読み込みに失敗しました。");
+    const msg = $("#profileMsg");
+    if (msg) msg.textContent = msgText;
+  }
+}
+
+function closeProfileModal() {
+  const modal = $("#profileModal");
+  if (!modal) return;
+  modal.classList.remove("eventmodal--open");
+  modal.setAttribute("aria-hidden", "true");
+}
+
+async function saveProfileFromModal() {
+  const msg = $("#profileMsg");
+  if (msg) msg.textContent = "";
+  const nickname = ($("#profileNickname")?.value || "").trim();
+  const iconUrl = ($("#profileIconUrl")?.value || "").trim();
+  const hobby = ($("#profileHobby")?.value || "").trim();
+  const interests = ($("#profileInterests")?.value || "").trim();
+
+  const btn = $("#profileSaveBtn");
+  const oldText = btn ? btn.textContent : "";
+  try {
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "保存中...";
+    }
+    const profile = await saveProfileToApi({ nickname, iconUrl, hobby, interests });
+    const current = getCurrentUser();
+    if (current) {
+      const merged = { ...current, ...profile };
+      saveCurrentUser(merged);
+      updateProfileButton(merged);
+    }
+    updateProfilePreview(profile.iconUrl || iconUrl);
+    if (msg) msg.textContent = "プロフィールを保存しました。";
+  } catch (err) {
+    console.error(err);
+    if (isAuthError(err)) {
+      handleAuthFailure(err.message || "セッションの有効期限が切れました。");
+      closeProfileModal();
+      return;
+    }
+    if (msg) msg.textContent = formatErrorMessage(err, "プロフィールの保存に失敗しました。");
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = oldText || "保存";
+    }
+  }
+}
+
 function renderCalendar(){
   const calRoot = $("#cal");
   if(!calRoot) return;
@@ -1896,6 +2068,11 @@ function setupInstallButton(){
   window.addEventListener("beforeinstallprompt", (e) => {
     e.preventDefault();
     deferredInstallPrompt = e;
+    clearInstallHelpTimer();
+    if (getCurrentUser() && !isStandaloneMode()) {
+      const btn = $("#btnInstall");
+      if (btn) btn.hidden = false;
+    }
   });
   window.addEventListener("appinstalled", () => {
     deferredInstallPrompt = null;
@@ -1925,6 +2102,8 @@ function bind(){
   on("#eventModalClose", "click", closeEventModal);
   on("#installHelpModalScrim", "click", closeInstallHelpModal);
   on("#installHelpModalClose", "click", closeInstallHelpModal);
+  on("#profileModalScrim", "click", closeProfileModal);
+  on("#profileModalClose", "click", closeProfileModal);
 
   // search
   on("#q", "input", (e) => {
@@ -1958,11 +2137,16 @@ function bind(){
     });
   }
 
-  on("#btnLogout", "click", () => {
+  on("#btnProfile", "click", () => {
+    openProfileModal();
+  });
+
+  on("#btnProfileLogout", "click", () => {
     if (!confirm("ログアウトしますか？")) return;
     clearCurrentUser();
     clearAuthToken();
     hideNotifyBanner();
+    closeProfileModal();
     applyAuthUI();
     const msg = $("#loginMsg");
     if (msg) msg.textContent = "ログアウトしました。";
@@ -2417,6 +2601,38 @@ function bind(){
     });
   }
 
+  const profileIconFile = document.getElementById("profileIconFile");
+  if (profileIconFile) {
+    profileIconFile.addEventListener("change", async () => {
+      const file = profileIconFile.files && profileIconFile.files[0];
+      if (!file) return;
+      const msg = $("#profileMsg");
+      if (msg) msg.textContent = "";
+      try {
+        const url = await uploadImageToApi(file);
+        const iconUrlInput = $("#profileIconUrl");
+        if (iconUrlInput) iconUrlInput.value = url;
+        updateProfilePreview(url);
+        if (msg) msg.textContent = "アイコンをアップロードしました。";
+      } catch (err) {
+        console.error(err);
+        if (isAuthError(err)) {
+          handleAuthFailure(err.message || "セッションの有効期限が切れました。");
+          closeProfileModal();
+          return;
+        }
+        if (msg) msg.textContent = formatErrorMessage(err, "アイコンアップロードに失敗しました。");
+      } finally {
+        profileIconFile.value = "";
+      }
+    });
+  }
+
+  on("#profileSaveBtn", "click", (e) => {
+    e.preventDefault();
+    saveProfileFromModal();
+  });
+
   on("#btnInstall", "click", async () => {
     if (!deferredInstallPrompt) {
       openInstallHelpModal();
@@ -2425,6 +2641,7 @@ function bind(){
     deferredInstallPrompt.prompt();
     await deferredInstallPrompt.userChoice;
     deferredInstallPrompt = null;
+    applyAuthUI();
   });
   on("#notifyRefresh", "click", async () => {
     try {
