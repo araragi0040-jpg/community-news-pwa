@@ -2,7 +2,7 @@
 :root{
   --bg: #ffffff;
   --panel: #ffffff;
-  --panel2: #fafafa;
+  --panel2: #ffffff;
   --stroke: #e0e0e0;
 
   --text-strong: #1f2937;
@@ -54,7 +54,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
   top: 0;
   z-index: 10;
   padding: 14px 16px 14px; /* safeTopを外す */
-  background: rgba(255, 255, 255, 0.92);
+  background: #fff;
   backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--stroke);
   display:flex;
@@ -74,7 +74,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
   border-radius: 10px;
   object-fit: cover;
   border: 1px solid rgba(176,125,79,.18);
-  background: rgba(255,255,255,.55);
+  background: #fff;
 }
 .brand__name{ font-weight: 760; letter-spacing:.2px; color: var(--text-strong); }
 .brand__sub{ font-size: 12px; color: var(--muted); margin-top: 2px; }
@@ -86,7 +86,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
   width: 42px; height: 42px;
   border-radius: 14px;
   border: 1px solid var(--stroke);
-  background: rgba(255,255,255,.55);
+  background: #fff;
   color: var(--text-strong);
   display:grid;
   place-items:center;
@@ -94,7 +94,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
   transition: transform .12s ease, background .12s ease;
 }
 .iconbtn:active{ transform: scale(.98); }
-.iconbtn:hover{ background: rgba(255,255,255,.72); }
+.iconbtn:hover{ background: #fff; }
 
 .btn-app-download{
   border: 1px solid rgba(176,125,79,.32);
@@ -126,7 +126,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
   padding: 12px 12px;
   border: 1px solid var(--stroke);
   border-radius: var(--radius2);
-  background: rgba(255,255,255,.70);
+  background: #fff;
   box-shadow: 0 10px 24px rgba(75,50,30,.10);
 }
 .search__icon{ color: var(--muted); display:grid; place-items:center; }
@@ -164,7 +164,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
 .chips__row::-webkit-scrollbar{ display:none; }
 .chip{
   border: 1px solid var(--stroke);
-  background: rgba(255,255,255,.55);
+  background: #fff;
   color: var(--text-strong);
   border-radius: 999px;
   padding: 10px 12px;
@@ -176,7 +176,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
   white-space: nowrap;
   transition: background .12s ease, transform .12s ease;
 }
-.chip:hover{ background: rgba(255,255,255,.72); }
+.chip:hover{ background: #fff; }
 .chip:active{ transform: scale(.99); }
 .chip--active{
   border-color: rgba(176,125,79,.55);
@@ -208,7 +208,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
   margin-top: 12px;
   border: 1px solid var(--stroke);
   border-radius: 14px;
-  background: rgba(255,255,255,.72);
+  background: #fff;
   padding: 18px 14px;
   text-align: center;
 }
@@ -310,7 +310,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
   height: 28px;
   border-radius: 999px;
   border: 1px solid rgba(176,125,79,.35);
-  background: rgba(255,255,255,.88);
+  background: #fff;
   color: var(--muted);
   font-size: 17px;
   line-height: 1;
@@ -439,7 +439,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
   font-size: 11px;
   color: var(--text-soft);
   border: 1px solid var(--stroke);
-  background: rgba(255,255,255,.55);
+  background: #fff;
   border-radius: 999px;
   padding: 2px 8px;
   margin-right: 4px;
@@ -458,7 +458,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
   bottom: 10px;
   font-size: 12px;
   color: rgba(59,42,31,.55);
-  background: rgba(255,255,255,.55);
+  background: #fff;
   border: 1px solid rgba(176,125,79,.20);
   padding: 6px 10px;
   border-radius: 999px;
@@ -475,7 +475,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
 .empty{
   border: 1px dashed rgba(176,125,79,.35);
   border-radius: var(--radius);
-  background: rgba(255,255,255,.55);
+  background: #fff;
   padding: 18px 14px;
   text-align:center;
 }
@@ -490,7 +490,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
   width: 48px; height: 28px;
   border-radius: 999px;
   border: 1px solid rgba(176,125,79,.32);
-  background: rgba(255,255,255,.72);
+  background: #fff;
   position: relative;
 }
 .toggle__ui::after{
@@ -515,7 +515,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
 .notif{
   border: 1px solid var(--stroke);
   border-radius: var(--radius);
-  background: rgba(255,255,255,.62);
+  background: #fff;
   padding: 12px;
 }
 .notif__top{ display:flex; align-items:center; justify-content: space-between; gap: 10px; }
@@ -535,7 +535,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
   z-index: 1200;
   pointer-events: auto;
   padding: 10px 10px calc(10px + var(--safe));
-  background: rgba(255, 255, 255, 0.95);
+  background: #fff;
   border-top: 1px solid var(--stroke);
   display:flex;
   justify-content: center;
@@ -589,7 +589,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
   border-radius: 26px 26px 0 0;
   border: 1px solid rgba(176,125,79,.20);
   border-bottom: 0;
-  background: rgba(255,250,245,.98);
+  background: #fff;
   box-shadow: 0 22px 60px rgba(60,40,25,.22);
   overflow:hidden;
   transform: translateY(10px);
@@ -635,7 +635,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
   display: inline-flex;
   align-items: center;
   border: 1px solid var(--stroke);
-  background: rgba(255,255,255,.8);
+  background: #fff;
   color: var(--text-soft);
   border-radius: 999px;
   padding: 4px 9px;
@@ -657,7 +657,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
 .article__stats{ display:flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
 .article__summary{
   border: 1px solid rgba(176,125,79,.22);
-  background: rgba(255,255,255,.70);
+  background: #fff;
   border-radius: 18px;
   padding: 12px 12px;
   margin: 10px 0 12px;
@@ -706,7 +706,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
   margin-top: 14px;
   border: 1px solid var(--stroke);
   border-radius: var(--radius);
-  background: rgba(255,255,255,.70);
+  background: #fff;
   box-shadow: 0 16px 34px rgba(75,50,30,.10);
   padding: 12px;
 }
@@ -721,24 +721,24 @@ svg{ width:22px; height:22px; fill: currentColor; }
 .cal__ctrl{ display:flex; gap: 8px; }
 .cal__btn{
   border: 1px solid var(--stroke);
-  background: rgba(255,255,255,.70);
+  background: #fff;
   color: var(--text-strong);
   border-radius: 14px;
   padding: 8px 10px;
   cursor:pointer;
 }
-.cal__btn:hover{ background: rgba(255,255,255,.85); }
+.cal__btn:hover{ background: #fff; }
 /* cal__grid / cal__dow are defined in the schedule section below */
 .cal__day{
   border: 1px solid rgba(176,125,79,.22);
-  background: rgba(255,255,255,.65);
+  background: #fff;
   border-radius: 14px;
   min-height: 56px;
   padding: 8px 8px 6px;
   cursor:pointer;
   position: relative;
 }
-.cal__day:hover{ background: rgba(255,255,255,.85); }
+.cal__day:hover{ background: #fff; }
 .cal__day--muted{ opacity: .55; }
 .cal__daynum{ font-weight: 780; color: var(--text-strong); font-size: 12px; }
 .cal__dots{ display:flex; gap: 4px; margin-top: 6px; flex-wrap: wrap; }
@@ -754,7 +754,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
   display:flex; align-items:center; gap: 6px;
   font-size: 12px; color: var(--text-soft);
   border: 1px solid rgba(176,125,79,.20);
-  background: rgba(255,255,255,.70);
+  background: #fff;
   padding: 6px 10px; border-radius: 999px;
 }
 .leg__dot{ width: 10px; height: 10px; border-radius: 999px; background: var(--accent2); }
@@ -762,7 +762,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
 .sched{ margin-top: 12px; display:grid; gap: 10px; }
 .sitem{
   border: 1px solid rgba(176,125,79,.22);
-  background: rgba(255,255,255,.70);
+  background: #fff;
   border-radius: var(--radius);
   padding: 12px;
   display:flex;
@@ -777,7 +777,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
   display:inline-flex; align-items:center; gap: 6px;
   font-size: 12px; color: var(--text-strong);
   border: 1px solid rgba(176,125,79,.22);
-  background: rgba(255,255,255,.78);
+  background: #fff;
   padding: 6px 10px; border-radius: 999px; height: fit-content; white-space: nowrap;
 }
 .sitem__dot{ width: 8px; height: 8px; border-radius: 999px; background: var(--accent2); }
@@ -814,7 +814,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
 .admin__list, .admin__editor{
   border: 1px solid var(--stroke);
   border-radius: var(--radius);
-  background: rgba(255,255,255,.70);
+  background: #fff;
   box-shadow: 0 16px 34px rgba(75,50,30,.10);
 }
 .admin__listhead, .admin__editorhead{
@@ -831,13 +831,13 @@ svg{ width:22px; height:22px; fill: currentColor; }
 .admin__items{ display:grid; gap: 8px; padding: 12px; }
 .aitem{
   border: 1px solid rgba(176,125,79,.22);
-  background: rgba(255,255,255,.78);
+  background: #fff;
   border-radius: 14px;
   padding: 10px 10px;
   cursor:pointer;
   transition: background .12s ease, transform .12s ease;
 }
-.aitem:hover{ background: rgba(255,255,255,.90); }
+.aitem:hover{ background: #fff; }
 .aitem:active{ transform: scale(.995); }
 .aitem__top{ display:flex; align-items:center; justify-content: space-between; gap: 10px; }
 .aitem__title{ font-weight: 820; color: var(--text-strong); }
@@ -850,7 +850,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
 .input, .textarea, select.input{
   width: 100%;
   border: 1px solid rgba(176,125,79,.22);
-  background: rgba(255,255,255,.90);
+  background: #fff;
   color: var(--text);
   border-radius: 14px;
   padding: 10px 12px;
@@ -885,7 +885,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
 .btn:hover{ background: rgba(176,125,79,.20); }
 .btn:active{ transform: scale(.99); }
 .btn--ghost{
-  background: rgba(255,255,255,.75);
+  background: #fff;
 }
 .btn--danger{
   border-color: rgba(197,106,92,.35);
@@ -950,7 +950,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
 #contactForm input,
 #contactForm textarea{
   width: 100%;
-  background: rgba(255,255,255,0.75);  /* クリーム寄り */
+  background: #fff;
   color: var(--text, #1f2937);
   border: 1px solid rgba(176,125,79,0.22); /* アクセントの薄い線 */
   border-radius: 14px;
@@ -973,7 +973,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
 #contactForm textarea:focus{
   border-color: rgba(176,125,79,0.55);
   box-shadow: 0 0 0 4px rgba(176,125,79,0.14);
-  background: rgba(255,255,255,0.92);
+  background: #fff;
 }
 
 #contactForm button[type="submit"]{
@@ -1073,7 +1073,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
   padding: 6px;
   border-radius: 999px;
   border: 1px solid rgba(176,125,79,.22);
-  background: rgba(255,255,255,.70);
+  background: #fff;
   gap: 6px;
 }
 
@@ -1116,7 +1116,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
 
 .sday{
   border: 1px solid rgba(176,125,79,.22);
-  background: rgba(255,255,255,.70);
+  background: #fff;
   border-radius: 16px;
   overflow:hidden;
   box-shadow: 0 10px 24px rgba(75,50,30,.08);
@@ -1191,7 +1191,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
 .calview{ display:flex; gap:8px; }
 .calview__btn{
   border: 1px solid var(--stroke);
-  background: rgba(255,255,255,.70);
+  background: #fff;
   color: var(--text-strong);
   border-radius: 999px;
   padding: 8px 12px;
@@ -1207,7 +1207,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
 .cal__left{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
 .cal__nav{
   border: 1px solid var(--stroke);
-  background: rgba(255,255,255,.75);
+  background: #fff;
   color: var(--text-strong);
   border-radius: 14px;
   padding: 8px 10px;
@@ -1223,7 +1223,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
   border: 1px solid rgba(176,125,79,.18);
   border-radius: 14px;
   overflow: hidden;
-  background: rgba(255,255,255,.75);
+  background: #fff;
 }
 .cal__cell{
   min-width: 0;
@@ -1231,7 +1231,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
   padding: 8px 8px 6px;
   border-right: 1px solid rgba(176,125,79,.12);
   border-bottom: 1px solid rgba(176,125,79,.12);
-  background: rgba(255,255,255,.70);
+  background: #fff;
 }
 .cal__cell:nth-child(7n){ border-right: 0; }
 
@@ -1240,7 +1240,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
   padding: 8px 8px;
   font-size: 11px;
   color: var(--muted);
-  background: rgba(255,255,255,.85);
+  background: #fff;
   font-weight: 800;
 }
 
@@ -1254,7 +1254,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
 
 /* “来月の薄い表示”を出さない：セルは空白にする */
 .cal__cell.is-out{
-  background: rgba(255,255,255,.55);
+  background: #fff;
 }
 .cal__cell.is-out .cal__daynum{
   display:none;     /* 1〜5など数字を非表示 */
@@ -1327,7 +1327,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
   overflow: auto;
   border-radius: 22px;
   border: 1px solid rgba(176,125,79,.22);
-  background: rgba(255,250,245,.98);
+  background: #fff;
   box-shadow: 0 22px 60px rgba(60,40,25,.20);
 }
 
@@ -1354,7 +1354,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
 
 .eventdetail{
   border: 1px solid rgba(176,125,79,.18);
-  background: rgba(255,255,255,.72);
+  background: #fff;
   border-radius: 16px;
   padding: 12px;
 }
@@ -1396,7 +1396,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
 .cal2w__day{
   border: 1px solid rgba(176,125,79,.18);
   border-radius: 16px;
-  background: rgba(255,255,255,.78);
+  background: #fff;
   overflow: hidden;
 }
 
@@ -1407,7 +1407,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
   gap:8px;
   padding:10px 12px;
   border-bottom:1px solid rgba(176,125,79,.14);
-  background: rgba(255,255,255,.9);
+  background: #fff;
 }
 
 .cal2w__date{
@@ -1471,12 +1471,12 @@ svg{ width:22px; height:22px; fill: currentColor; }
   align-items: center;
   justify-content: center;
   padding: 20px;
-  background: rgba(246,239,231,0.96);
+  background: #fff;
 }
 
 .auth__panel{
   width: min(92vw, 420px);
-  background: #fffaf5;
+  background: #fff;
   border: 1px solid rgba(176,125,79,.18);
   border-radius: 24px;
   padding: 24px 20px;
@@ -1503,7 +1503,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
 .auth__form input{
   width: 100%;
   border: 1px solid rgba(176,125,79,.22);
-  background: rgba(255,255,255,.95);
+  background: #fff;
   color: var(--text);
   border-radius: 14px;
   padding: 12px 14px;
@@ -1540,7 +1540,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
 
 .auth__ghostbtn{
   border: 1px solid rgba(176,125,79,.22);
-  background: rgba(255,255,255,.9);
+  background: #fff;
   color: var(--text);
   border-radius: 14px;
   padding: 10px 14px;
@@ -1583,7 +1583,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
   padding: 6px;
   border-radius: 999px;
   border: 1px solid rgba(176,125,79,.22);
-  background: rgba(255,255,255,.70);
+  background: #fff;
   gap: 6px;
 }
 
@@ -1605,7 +1605,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
   margin-top: 14px;
   border: 1px solid var(--stroke);
   border-radius: var(--radius);
-  background: rgba(255,255,255,.70);
+  background: #fff;
   box-shadow: 0 16px 34px rgba(75,50,30,.10);
   padding: 12px;
 }
@@ -1617,7 +1617,7 @@ svg{ width:22px; height:22px; fill: currentColor; }
   justify-content: space-between;
   gap: 10px;
   border: 1px solid rgba(176,125,79,.22);
-  background: rgba(255,255,255,.78);
+  background: #fff;
   border-radius: 14px;
   padding: 10px;
   color: var(--text-strong);
@@ -1642,6 +1642,33 @@ svg{ width:22px; height:22px; fill: currentColor; }
   padding: 6px 10px;
   font-size: 12px;
   cursor: pointer;
+}
+
+.toast{
+  position: fixed;
+  top: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2000;
+  background: #fff;
+  border: 1px solid rgba(122,166,122,.45);
+  color: var(--text-strong);
+  border-radius: 14px;
+  padding: 12px 20px;
+  font-weight: 700;
+  box-shadow: 0 8px 24px rgba(0,0,0,.10);
+  animation: toastIn .2s ease;
+}
+
+@keyframes toastIn{
+  from{
+    opacity: 0;
+    transform: translateX(-50%) translateY(-6px);
+  }
+  to{
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
 }
 
 .notify-banner{
