@@ -578,12 +578,14 @@ function getCurrentUser() {
 
 function saveCurrentUser(user) {
   const u = user || {};
+  const parsedPoints = Number(u.points || 0);
   const safeUser = {
     ...u,
     nickname: String(u.nickname || "").trim(),
     iconUrl: String(u.iconUrl || "").trim(),
     hobby: String(u.hobby || "").trim(),
-    interests: String(u.interests || "").trim()
+    interests: String(u.interests || "").trim(),
+    points: Number.isFinite(parsedPoints) && parsedPoints >= 0 ? Math.floor(parsedPoints) : 0
   };
   localStorage.setItem(LS_KEY_USER, JSON.stringify(safeUser));
 }
@@ -1349,6 +1351,14 @@ function updateProfilePreview(url) {
   preview.src = safe || "./favicon.png";
 }
 
+function updateProfilePoints(pointsValue) {
+  const pointEl = $("#profilePoints");
+  if (!pointEl) return;
+  const points = Number(pointsValue || 0);
+  const safePoints = Number.isFinite(points) && points >= 0 ? Math.floor(points) : 0;
+  pointEl.textContent = `${safePoints}pt`;
+}
+
 async function loadProfileIntoModal() {
   const user = getCurrentUser();
   if (!user) return;
@@ -1359,7 +1369,8 @@ async function loadProfileIntoModal() {
     nickname: String(profile.nickname ?? user.nickname ?? "").trim(),
     iconUrl: String(profile.iconUrl ?? user.iconUrl ?? "").trim(),
     hobby: String(profile.hobby ?? user.hobby ?? "").trim(),
-    interests: String(profile.interests ?? user.interests ?? "").trim()
+    interests: String(profile.interests ?? user.interests ?? "").trim(),
+    points: Number(profile.points ?? user.points ?? 0)
   };
   saveCurrentUser(merged);
   updateProfileButton(merged);
@@ -1374,6 +1385,7 @@ async function loadProfileIntoModal() {
   if (hobbyInput) hobbyInput.value = merged.hobby || "";
   if (interestsInput) interestsInput.value = merged.interests || "";
   updateProfilePreview(merged.iconUrl || "");
+  updateProfilePoints(merged.points);
 }
 
 async function openProfileModal() {
@@ -1421,6 +1433,7 @@ async function saveProfileFromModal() {
       const merged = { ...current, ...profile };
       saveCurrentUser(merged);
       updateProfileButton(merged);
+      updateProfilePoints(merged.points);
     }
     updateProfilePreview(profile.iconUrl || iconUrl);
     if (msg) msg.textContent = "プロフィールを保存しました。";
@@ -2603,6 +2616,12 @@ function bind(){
 
   const profileIconFile = document.getElementById("profileIconFile");
   if (profileIconFile) {
+    const preview = $("#profileIconPreview");
+    if (preview) {
+      preview.addEventListener("click", () => {
+        profileIconFile.click();
+      });
+    }
     profileIconFile.addEventListener("change", async () => {
       const file = profileIconFile.files && profileIconFile.files[0];
       if (!file) return;
