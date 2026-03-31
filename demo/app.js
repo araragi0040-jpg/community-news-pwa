@@ -798,7 +798,12 @@ function openDrawer(articleId){
   $("#drawerDate").textContent = formatDateJP(a.date);
 
   $("#aTitle").textContent = a.title || "";
-  $("#aMeta").textContent = `#${a.channel}  /  ${(a.tags||[]).join("・") || "-"}`;
+  const meta = $("#aMeta");
+  const tagText = (a.tags || []).join("・");
+  if (meta) {
+    meta.textContent = tagText;
+    meta.style.display = tagText ? "" : "none";
+  }
 
   const stats = $("#aStats");
   stats.innerHTML = (a.tags||[]).map(t => `<span class="pill">${escapeHtml(t)}</span>`).join("");
@@ -1075,6 +1080,7 @@ async function saveEventEditor(status){
     const statusView = $("#evStatusView");
     if (statusView) statusView.textContent = saved.status || event.status;
     renderAll();
+    showToast("イベントを保存しました");
   } catch (err) {
     console.error(err);
     alert("イベント保存に失敗しました。\n" + (err.message || err));
@@ -1595,14 +1601,7 @@ async function saveEditor(status){
     const statusView = $("#pStatusView");
     if (statusView) statusView.textContent = normalized.status || a.status;
     syncAdminButtons();
-
-    if (btnSave) {
-      btnSave.textContent = "保存済み";
-    }
-
-    setTimeout(() => {
-      if (btnSave) btnSave.textContent = oldText || "投稿";
-    }, 1000);
+    showToast("投稿を保存しました");
 
     refreshFromCloud({ silent: false, skipNotify: true }).catch(err => {
       console.warn("Cloud resync failed:", err);
@@ -1660,14 +1659,7 @@ async function saveEditForm(status){
     const statusView = $("#eStatusView");
     if (statusView) statusView.textContent = normalized.status || a.status;
     syncEditButtons();
-
-    if (btnSave) {
-      btnSave.textContent = "保存済み";
-    }
-
-    setTimeout(() => {
-      if (btnSave) btnSave.textContent = oldText || "投稿";
-    }, 1000);
+    showToast("投稿を保存しました");
 
     refreshFromCloud({ silent: false, skipNotify: true }).catch(err => {
       console.warn("Cloud resync failed:", err);
@@ -1722,6 +1714,17 @@ function formatErrorMessage(err, fallback){
   if (!err) return fallback;
   if (typeof err === "string") return err;
   return err.message || fallback;
+}
+
+function showToast(message, duration = 2500){
+  const el = $("#toast");
+  if (!el) return;
+  el.textContent = message;
+  el.hidden = false;
+  clearTimeout(el._tid);
+  el._tid = setTimeout(() => {
+    el.hidden = true;
+  }, duration);
 }
 
 async function refreshFromCloud(opts = {}){
@@ -2252,7 +2255,7 @@ function bind(){
       textarea.value = [current, ...uploadedUrls]
         .filter(Boolean)
         .join("\n");
-      alert("画像をアップロードしました");
+      showToast("画像をアップロードしました");
     } catch (err) {
       console.error(err);
       if (isAuthError(err)) {
@@ -2327,6 +2330,12 @@ function bind(){
 
 // ===== Init =====
 async function init(){
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("./sw.js").catch(err => {
+      console.warn("SW registration failed:", err);
+    });
+  }
+
   bind();
   setupInstallButton();
   setupPostWatcher();
