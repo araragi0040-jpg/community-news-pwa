@@ -8,7 +8,7 @@
   <link rel="icon" href="./favicon.png" type="image/png">
   <link rel="apple-touch-icon" href="./favicon.png">
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=42" />
+  <link rel="stylesheet" href="./styles.css?v=41" />
 </head>
 <body>
   <div class="auth" id="authGate">
@@ -540,10 +540,11 @@
       <form class="form profile-form" id="profileForm">
         <div class="profile__iconrow">
           <img class="profile__icon-preview" id="profileIconPreview" src="./favicon.png" alt="プロフィールアイコン">
-          <div class="profile__iconcontrols">
-            <label class="btn btn--ghost profile__uploadbtn" for="profileIconFile">アイコン画像を選択</label>
-            <input class="profile__uploadinput" id="profileIconFile" type="file" accept="image/*">
+          <div class="profile__iconmeta">
+            <div class="profile__points" id="profilePoints">0pt</div>
+            <div class="profile__iconhint">アイコンをタップして変更</div>
           </div>
+          <input class="profile__uploadinput" id="profileIconFile" type="file" accept="image/*">
         </div>
         <input id="profileIconUrl" type="hidden">
 
@@ -572,7 +573,7 @@
   </div>
 </div>
 
-  <script src="config.js?v=42"></script>
-  <script src="./app.js?v=42"></script>
+  <script src="config.js?v=41"></script>
+  <script src="./app.js?v=41"></script>
 </body>
 </html>
