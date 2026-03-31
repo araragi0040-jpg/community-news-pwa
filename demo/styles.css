@@ -1425,22 +1425,27 @@ svg{ width:22px; height:22px; fill: currentColor; }
   object-fit: cover;
   background: #fff;
   flex-shrink: 0;
-}
-
-.profile__iconcontrols{
-  display: grid;
-  gap: 8px;
-}
-
-.profile__uploadbtn{
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   cursor: pointer;
+}
+
+.profile__iconmeta{
+  display: grid;
+  gap: 4px;
 }
 
 .profile__uploadinput{
   display: none;
+}
+
+.profile__points{
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-strong);
+}
+
+.profile__iconhint{
+  font-size: 11px;
+  color: var(--muted);
 }
 
 .profile__actions{
