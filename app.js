@@ -28,40 +28,56 @@ const ADMIN_CHANNELS = [
 // ==== Contact data ====
 const OWNERS = [
   {
-    name: "東",
-    instagram: "https://x.gd/tLcAs",
+    name: "おかっち",
+    instagram: "https://www.instagram.com/okacchi_4ugroup?utm_source=ig_web_button_share_sheet&igsh=ZDNlZDc0MzIxNw==",
+  },
+  {
+    name: "かずま",
+    instagram: "https://www.instagram.com/kazuma07_31?utm_source=ig_web_button_share_sheet&igsh=ZDNlZDc0MzIxNw==",
+  },
+  {
+    name: "けん",
+    instagram: "https://www.instagram.com/kaizokuken?utm_source=ig_web_button_share_sheet&igsh=ZDNlZDc0MzIxNw==",
   },
   {
     name: "しゅう",
     instagram: "https://x.gd/2a58h",
   },
   {
-    name: "◯◯",
-    instagram: "https://instagram.com/yyyy",
+    name: "じん",
+    instagram: "https://www.instagram.com/jin_wcrft?utm_source=ig_web_button_share_sheet&igsh=ZDNlZDc0MzIxNw==",
   },
   {
-    name: "◯◯",
-    instagram: "https://instagram.com/yyyy",
+    name: "たかちゃん",
+    instagram: "https://www.instagram.com/tk_hfpa?utm_source=ig_web_button_share_sheet&igsh=ZDNlZDc0MzIxNw==",
   },
   {
-    name: "◯◯",
-    instagram: "https://instagram.com/yyyy",
+    name: "だいち",
+    instagram: "https://www.instagram.com/daichi_kanae?utm_source=ig_web_button_share_sheet&igsh=ZDNlZDc0MzIxNw==",
   },
   {
-    name: "◯◯",
-    instagram: "https://instagram.com/yyyy",
+    name: "だいちゃん",
+    instagram: "https://www.instagram.com/daichan.1014?utm_source=ig_web_button_share_sheet&igsh=ZDNlZDc0MzIxNw==",
   },
   {
-    name: "◯◯",
-    instagram: "https://instagram.com/yyyy",
+    name: "とっとくん",
+    instagram: "https://www.instagram.com/tot_575_tot?utm_source=ig_web_button_share_sheet&igsh=ZDNlZDc0MzIxNw==",
   },
   {
-    name: "◯◯",
-    instagram: "https://instagram.com/yyyy",
+    name: "東",
+    instagram: "https://x.gd/tLcAs",
+  },
+
+  {
+    name: "ゆか",
+    instagram: "https://www.instagram.com/yuu.adorable_days?utm_source=ig_web_button_share_sheet&igsh=ZDNlZDc0MzIxNw==",
   },
   {
-    name: "◯◯",
-    instagram: "https://instagram.com/yyyy",
+    name: "よっしー",
+    instagram: "https://www.instagram.com/yoshi_yoshi828?utm_source=ig_web_button_share_sheet&igsh=ZDNlZDc0MzIxNw==",
+  },
+  {
+    name: "ぐっちょん",
   },
 ];
 
