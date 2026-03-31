@@ -69,11 +69,11 @@ svg{ width:22px; height:22px; fill: currentColor; }
 }
 
 .brand__logo{
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
   object-fit: cover;
-  border: 1px solid rgba(176,125,79,.18);
+  border: 2px solid #fff;
   background: #fff;
 }
 .brand__name{ font-weight: 760; letter-spacing:.2px; color: var(--text-strong); }
@@ -95,25 +95,6 @@ svg{ width:22px; height:22px; fill: currentColor; }
 }
 .iconbtn:active{ transform: scale(.98); }
 .iconbtn:hover{ background: #fff; }
-
-.btn-app-download{
-  border: 1px solid rgba(176,125,79,.32);
-  background: rgba(176,125,79,.12);
-  color: var(--text-strong);
-  border-radius: 999px;
-  height: 42px;
-  padding: 0 12px;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  font-weight: 760;
-  cursor: pointer;
-  transition: background .12s ease, transform .12s ease;
-}
-.btn-app-download:hover{ background: rgba(176,125,79,.18); }
-.btn-app-download:active{ transform: scale(.98); }
-.btn-app-download svg{ width: 16px; height: 16px; }
 
 /* Pages */
 .page{ display:none !important; }
@@ -677,6 +658,11 @@ svg{ width:22px; height:22px; fill: currentColor; }
 .article__body a{ color: #8b5a2b; }
 .article__footer{ margin-top: 16px; }
 .muted{ color: var(--muted); font-size: 12px; }
+#aMeta{
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
 
 /* CTA */
 .cta{
@@ -1004,7 +990,8 @@ svg{ width:22px; height:22px; fill: currentColor; }
 
 .media__img img{
   width:100%;
-  height:auto;
+  max-height:360px;
+  object-fit:cover;
   display:block;
   margin: 0 auto;    /* ← 中央寄せ */
   border-radius:16px;
