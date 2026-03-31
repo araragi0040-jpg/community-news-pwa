@@ -8,7 +8,7 @@
   <link rel="icon" href="./favicon.png" type="image/png">
   <link rel="apple-touch-icon" href="./favicon.png">
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=39" />
+  <link rel="stylesheet" href="./styles.css?v=41" />
 </head>
 <body>
   <div class="auth" id="authGate">
@@ -62,7 +62,7 @@
     <!-- Topbar -->
     <header class="topbar">
       <div class="brand">
-        <img class="brand__logo" src="./logo.png" alt="語り場ニュース" width="36" height="36">
+        <img class="brand__logo" src="./logo.png" alt="語り場ニュース" width="60" height="60">
         <div class="brand__texts">
           <div class="brand__name">語り場ニュース</div>
           <div class="brand__sub">限定配信</div>
@@ -70,12 +70,6 @@
       </div>
 
       <div class="topbar__actions">
-        <button class="btn-app-download" id="btnAppDownload" aria-label="アプリダウンロード" title="アプリダウンロード">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
-          </svg>
-          <span>アプリDL</span>
-        </button>
         <button class="iconbtn" id="btnInstall" aria-label="Install" title="インストール" hidden>
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
@@ -89,7 +83,7 @@
       </div>
     </header>
     <div class="notify-banner" id="notifyBanner" hidden>
-      <span>新しい記事があります</span>
+      <span id="notifyBannerText">新しい記事があります</span>
       <button id="notifyRefresh" type="button">更新</button>
       <button id="notifyDismiss" type="button" aria-label="閉じる">×</button>
     </div>
@@ -487,8 +481,6 @@
         <div class="article">
           <h2 class="article__title" id="aTitle">-</h2>
 
-          <div class="article__stats" id="aStats"></div>
-
           <div class="article__summary" id="aSummary">
             <ul id="aSummaryList"></ul>
           </div>
@@ -521,7 +513,7 @@
   </div>
 </div>
 
-  <script src="config.js?v=39"></script>
-  <script src="./app.js?v=39"></script>
+  <script src="config.js?v=41"></script>
+  <script src="./app.js?v=41"></script>
 </body>
 </html>
