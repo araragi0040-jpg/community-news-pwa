@@ -1373,6 +1373,27 @@ svg{ width:22px; height:22px; fill: currentColor; }
   color: var(--muted);
 }
 
+.installhelp__lead{
+  font-size: 14px;
+  color: var(--text-strong);
+  line-height: 1.6;
+}
+
+.installhelp__sub{
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--text-soft);
+  font-weight: 700;
+}
+
+.installhelp__list{
+  margin: 8px 0 0;
+  padding-left: 20px;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
 /* 2週間表示の内容 */
 .cal2w{
   display: grid;
