@@ -107,6 +107,7 @@ let state = {
 let cloudPosts = [];
 let cloudEvents = [];
 let latestPostKey = "";
+let latestPostSnapshot = null;
 let deferredInstallPrompt = null;
 
 // ===== Helpers =====
@@ -575,6 +576,7 @@ function applyAuthUI() {
   const adminNav = document.querySelector('.navitem[data-nav="admin"]');
   const adminPage = document.querySelector('.page[data-page="admin"]');
   const logoutBtn = document.getElementById("btnLogout");
+  const installBtn = document.getElementById("btnInstall");
 
   if (!authGate || !appRoot) return;
 
@@ -584,6 +586,7 @@ function applyAuthUI() {
     if (adminNav) adminNav.style.display = "none";
     if (adminPage) adminPage.style.display = "none";
     if (logoutBtn) logoutBtn.hidden = true;
+    if (installBtn) installBtn.hidden = true;
     return;
   }
 
@@ -595,6 +598,7 @@ function applyAuthUI() {
   if (adminNav) adminNav.style.display = isAdmin ? "flex" : "none";
   if (adminPage) adminPage.style.display = isAdmin ? "" : "none";
   if (logoutBtn) logoutBtn.hidden = false;
+  if (installBtn) installBtn.hidden = isStandaloneMode();
 }
 
 // ===== Rendering: Chips =====
@@ -1719,6 +1723,7 @@ function renderAll(){
 function updateLatestPostKey(posts){
   if(!Array.isArray(posts) || posts.length === 0){
     latestPostKey = "";
+    latestPostSnapshot = null;
     return;
   }
   const sorted = posts
@@ -1726,10 +1731,21 @@ function updateLatestPostKey(posts){
     .sort((a, b) => (parseDate(a.date) < parseDate(b.date) ? 1 : -1));
   const top = sorted[0];
   latestPostKey = `${top.id}:${parseDate(top.date)}`;
+  latestPostSnapshot = {
+    id: top.id || "",
+    title: top.title || "",
+    date: parseDate(top.date)
+  };
 }
 
-function showNotifyBanner(){
+function showNotifyBanner(postTitle = ""){
   const banner = $("#notifyBanner");
+  const text = $("#notifyBannerText");
+  if (text) {
+    text.textContent = postTitle
+      ? `新しい記事が投稿されました。「${postTitle}」を読む`
+      : "新しい記事があります";
+  }
   if (banner) banner.hidden = false;
 }
 
@@ -1755,6 +1771,35 @@ function showToast(message, duration = 2500){
   }, duration);
 }
 
+function isStandaloneMode() {
+  return window.matchMedia?.("(display-mode: standalone)")?.matches || window.navigator.standalone === true;
+}
+
+function requestSystemNotificationPermission() {
+  if (!("Notification" in window)) return;
+  if (Notification.permission !== "default") return;
+  Notification.requestPermission().catch(() => {});
+}
+
+function showNewPostSystemNotification(post) {
+  if (!post?.title) return;
+  if (!("Notification" in window)) return;
+  if (Notification.permission !== "granted") return;
+  const notification = new Notification("新しい記事が投稿されました。", {
+    body: `「${post.title}」を読む`,
+    icon: "./favicon.png",
+    badge: "./favicon.png",
+    tag: `new-post-${post.id || post.date || Date.now()}`
+  });
+  notification.onclick = () => {
+    window.focus();
+    const target = allArticles().find(a => a.id === post.id);
+    if (target) openDrawer(target.id);
+    notification.close();
+  };
+  setTimeout(() => notification.close(), 12000);
+}
+
 async function refreshFromCloud(opts = {}){
   try {
     const user = getCurrentUser();
@@ -1774,7 +1819,8 @@ async function refreshFromCloud(opts = {}){
     if (!opts.silent) renderAll();
     setFeedLoading(false);
     if (!opts.skipNotify && prevKey && prevKey !== latestPostKey) {
-      showNotifyBanner();
+      showNotifyBanner(latestPostSnapshot?.title || "");
+      showNewPostSystemNotification(latestPostSnapshot);
     }
   } catch (err) {
     if (isAuthError(err)) {
@@ -1794,13 +1840,10 @@ function setupInstallButton(){
   window.addEventListener("beforeinstallprompt", (e) => {
     e.preventDefault();
     deferredInstallPrompt = e;
-    const btn = $("#btnInstall");
-    if (btn) btn.hidden = false;
   });
   window.addEventListener("appinstalled", () => {
     deferredInstallPrompt = null;
-    const btn = $("#btnInstall");
-    if (btn) btn.hidden = true;
+    applyAuthUI();
   });
 }
 
@@ -2125,6 +2168,7 @@ function bind(){
         saveCurrentUser(auth.user);
         saveAuthToken(auth.token || "");
         applyAuthUI();
+        requestSystemNotificationPermission();
         setActivePage("home");
         const cachedPosts = loadCachedPosts();
         const hasCache = cachedPosts.length > 0;
@@ -2316,12 +2360,13 @@ function bind(){
   }
 
   on("#btnInstall", "click", async () => {
-    if (!deferredInstallPrompt) return;
+    if (!deferredInstallPrompt) {
+      showToast("この端末・ブラウザではアプリのインストールに対応していません。");
+      return;
+    }
     deferredInstallPrompt.prompt();
     await deferredInstallPrompt.userChoice;
     deferredInstallPrompt = null;
-    const btn = $("#btnInstall");
-    if (btn) btn.hidden = true;
   });
   on("#notifyRefresh", "click", async () => {
     try {
@@ -2368,6 +2413,7 @@ async function init(){
     updateLatestPostKey(cachedPosts);
   }
 
+  requestSystemNotificationPermission();
   setActivePage("home");
   renderAll();
   setFeedLoading(!hasCache);
