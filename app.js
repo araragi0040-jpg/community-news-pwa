@@ -853,17 +853,74 @@ function escapeAttr(s){
   return escapeHtml(s).replaceAll("`","&#096;");
 }
 
-function mediaHtml(a){
-  const imgs = (a.media?.images || [])
+const INLINE_IMG_RE = /^\{\{画像([12])(?::(.+?))?\}\}$/;
+const INLINE_VID_RE = /^\{\{動画\}\}$/;
+
+function bodyHasMarkers(a){
+  return (a.body || []).some(p => INLINE_IMG_RE.test(p.trim()) || INLINE_VID_RE.test(p.trim()));
+}
+
+function mediaHtml(a, heroOnly){
+  const images = a.media?.images || [];
+  const videoUrl = a.media?.video || "";
+
+  if(heroOnly){
+    if(!images.length) return "";
+    return `<div class="media">
+      <div class="media__img">
+        <img src="${escapeAttr(images[0])}" alt="" loading="lazy" />
+      </div>
+    </div>`;
+  }
+
+  const imgs = images
     .map(url => `
       <div class="media__img">
         <img src="${escapeAttr(url)}" alt="" loading="lazy" />
       </div>
     `).join("");
-  const videoUrl = a.media?.video || "";
   const video = videoUrl ? renderVideoEmbed(videoUrl) : "";
   if(!imgs && !video) return "";
   return `<div class="media">${imgs}${video}</div>`;
+}
+
+function renderInlineImage(url, caption){
+  let html = `<div class="media-inline"><div class="media__img">
+    <img src="${escapeAttr(url)}" alt="" loading="lazy" />
+  </div>`;
+  if(caption){
+    html += `<div class="media-caption">${escapeHtml(caption)}</div>`;
+  }
+  html += `</div>`;
+  return html;
+}
+
+function renderBodyWithInlineMedia(a){
+  const images = a.media?.images || [];
+  const videoUrl = a.media?.video || "";
+  const paragraphs = a.body || [];
+
+  return paragraphs.map(p => {
+    const trimmed = p.trim();
+
+    const imgMatch = trimmed.match(INLINE_IMG_RE);
+    if(imgMatch){
+      const idx = Number(imgMatch[1]);
+      const caption = imgMatch[2] || "";
+      const url = images[idx];
+      if(url) return renderInlineImage(url, caption);
+      return "";
+    }
+
+    if(INLINE_VID_RE.test(trimmed)){
+      if(videoUrl){
+        return `<div class="media-inline">${renderVideoEmbed(videoUrl)}</div>`;
+      }
+      return "";
+    }
+
+    return `<p>${escapeHtml(p)}</p>`;
+  }).join("");
 }
 
 function renderVideoEmbed(url){
@@ -920,9 +977,12 @@ function openDrawer(articleId){
   $("#aSummary").style.display = (a.summary && a.summary.length) ? "block" : "none";
 
   const body = $("#aBody");
+  const hasMarkers = bodyHasMarkers(a);
   body.innerHTML =
-    mediaHtml(a) +
-    (a.body||[]).map(p => `<p>${escapeHtml(p)}</p>`).join("");
+    mediaHtml(a, hasMarkers) +
+    (hasMarkers
+      ? renderBodyWithInlineMedia(a)
+      : (a.body||[]).map(p => `<p>${escapeHtml(p)}</p>`).join(""));
 
   const cta = $("#cta");
   if(a.cta && a.cta.url){
@@ -949,7 +1009,7 @@ function renderSaveBtn(){
   if(!id) return;
   const saved = isSaved(id);
   btn.textContent = saved ? "★" : "☆";
-  btn.title = saved ? "保存済み" : "保存";
+  btn.title = saved ? "お気に入り済み" : "お気に入りに追加";
 }
 
 // ===== Saved =====
