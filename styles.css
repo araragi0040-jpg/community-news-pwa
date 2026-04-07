@@ -1027,6 +1027,20 @@ svg{ width:22px; height:22px; fill: currentColor; }
   gap:14px;
   margin:20px 0;
 }
+
+.media-inline{
+  margin: 18px 0;
+}
+.media-inline .media__img img{
+  max-height: 420px;
+}
+.media-caption{
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+  line-height: 1.5;
+}
 .media--images{ grid-template-columns: 1fr; }
 .media__img{
   width:100%;
