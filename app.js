@@ -11,6 +11,7 @@ const LS_KEY_SAVED = "community_news_saved_v1";
 const LS_KEY_USER = "community_news_user_v1";
 const LS_KEY_TOKEN = "community_news_token_v1";
 const LS_KEY_POSTS_CACHE = "community_news_posts_cache_v1";
+const LS_KEY_EVENTS_CACHE = "community_news_events_cache_v1";
 const ITEMS_PER_PAGE = 10;
 
 const CHANNELS = [
@@ -133,6 +134,15 @@ function loadCachedPosts(){
 
 function saveCachedPosts(posts){
   localStorage.setItem(LS_KEY_POSTS_CACHE, JSON.stringify(Array.isArray(posts) ? posts : []));
+}
+
+function loadCachedEvents(){
+  const events = safeJsonParse(localStorage.getItem(LS_KEY_EVENTS_CACHE) || "[]", []);
+  return Array.isArray(events) ? events.map(mapApiEvent) : [];
+}
+
+function saveCachedEvents(events){
+  localStorage.setItem(LS_KEY_EVENTS_CACHE, JSON.stringify(Array.isArray(events) ? events : []));
 }
 
 function allArticles(){
@@ -853,6 +863,87 @@ function escapeAttr(s){
   return escapeHtml(s).replaceAll("`","&#096;");
 }
 
+function insertAtCursor(textarea, text){
+  if(!textarea) return;
+  const start = textarea.selectionStart ?? textarea.value.length;
+  const end = textarea.selectionEnd ?? textarea.value.length;
+  const before = textarea.value.slice(0, start);
+  const after = textarea.value.slice(end);
+  textarea.value = `${before}${text}${after}`;
+  const nextPos = start + text.length;
+  textarea.selectionStart = nextPos;
+  textarea.selectionEnd = nextPos;
+  textarea.focus();
+  textarea.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+function renderImagePicker(textareaId, pickerId, bodyTextareaId){
+  const textarea = document.getElementById(textareaId);
+  const picker = document.getElementById(pickerId);
+  const bodyTextarea = document.getElementById(bodyTextareaId);
+  if (!textarea || !picker || !bodyTextarea) return;
+
+  const urls = (textarea.value || "")
+    .split("\n")
+    .map(s => s.trim())
+    .filter(Boolean);
+
+  if (!urls.length) {
+    picker.innerHTML = "";
+    return;
+  }
+
+  picker.innerHTML = urls.map((url, idx) => {
+    let label = `追加画像${idx + 1}`;
+    if (idx === 0) label = "トップ画";
+    if (idx === 1) label = "画像1";
+    if (idx === 2) label = "画像2";
+    const marker = idx === 1 ? "{{画像1}}" : (idx === 2 ? "{{画像2}}" : "");
+    const insertButton = marker
+      ? `<button class="img-picker__insert" type="button" data-marker="${escapeAttr(marker)}">本文に挿入</button>`
+      : "";
+    return `
+      <div class="img-picker__item">
+        <img class="img-picker__thumb" src="${escapeAttr(url)}" alt="${escapeAttr(label)}" loading="lazy">
+        <div class="img-picker__label">${escapeHtml(label)}</div>
+        ${insertButton}
+      </div>
+    `;
+  }).join("");
+
+  $$(".img-picker__insert", picker).forEach(btn => {
+    btn.addEventListener("click", () => {
+      const marker = btn.dataset.marker || "";
+      if (!marker) return;
+      const needsBreak = bodyTextarea.value.trim().length > 0;
+      const text = needsBreak ? `\n\n${marker}\n\n` : `${marker}\n\n`;
+      insertAtCursor(bodyTextarea, text);
+    });
+  });
+}
+
+function renderVidInsertButton(videoInputId, bodyTextareaId, containerId){
+  const input = document.getElementById(videoInputId);
+  const bodyTextarea = document.getElementById(bodyTextareaId);
+  const container = document.getElementById(containerId);
+  if (!input || !bodyTextarea || !container) return;
+
+  const videoUrl = (input.value || "").trim();
+  if (!videoUrl) {
+    container.innerHTML = "";
+    return;
+  }
+
+  container.innerHTML = `<button class="img-picker__insert" type="button">本文に動画を挿入</button>`;
+  const btn = container.querySelector("button");
+  if (!btn) return;
+  btn.addEventListener("click", () => {
+    const needsBreak = bodyTextarea.value.trim().length > 0;
+    const text = needsBreak ? `\n\n{{動画}}\n\n` : `{{動画}}\n\n`;
+    insertAtCursor(bodyTextarea, text);
+  });
+}
+
 const INLINE_IMG_RE = /^\{\{画像([12])(?::(.+?))?\}\}$/;
 const INLINE_VID_RE = /^\{\{動画\}\}$/;
 
@@ -1419,6 +1510,26 @@ function updateProfilePoints(pointsValue) {
   pointEl.textContent = `${safePoints}pt`;
 }
 
+function fillProfileForm(userLike = {}){
+  const nicknameInput = $("#profileNickname");
+  const iconUrlInput = $("#profileIconUrl");
+  const hobbyInput = $("#profileHobby");
+  const interestsInput = $("#profileInterests");
+
+  const nickname = String(userLike.nickname || "").trim();
+  const iconUrl = String(userLike.iconUrl || "").trim();
+  const hobby = String(userLike.hobby || "").trim();
+  const interests = String(userLike.interests || "").trim();
+  const points = Number(userLike.points || 0);
+
+  if (nicknameInput) nicknameInput.value = nickname;
+  if (iconUrlInput) iconUrlInput.value = iconUrl;
+  if (hobbyInput) hobbyInput.value = hobby;
+  if (interestsInput) interestsInput.value = interests;
+  updateProfilePreview(iconUrl);
+  updateProfilePoints(points);
+}
+
 async function loadProfileIntoModal() {
   const user = getCurrentUser();
   if (!user) return;
@@ -1434,18 +1545,7 @@ async function loadProfileIntoModal() {
   };
   saveCurrentUser(merged);
   updateProfileButton(merged);
-
-  const nicknameInput = $("#profileNickname");
-  const iconUrlInput = $("#profileIconUrl");
-  const hobbyInput = $("#profileHobby");
-  const interestsInput = $("#profileInterests");
-
-  if (nicknameInput) nicknameInput.value = merged.nickname || "";
-  if (iconUrlInput) iconUrlInput.value = merged.iconUrl || "";
-  if (hobbyInput) hobbyInput.value = merged.hobby || "";
-  if (interestsInput) interestsInput.value = merged.interests || "";
-  updateProfilePreview(merged.iconUrl || "");
-  updateProfilePoints(merged.points);
+  fillProfileForm(merged);
 }
 
 async function openProfileModal() {
@@ -1455,6 +1555,8 @@ async function openProfileModal() {
   modal.setAttribute("aria-hidden", "false");
   const msg = $("#profileMsg");
   if (msg) msg.textContent = "";
+  const user = getCurrentUser();
+  if (user) fillProfileForm(user);
   try {
     await loadProfileIntoModal();
   } catch (err) {
@@ -1765,6 +1867,8 @@ function clearEditor(){
   $("#pCtaUrl").value = "";
   $("#pImages").value = "";
   $("#pVideo").value = "";
+  renderImagePicker("pImages", "pImagePicker", "pBody");
+  renderVidInsertButton("pVideo", "pBody", "pVidInsert");
   const statusView = $("#pStatusView");
   if (statusView) statusView.textContent = "未設定（投稿すると状態が反映されます）";
   syncAdminButtons();
@@ -1780,6 +1884,8 @@ function clearEditForm(){
   $("#eCtaUrl").value = "";
   $("#eImages").value = "";
   $("#eVideo").value = "";
+  renderImagePicker("eImages", "eImagePicker", "eBody");
+  renderVidInsertButton("eVideo", "eBody", "eVidInsert");
   const statusView = $("#eStatusView");
   if (statusView) statusView.textContent = "未設定";
   syncEditButtons();
@@ -1800,6 +1906,8 @@ function startEdit(id){
   $("#eCtaUrl").value = a.cta?.url || "";
   $("#eImages").value = (a.media?.images || []).join("\n");
   $("#eVideo").value = a.media?.video || "";
+  renderImagePicker("eImages", "eImagePicker", "eBody");
+  renderVidInsertButton("eVideo", "eBody", "eVidInsert");
   const statusView = $("#eStatusView");
   if (statusView) statusView.textContent = a.status || "public";
   syncEditButtons();
@@ -2116,6 +2224,7 @@ async function refreshFromCloud(opts = {}){
     cloudPosts = posts;
     cloudEvents = events;
     saveCachedPosts(posts);
+    saveCachedEvents(events);
     updateLatestPostKey(posts);
     if (!opts.silent) renderAll();
     setFeedLoading(false);
@@ -2486,16 +2595,20 @@ function bind(){
         requestSystemNotificationPermission();
         setActivePage("home");
         const cachedPosts = loadCachedPosts();
-        const hasCache = cachedPosts.length > 0;
-        if (hasCache) {
+        const cachedEvents = loadCachedEvents();
+        const hasPostCache = cachedPosts.length > 0;
+        if (hasPostCache) {
           cloudPosts = cachedPosts;
           updateLatestPostKey(cachedPosts);
         }
+        if (cachedEvents.length > 0) {
+          cloudEvents = cachedEvents;
+        }
         renderAll();
-        setFeedLoading(!hasCache);
-        refreshFromCloud({ silent: false, skipNotify: true, showError: !hasCache }).catch((refreshErr) => {
+        setFeedLoading(!hasPostCache);
+        refreshFromCloud({ silent: false, skipNotify: true, showError: !hasPostCache }).catch((refreshErr) => {
           console.warn(refreshErr);
-          if (msg && !hasCache) msg.textContent = formatErrorMessage(refreshErr, "記事の読み込みに失敗しました。");
+          if (msg && !hasPostCache) msg.textContent = formatErrorMessage(refreshErr, "記事の読み込みに失敗しました。");
         });
         if (msg) msg.textContent = "";
       } catch (err) {
@@ -2642,6 +2755,11 @@ function bind(){
       textarea.value = [current, ...uploadedUrls]
         .filter(Boolean)
         .join("\n");
+      if (textareaId === "pImages") {
+        renderImagePicker("pImages", "pImagePicker", "pBody");
+      } else if (textareaId === "eImages") {
+        renderImagePicker("eImages", "eImagePicker", "eBody");
+      }
       showToast("画像をアップロードしました");
     } catch (err) {
       console.error(err);
@@ -2673,6 +2791,35 @@ function bind(){
       handleImageUpload(evImageFiles, "evImageUrls");
     });
   }
+
+  const pImages = document.getElementById("pImages");
+  if (pImages) {
+    pImages.addEventListener("input", () => {
+      renderImagePicker("pImages", "pImagePicker", "pBody");
+    });
+  }
+  const eImages = document.getElementById("eImages");
+  if (eImages) {
+    eImages.addEventListener("input", () => {
+      renderImagePicker("eImages", "eImagePicker", "eBody");
+    });
+  }
+  const pVideo = document.getElementById("pVideo");
+  if (pVideo) {
+    pVideo.addEventListener("input", () => {
+      renderVidInsertButton("pVideo", "pBody", "pVidInsert");
+    });
+  }
+  const eVideo = document.getElementById("eVideo");
+  if (eVideo) {
+    eVideo.addEventListener("input", () => {
+      renderVidInsertButton("eVideo", "eBody", "eVidInsert");
+    });
+  }
+  renderImagePicker("pImages", "pImagePicker", "pBody");
+  renderImagePicker("eImages", "eImagePicker", "eBody");
+  renderVidInsertButton("pVideo", "pBody", "pVidInsert");
+  renderVidInsertButton("eVideo", "eBody", "eVidInsert");
 
   const profileIconFile = document.getElementById("profileIconFile");
   if (profileIconFile) {
@@ -2761,18 +2908,22 @@ async function init(){
   }
 
   const cachedPosts = loadCachedPosts();
-  const hasCache = cachedPosts.length > 0;
-  if (hasCache) {
+  const cachedEvents = loadCachedEvents();
+  const hasPostCache = cachedPosts.length > 0;
+  if (hasPostCache) {
     cloudPosts = cachedPosts;
     updateLatestPostKey(cachedPosts);
+  }
+  if (cachedEvents.length > 0) {
+    cloudEvents = cachedEvents;
   }
 
   requestSystemNotificationPermission();
   setActivePage("home");
   renderAll();
-  setFeedLoading(!hasCache);
+  setFeedLoading(!hasPostCache);
 
-  refreshFromCloud({ silent: false, skipNotify: true, showError: !hasCache }).catch((err) => {
+  refreshFromCloud({ silent: false, skipNotify: true, showError: !hasPostCache }).catch((err) => {
     console.warn("Cloud refresh failed:", err);
   });
 }
