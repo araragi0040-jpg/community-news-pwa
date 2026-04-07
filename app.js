@@ -12,6 +12,7 @@ const LS_KEY_USER = "community_news_user_v1";
 const LS_KEY_TOKEN = "community_news_token_v1";
 const LS_KEY_POSTS_CACHE = "community_news_posts_cache_v1";
 const LS_KEY_EVENTS_CACHE = "community_news_events_cache_v1";
+const LS_KEY_DAILY_POINT_DATE_PREFIX = "community_news_daily_point_date_v1:";
 const ITEMS_PER_PAGE = 10;
 
 const CHANNELS = [
@@ -504,6 +505,11 @@ async function saveProfileToApi(profile) {
   return data.profile || {};
 }
 
+async function touchDailyPointToApi() {
+  const data = await callApi("touchDailyPoint");
+  return Number(data.points || 0);
+}
+
 async function uploadImageToApi(file) {
   const dataUrl = await compressImage(file);
   const data = await callApi("uploadImage", {
@@ -598,6 +604,25 @@ function saveCurrentUser(user) {
     points: Number.isFinite(parsedPoints) && parsedPoints >= 0 ? Math.floor(parsedPoints) : 0
   };
   localStorage.setItem(LS_KEY_USER, JSON.stringify(safeUser));
+}
+
+async function awardDailyVisitPointIfNeeded() {
+  const user = getCurrentUser();
+  const token = getAuthToken();
+  if (!user || !token || !user.id) return;
+  const today = todayYMD();
+  const cacheKey = `${LS_KEY_DAILY_POINT_DATE_PREFIX}${user.id}`;
+  if (localStorage.getItem(cacheKey) === today) return;
+
+  const points = await touchDailyPointToApi();
+  const merged = {
+    ...user,
+    points: Number.isFinite(points) && points >= 0 ? Math.floor(points) : Number(user.points || 0)
+  };
+  saveCurrentUser(merged);
+  updateProfileButton(merged);
+  updateProfilePoints(merged.points);
+  localStorage.setItem(cacheKey, today);
 }
 
 function clearCurrentUser() {
@@ -944,8 +969,9 @@ function renderVidInsertButton(videoInputId, bodyTextareaId, containerId){
   });
 }
 
-const INLINE_IMG_RE = /^\{\{画像([12])(?::(.+?))?\}\}$/;
-const INLINE_VID_RE = /^\{\{動画\}\}$/;
+const INLINE_IMG_RE = /\{\{画像([12])(?::([^}]+))?\}\}/;
+const INLINE_VID_RE = /\{\{動画\}\}/;
+const INLINE_TOKEN_RE = /\{\{画像([12])(?::([^}]+))?\}\}|\{\{動画\}\}/g;
 
 function bodyHasMarkers(a){
   return (a.body || []).some(p => INLINE_IMG_RE.test(p.trim()) || INLINE_VID_RE.test(p.trim()));
@@ -992,25 +1018,32 @@ function renderBodyWithInlineMedia(a){
   const paragraphs = a.body || [];
 
   return paragraphs.map(p => {
-    const trimmed = p.trim();
+    const source = String(p || "");
+    const parts = [];
+    let lastIndex = 0;
 
-    const imgMatch = trimmed.match(INLINE_IMG_RE);
-    if(imgMatch){
-      const idx = Number(imgMatch[1]);
-      const caption = imgMatch[2] || "";
-      const url = images[idx];
-      if(url) return renderInlineImage(url, caption);
-      return "";
-    }
+    source.replace(INLINE_TOKEN_RE, (match, imgIdx, caption, offset) => {
+      const before = source.slice(lastIndex, offset).trim();
+      if (before) parts.push(`<p>${escapeHtml(before)}</p>`);
 
-    if(INLINE_VID_RE.test(trimmed)){
-      if(videoUrl){
-        return `<div class="media-inline">${renderVideoEmbed(videoUrl)}</div>`;
+      if (match.startsWith("{{画像")) {
+        const idx = Number(imgIdx);
+        const url = images[idx];
+        if (url) parts.push(renderInlineImage(url, caption || ""));
+      } else if (videoUrl) {
+        parts.push(`<div class="media-inline">${renderVideoEmbed(videoUrl)}</div>`);
       }
-      return "";
-    }
 
-    return `<p>${escapeHtml(p)}</p>`;
+      lastIndex = offset + match.length;
+      return match;
+    });
+
+    const tail = source.slice(lastIndex).trim();
+    if (tail) parts.push(`<p>${escapeHtml(tail)}</p>`);
+
+    if (parts.length) return parts.join("");
+    if (!source.trim()) return "";
+    return `<p>${escapeHtml(source)}</p>`;
   }).join("");
 }
 
@@ -2592,6 +2625,7 @@ function bind(){
         saveCurrentUser(auth.user);
         saveAuthToken(auth.token || "");
         applyAuthUI();
+        awardDailyVisitPointIfNeeded().catch(err => console.warn("Daily point update failed:", err));
         requestSystemNotificationPermission();
         setActivePage("home");
         const cachedPosts = loadCachedPosts();
@@ -2922,6 +2956,7 @@ async function init(){
   setActivePage("home");
   renderAll();
   setFeedLoading(!hasPostCache);
+  awardDailyVisitPointIfNeeded().catch(err => console.warn("Daily point update failed:", err));
 
   refreshFromCloud({ silent: false, skipNotify: true, showError: !hasPostCache }).catch((err) => {
     console.warn("Cloud refresh failed:", err);
