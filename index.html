@@ -8,7 +8,7 @@
   <link rel="icon" href="./favicon.png" type="image/png">
   <link rel="apple-touch-icon" href="./favicon.png">
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=42" />
+  <link rel="stylesheet" href="./styles.css?v=41" />
 </head>
 <body>
   <div class="auth" id="authGate">
@@ -229,14 +229,14 @@
     <section class="page" data-page="saved">
       <section class="pane">
         <div class="pane__head">
-          <h2 class="pane__title">お気に入り</h2>
-          <p class="pane__sub">お気に入りに追加した記事</p>
+          <h2 class="pane__title">保存</h2>
+          <p class="pane__sub">あとで読む記事</p>
         </div>
         <div class="cards" id="savedCards"></div>
         <div class="empty" id="savedEmpty" style="display:none;">
           <div class="empty__icon">🔖</div>
-          <div class="empty__title">お気に入りがありません</div>
-          <div class="empty__text">記事を開いて「お気に入り」に追加してください。</div>
+          <div class="empty__title">保存がありません</div>
+          <div class="empty__text">記事を開いて「保存」してください。</div>
         </div>
       </section>
     </section>
@@ -301,7 +301,6 @@
 
               <label class="field">
                 <div class="field__label">本文（改行で段落）</div>
-                <div class="hint" style="margin-top:0;margin-bottom:6px;">本文中に <code>{{画像1}}</code> <code>{{画像2}}</code> <code>{{動画}}</code> を記述するとその位置にメディアを挿入できます。注釈付き: <code>{{画像1:注釈テキスト}}</code></div>
                 <textarea class="textarea" id="pBody" rows="8" placeholder="本文を入力"></textarea>
               </label>
 
@@ -313,13 +312,11 @@
 <label class="field">
   <div class="field__label">画像URL（自動反映 / 手入力も可）</div>
   <textarea class="textarea" id="pImages" rows="3" placeholder="https://..."></textarea>
-  <div class="img-picker" id="pImagePicker"></div>
 </label>
 
 <label class="field">
   <div class="field__label">動画URL（YouTube等 / mp4直リンク）</div>
   <input class="input" id="pVideo" placeholder="https://..." />
-  <div class="vid-insert" id="pVidInsert"></div>
 </label>
 
               <div class="grid2">
@@ -379,7 +376,6 @@
 
               <label class="field">
                 <div class="field__label">本文（改行で段落）</div>
-                <div class="hint" style="margin-top:0;margin-bottom:6px;">本文中に <code>{{画像1}}</code> <code>{{画像2}}</code> <code>{{動画}}</code> を記述するとその位置にメディアを挿入できます。注釈付き: <code>{{画像1:注釈テキスト}}</code></div>
                 <textarea class="textarea" id="eBody" rows="8" placeholder="本文を入力"></textarea>
               </label>
 
@@ -391,13 +387,11 @@
               <label class="field">
                 <div class="field__label">画像URL（自動反映 / 手入力も可）</div>
                 <textarea class="textarea" id="eImages" rows="3" placeholder="https://..."></textarea>
-                <div class="img-picker" id="eImagePicker"></div>
               </label>
 
               <label class="field">
                 <div class="field__label">動画URL（YouTube等 / mp4直リンク）</div>
                 <input class="input" id="eVideo" placeholder="https://..." />
-                <div class="vid-insert" id="eVidInsert"></div>
               </label>
 
               <div class="grid2">
@@ -441,9 +435,9 @@
         <span>Schedule</span>
       </button>
 
-      <button class="navitem" data-nav="saved" aria-label="お気に入り">
+      <button class="navitem" data-nav="saved" aria-label="Saved">
         <svg viewBox="0 0 24 24"><path d="M6 2h12a2 2 0 0 1 2 2v18l-8-4-8 4V4a2 2 0 0 1 2-2z"/></svg>
-        <span>お気に入り</span>
+        <span>Saved</span>
       </button>
 
       <button class="navitem" data-nav="contact" aria-label="Contact">
@@ -472,7 +466,7 @@
             <span class="drawer__date" id="drawerDate">-</span>
           </div>
           <div style="display:flex; gap:8px;">
-            <button class="iconbtn" id="btnSave" aria-label="お気に入り">
+            <button class="iconbtn" id="btnSave" aria-label="Save">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2h12a2 2 0 0 1 2 2v18l-8-4-8 4V4a2 2 0 0 1 2-2z"/></svg>
             </button>
             <button class="iconbtn" id="btnClose" aria-label="Close">
@@ -579,7 +573,7 @@
   </div>
 </div>
 
-  <script src="config.js?v=42"></script>
-  <script src="./app.js?v=42"></script>
+  <script src="config.js?v=41"></script>
+  <script src="./app.js?v=41"></script>
 </body>
 </html>
