@@ -2,9 +2,9 @@ const CACHE_NAME = "community-news-v3";
 const ASSETS = [
   "./",
   "./index.html",
-  "./styles.css?v=42",
-  "./app.js?v=42",
-  "./config.js?v=42",
+  "./styles.css?v=43",
+  "./app.js?v=43",
+  "./config.js?v=43",
   "./manifest.webmanifest",
   "./favicon.png",
   "./logo.png"
