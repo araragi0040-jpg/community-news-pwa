@@ -8,7 +8,7 @@
   <link rel="icon" href="./favicon.png" type="image/png">
   <link rel="apple-touch-icon" href="./favicon.png">
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=41" />
+  <link rel="stylesheet" href="./styles.css?v=44" />
 </head>
 <body>
   <div class="auth" id="authGate">
@@ -229,14 +229,14 @@
     <section class="page" data-page="saved">
       <section class="pane">
         <div class="pane__head">
-          <h2 class="pane__title">保存</h2>
+          <h2 class="pane__title">お気に入り</h2>
           <p class="pane__sub">あとで読む記事</p>
         </div>
         <div class="cards" id="savedCards"></div>
         <div class="empty" id="savedEmpty" style="display:none;">
           <div class="empty__icon">🔖</div>
-          <div class="empty__title">保存がありません</div>
-          <div class="empty__text">記事を開いて「保存」してください。</div>
+          <div class="empty__title">お気に入りがありません</div>
+          <div class="empty__text">記事を開いて「お気に入り」してください。</div>
         </div>
       </section>
     </section>
@@ -314,6 +314,8 @@
   <textarea class="textarea" id="pImages" rows="3" placeholder="https://..."></textarea>
 </label>
 
+<div id="pImagePicker" class="img-picker"></div>
+
 <label class="field">
   <div class="field__label">動画URL（YouTube等 / mp4直リンク）</div>
   <input class="input" id="pVideo" placeholder="https://..." />
@@ -388,6 +390,8 @@
                 <div class="field__label">画像URL（自動反映 / 手入力も可）</div>
                 <textarea class="textarea" id="eImages" rows="3" placeholder="https://..."></textarea>
               </label>
+
+              <div id="eImagePicker" class="img-picker"></div>
 
               <label class="field">
                 <div class="field__label">動画URL（YouTube等 / mp4直リンク）</div>
@@ -573,7 +577,7 @@
   </div>
 </div>
 
-  <script src="config.js?v=41"></script>
-  <script src="./app.js?v=41"></script>
+  <script src="config.js?v=44"></script>
+  <script src="./app.js?v=44"></script>
 </body>
 </html>
