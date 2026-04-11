@@ -265,6 +265,10 @@ function normalizePost(input){
   a.media.images = Array.isArray(a.media.images) ? a.media.images : [];
   a.media.video = a.media.video || "";
   a.status = normalizeStatusValue(a.status, "public");
+  const totalViews = Number(a.totalViews || 0);
+  const uniqueViewCount = Number(a.uniqueViewCount || 0);
+  a.totalViews = Number.isFinite(totalViews) && totalViews >= 0 ? Math.floor(totalViews) : 0;
+  a.uniqueViewCount = Number.isFinite(uniqueViewCount) && uniqueViewCount >= 0 ? Math.floor(uniqueViewCount) : 0;
   return a;
 }
 
@@ -287,7 +291,9 @@ function mapApiPost(post){
       images: post.imageUrls || post.images || [],
       video: post.video || ""
     },
-    status: post.status || "public"
+    status: post.status || "public",
+    totalViews: post.totalViews || 0,
+    uniqueViewCount: post.uniqueViewCount || 0
   });
 }
 
@@ -486,6 +492,14 @@ async function saveContactToApi(contact) {
     }
   });
   return data.contact;
+}
+
+async function recordPostViewToApi(postId) {
+  const data = await callApi("recordPostView", { id: postId });
+  return {
+    totalViews: Number(data.totalViews || 0),
+    uniqueViewCount: Number(data.uniqueViewCount || 0)
+  };
 }
 
 async function fetchProfileFromApi() {
@@ -1071,6 +1085,17 @@ function renderVideoEmbed(url){
 }
 
 // ===== Drawer =====
+function applyPostViewStatsLocally(postId, stats = {}) {
+  const idx = cloudPosts.findIndex(post => post.id === postId);
+  if (idx < 0) return;
+  const current = cloudPosts[idx] || {};
+  cloudPosts[idx] = normalizePost({
+    ...current,
+    totalViews: Number(stats.totalViews || current.totalViews || 0),
+    uniqueViewCount: Number(stats.uniqueViewCount || current.uniqueViewCount || 0)
+  });
+}
+
 function openDrawer(articleId){
   const a = allArticles().find(x => x.id === articleId);
   if(!a) return;
@@ -1117,6 +1142,20 @@ function openDrawer(articleId){
     cta.style.display = "none";
   }
   renderSaveBtn();
+
+  if (getCurrentUser()) {
+    recordPostViewToApi(a.id)
+      .then(stats => {
+        applyPostViewStatsLocally(a.id, stats);
+      })
+      .catch(err => {
+        if (isAuthError(err)) {
+          handleAuthFailure(err.message || "セッションの有効期限が切れました。");
+          return;
+        }
+        console.warn("Failed to record post view:", err);
+      });
+  }
 }
 
 function closeDrawer(){
@@ -1874,6 +1913,10 @@ function renderAdmin(){
           <div class="aitem__date">${formatDateJP(a.date)}</div>
         </div>
         <div class="aitem__sub">#${escapeHtml(channelLabel(a.channel))} / ${escapeHtml(a.badge || "")} / ${escapeHtml(a.status || "public")}</div>
+        <div class="aitem__stats">
+          <span class="aitem__stat">総閲覧数 ${Number(a.totalViews || 0)}</span>
+          <span class="aitem__stat">閲覧ユーザー数 ${Number(a.uniqueViewCount || 0)}</span>
+        </div>
       </div>
     `).join("");
 
