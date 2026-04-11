@@ -104,6 +104,10 @@ let state = {
   adminTab: "editor", // "editor" | "list" | "edit"
   eventAdminTab: "list", // "list" | "editor"
   editingEventId: null,
+  activePage: "home",
+  newEditorDraftId: null,
+  newEditorLastSavedSignature: "",
+  editEditorLastSavedSignature: "",
 };
 
 let cloudPosts = [];
@@ -642,6 +646,63 @@ async function awardDailyVisitPointIfNeeded() {
 function clearCurrentUser() {
   localStorage.removeItem(LS_KEY_USER);
   localStorage.removeItem(LS_KEY_TOKEN);
+}
+
+function normalizePostContentParts(post){
+  const normalized = normalizePost(post || {});
+  return {
+    channel: normalized.channel || "article",
+    title: normalized.title || "",
+    tags: Array.isArray(normalized.tags) ? normalized.tags : [],
+    body: Array.isArray(normalized.body) ? normalized.body : [],
+    ctaText: normalized.cta?.text || "",
+    ctaUrl: normalized.cta?.url || "",
+    images: Array.isArray(normalized.media?.images) ? normalized.media.images : [],
+    video: normalized.media?.video || ""
+  };
+}
+
+function buildPostContentSignature(post){
+  return JSON.stringify(normalizePostContentParts(post));
+}
+
+function hasMeaningfulPostContent(post){
+  const parts = normalizePostContentParts(post);
+  return Boolean(
+    parts.title.trim() ||
+    parts.tags.length ||
+    parts.body.length ||
+    parts.ctaText.trim() ||
+    parts.ctaUrl.trim() ||
+    parts.images.length ||
+    parts.video.trim()
+  );
+}
+
+async function autoSaveCurrentPostDraftIfNeeded(){
+  const adminPage = document.querySelector('.page[data-page="admin"]');
+  if (!adminPage || !adminPage.classList.contains("page--active")) return false;
+
+  if (state.adminTab === "editor") {
+    const draft = collectForm();
+    if (state.newEditorDraftId) draft.id = state.newEditorDraftId;
+    const signature = buildPostContentSignature(draft);
+    if (!hasMeaningfulPostContent(draft)) return false;
+    if (signature === state.newEditorLastSavedSignature) return false;
+    await saveEditor("draft", { silentSuccess: true, silentError: true, skipRefresh: true, isAutoSave: true });
+    return true;
+  }
+
+  if (state.adminTab === "edit" && state.editingId) {
+    const draft = collectEditForm();
+    const signature = buildPostContentSignature(draft);
+    if (!hasMeaningfulPostContent(draft)) return false;
+    if (signature === state.editEditorLastSavedSignature) return false;
+    await saveEditForm("draft", { silentSuccess: true, silentError: true, skipRefresh: true, isAutoSave: true });
+    return true;
+  }
+
+  return false;
 }
 
 function updateProfileButton(user = getCurrentUser()) {
@@ -1224,6 +1285,7 @@ function setActivePage(key){
     key = "home";
   }
 
+  state.activePage = key;
   $$(".page").forEach(p => p.classList.remove("page--active"));
   const page = $(`.page[data-page="${key}"]`);
   if(page) page.classList.add("page--active");
@@ -1255,7 +1317,17 @@ function scheduleItems(){
       status: e.status || "public"
     }))
     .filter(it => !!it.date)
-    .sort((a,b) => (a.date < b.date ? -1 : 1));
+    .sort((a, b) => {
+      const dateCmp = String(a.date || "").localeCompare(String(b.date || ""));
+      if (dateCmp !== 0) return dateCmp;
+
+      const aTime = String(a.startTime || "99:99");
+      const bTime = String(b.startTime || "99:99");
+      const timeCmp = aTime.localeCompare(bTime);
+      if (timeCmp !== 0) return timeCmp;
+
+      return String(a.title || "").localeCompare(String(b.title || ""));
+    });
 }
 
 function normalizeDateForCalendar(value){
@@ -1935,6 +2007,8 @@ function renderAdmin(){
 
 function clearEditor(){
   state.editingId = null;
+  state.newEditorDraftId = null;
+  state.newEditorLastSavedSignature = "";
   $("#postForm").reset();
   $("#pChannel").value = "article";
   $("#pTags").value = "";
@@ -1951,6 +2025,7 @@ function clearEditor(){
 }
 
 function clearEditForm(){
+  state.editEditorLastSavedSignature = "";
   const form = $("#editForm");
   if(form) form.reset();
   $("#eChannel").value = "article";
@@ -1986,6 +2061,7 @@ function startEdit(id){
   renderVidInsertButton("eVideo", "eBody", "eVidInsert");
   const statusView = $("#eStatusView");
   if (statusView) statusView.textContent = a.status || "public";
+  state.editEditorLastSavedSignature = buildPostContentSignature(a);
   syncEditButtons();
 }
 
@@ -2035,6 +2111,7 @@ function collectForm(){
   const video = ($("#pVideo").value || "").trim();
 
   const a = normalizePost({
+    id: state.newEditorDraftId || undefined,
     channel,
     tone: "accent",
     badge: badgeTextFromChannel(channel),
@@ -2082,11 +2159,11 @@ function collectEditForm(){
   });
 }
 
-async function saveEditor(status){
+async function saveEditor(status, opts = {}){
   const a = collectForm();
   if(!a.title){
-    alert("タイトルは必須です。");
-    return;
+    if (!opts.silentError) alert("タイトルは必須です。");
+    return null;
   }
   a.status = status || "public";
 
@@ -2107,6 +2184,8 @@ async function saveEditor(status){
     const saved = await savePostToApi(a);
 
     const normalized = mapApiPost(saved);
+    state.newEditorDraftId = normalized.id || state.newEditorDraftId;
+    state.newEditorLastSavedSignature = buildPostContentSignature(normalized);
 
     // cloudPosts を即更新
     const cidx = cloudPosts.findIndex(x => x.id === normalized.id);
@@ -2118,15 +2197,23 @@ async function saveEditor(status){
     const statusView = $("#pStatusView");
     if (statusView) statusView.textContent = normalized.status || a.status;
     syncAdminButtons();
-    showToast("投稿を保存しました");
+    if (!opts.silentSuccess) {
+      showToast(opts.isAutoSave ? "下書きを自動保存しました" : "投稿を保存しました");
+    }
 
-    refreshFromCloud({ silent: false, skipNotify: true }).catch(err => {
-      console.warn("Cloud resync failed:", err);
-    });
-
+    if (!opts.skipRefresh) {
+      refreshFromCloud({ silent: false, skipNotify: true }).catch(err => {
+        console.warn("Cloud resync failed:", err);
+      });
+    }
+    return normalized;
   } catch (err) {
     console.error(err);
-    alert("保存に失敗しました。\n" + (err.message || err));
+    if (!opts.silentError) {
+      alert("保存に失敗しました。\n" + (err.message || err));
+      return null;
+    }
+    throw err;
   } finally {
     if (btnSave) {
       btnSave.disabled = false;
@@ -2137,16 +2224,16 @@ async function saveEditor(status){
   }
 }
 
-async function saveEditForm(status){
+async function saveEditForm(status, opts = {}){
   if (!state.editingId) {
-    alert("編集対象の記事が見つかりません。");
-    return;
+    if (!opts.silentError) alert("編集対象の記事が見つかりません。");
+    return null;
   }
 
   const a = collectEditForm();
   if(!a.title){
-    alert("タイトルは必須です。");
-    return;
+    if (!opts.silentError) alert("タイトルは必須です。");
+    return null;
   }
   a.status = status || "public";
 
@@ -2166,6 +2253,7 @@ async function saveEditForm(status){
 
     const saved = await savePostToApi(a);
     const normalized = mapApiPost(saved);
+    state.editEditorLastSavedSignature = buildPostContentSignature(normalized);
 
     const cidx = cloudPosts.findIndex(x => x.id === normalized.id);
     if(cidx >= 0) cloudPosts[cidx] = normalized;
@@ -2176,14 +2264,23 @@ async function saveEditForm(status){
     const statusView = $("#eStatusView");
     if (statusView) statusView.textContent = normalized.status || a.status;
     syncEditButtons();
-    showToast("投稿を保存しました");
+    if (!opts.silentSuccess) {
+      showToast(opts.isAutoSave ? "下書きを自動保存しました" : "投稿を保存しました");
+    }
 
-    refreshFromCloud({ silent: false, skipNotify: true }).catch(err => {
-      console.warn("Cloud resync failed:", err);
-    });
+    if (!opts.skipRefresh) {
+      refreshFromCloud({ silent: false, skipNotify: true }).catch(err => {
+        console.warn("Cloud resync failed:", err);
+      });
+    }
+    return normalized;
   } catch (err) {
     console.error(err);
-    alert("保存に失敗しました。\n" + (err.message || err));
+    if (!opts.silentError) {
+      alert("保存に失敗しました。\n" + (err.message || err));
+      return null;
+    }
+    throw err;
   } finally {
     if (btnSave) {
       btnSave.disabled = false;
@@ -2386,11 +2483,16 @@ function bind(){
   // nav
   const navRoot = document.querySelector(".bottomnav");
   if(navRoot){
-    navRoot.addEventListener("click", (e) => {
+    navRoot.addEventListener("click", async (e) => {
       const btn = e.target.closest(".navitem");
       if(!btn) return;
       const key = btn.dataset.nav;
       if(!key) return;
+      try {
+        await autoSaveCurrentPostDraftIfNeeded();
+      } catch (err) {
+        console.warn("Auto draft save failed before page switch:", err);
+      }
       setActivePage(key);
     });
   }
@@ -2486,23 +2588,43 @@ function bind(){
   });
 
   // admin
-  on("#btnNewPost", "click", () => {
+  on("#btnNewPost", "click", async () => {
+    try {
+      await autoSaveCurrentPostDraftIfNeeded();
+    } catch (err) {
+      console.warn("Auto draft save failed before opening new editor:", err);
+    }
     state.adminTab = "editor";
     clearEditor();
     syncAdminButtons();
     renderAdmin();
   });
 
-  on("#adminTabEditor", "click", () => {
+  on("#adminTabEditor", "click", async () => {
+    try {
+      await autoSaveCurrentPostDraftIfNeeded();
+    } catch (err) {
+      console.warn("Auto draft save failed before switching admin tab:", err);
+    }
     state.adminTab = "editor";
     renderAdmin();
   });
-  on("#adminTabList", "click", () => {
+  on("#adminTabList", "click", async () => {
+    try {
+      await autoSaveCurrentPostDraftIfNeeded();
+    } catch (err) {
+      console.warn("Auto draft save failed before switching admin tab:", err);
+    }
     state.adminTab = "list";
     renderAdmin();
   });
-  on("#adminTabEdit", "click", () => {
+  on("#adminTabEdit", "click", async () => {
     if (!state.editingId) return;
+    try {
+      await autoSaveCurrentPostDraftIfNeeded();
+    } catch (err) {
+      console.warn("Auto draft save failed before switching admin tab:", err);
+    }
     state.adminTab = "edit";
     renderAdmin();
   });
@@ -2961,7 +3083,7 @@ function bind(){
 // ===== Init =====
 async function init(){
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("./sw.js").catch(err => {
+    navigator.serviceWorker.register("./sw.js?v=46").catch(err => {
       console.warn("SW registration failed:", err);
     });
   }
