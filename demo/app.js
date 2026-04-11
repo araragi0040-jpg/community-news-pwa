@@ -668,7 +668,6 @@ function buildPostContentSignature(post){
 
 function hasMeaningfulPostContent(post){
   const parts = normalizePostContentParts(post);
-  if (!parts.title.trim()) return false;
   return Boolean(
     parts.title.trim() ||
     parts.tags.length ||
