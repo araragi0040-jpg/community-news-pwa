@@ -447,6 +447,12 @@ async function deleteEventFromApi(id) {
 }
 
 async function savePostToApi(post) {
+  const rawTitle = String(post?.title || "").trim();
+  if (!rawTitle) {
+    const err = new Error("タイトルは必須です。");
+    err.code = "VALIDATION_ERROR";
+    throw err;
+  }
   const data = await callApi("savePost", {
     post: {
       id: post.id || "",
@@ -454,7 +460,7 @@ async function savePostToApi(post) {
       channel: post.channel || "article",
       tone: post.tone || "accent",
       badge: post.badge || "",
-      title: post.title || "",
+      title: rawTitle,
       tags: post.tags || [],
       summary: post.summary || [],
       body: post.body || [],
@@ -685,7 +691,10 @@ async function autoSaveCurrentPostDraftIfNeeded(){
   if (!adminPage || !adminPage.classList.contains("page--active")) return false;
 
   if (state.adminTab === "editor") {
+    const rawTitle = (($("#pTitle")?.value) || "").trim();
+    if (!rawTitle) return false;
     const draft = collectForm();
+    draft.title = rawTitle;
     if (state.newEditorDraftId) draft.id = state.newEditorDraftId;
     const signature = buildPostContentSignature(draft);
     if (!hasMeaningfulPostContent(draft)) return false;
@@ -695,7 +704,10 @@ async function autoSaveCurrentPostDraftIfNeeded(){
   }
 
   if (state.adminTab === "edit" && state.editingId) {
+    const rawTitle = (($("#eTitle")?.value) || "").trim();
+    if (!rawTitle) return false;
     const draft = collectEditForm();
+    draft.title = rawTitle;
     const signature = buildPostContentSignature(draft);
     if (!hasMeaningfulPostContent(draft)) return false;
     if (signature === state.editEditorLastSavedSignature) return false;
