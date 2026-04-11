@@ -1,10 +1,10 @@
-const CACHE_NAME = "community-news-v4";
+const CACHE_NAME = "community-news-v5";
 const ASSETS = [
   "./",
   "./index.html",
-  "./styles.css?v=45",
-  "./app.js?v=45",
-  "./config.js?v=45",
+  "./styles.css?v=46",
+  "./app.js?v=46",
+  "./config.js?v=46",
   "./manifest.webmanifest",
   "./favicon.png",
   "./logo.png"
