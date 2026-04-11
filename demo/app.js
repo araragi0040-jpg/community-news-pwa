@@ -649,10 +649,11 @@ function clearCurrentUser() {
 }
 
 function normalizePostContentParts(post){
-  const normalized = normalizePost(post || {});
+  const src = post || {};
+  const normalized = normalizePost({ ...src, title: "__KEEP_RAW_TITLE__" });
   return {
     channel: normalized.channel || "article",
-    title: normalized.title || "",
+    title: String(src.title || ""),
     tags: Array.isArray(normalized.tags) ? normalized.tags : [],
     body: Array.isArray(normalized.body) ? normalized.body : [],
     ctaText: normalized.cta?.text || "",
@@ -2125,6 +2126,7 @@ function collectForm(){
     media: { images, video }
   });
 
+  a.title = title;
   return a;
 }
 
@@ -2144,7 +2146,7 @@ function collectEditForm(){
     .split("\n").map(s=>s.trim()).filter(Boolean);
   const video = ($("#eVideo").value || "").trim();
 
-  return normalizePost({
+  const a = normalizePost({
     id: state.editingId || undefined,
     channel,
     tone: "accent",
@@ -2157,10 +2159,19 @@ function collectEditForm(){
     cta: ctaUrl ? { text: ctaText || "開く", url: ctaUrl } : null,
     media: { images, video }
   });
+
+  a.title = title;
+  return a;
 }
 
 async function saveEditor(status, opts = {}){
+  const rawTitle = (("#pTitle" && $("#pTitle")) ? $("#pTitle").value : "").trim();
+  if(!rawTitle){
+    if (!opts.silentError) alert("タイトルは必須です。");
+    return null;
+  }
   const a = collectForm();
+  a.title = rawTitle;
   if(!a.title){
     if (!opts.silentError) alert("タイトルは必須です。");
     return null;
@@ -2230,7 +2241,13 @@ async function saveEditForm(status, opts = {}){
     return null;
   }
 
+  const rawTitle = (("#eTitle" && $("#eTitle")) ? $("#eTitle").value : "").trim();
+  if(!rawTitle){
+    if (!opts.silentError) alert("タイトルは必須です。");
+    return null;
+  }
   const a = collectEditForm();
+  a.title = rawTitle;
   if(!a.title){
     if (!opts.silentError) alert("タイトルは必須です。");
     return null;
