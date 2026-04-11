@@ -104,6 +104,10 @@ let state = {
   adminTab: "editor", // "editor" | "list" | "edit"
   eventAdminTab: "list", // "list" | "editor"
   editingEventId: null,
+  activePage: "home",
+  newEditorDraftId: null,
+  newEditorLastSavedSignature: "",
+  editEditorLastSavedSignature: "",
 };
 
 let cloudPosts = [];
@@ -265,6 +269,10 @@ function normalizePost(input){
   a.media.images = Array.isArray(a.media.images) ? a.media.images : [];
   a.media.video = a.media.video || "";
   a.status = normalizeStatusValue(a.status, "public");
+  const totalViews = Number(a.totalViews || 0);
+  const uniqueViewCount = Number(a.uniqueViewCount || 0);
+  a.totalViews = Number.isFinite(totalViews) && totalViews >= 0 ? Math.floor(totalViews) : 0;
+  a.uniqueViewCount = Number.isFinite(uniqueViewCount) && uniqueViewCount >= 0 ? Math.floor(uniqueViewCount) : 0;
   return a;
 }
 
@@ -287,7 +295,9 @@ function mapApiPost(post){
       images: post.imageUrls || post.images || [],
       video: post.video || ""
     },
-    status: post.status || "public"
+    status: post.status || "public",
+    totalViews: post.totalViews || 0,
+    uniqueViewCount: post.uniqueViewCount || 0
   });
 }
 
@@ -437,6 +447,12 @@ async function deleteEventFromApi(id) {
 }
 
 async function savePostToApi(post) {
+  const rawTitle = String(post?.title || "").trim();
+  if (!rawTitle) {
+    const err = new Error("タイトルは必須です。");
+    err.code = "VALIDATION_ERROR";
+    throw err;
+  }
   const data = await callApi("savePost", {
     post: {
       id: post.id || "",
@@ -444,7 +460,7 @@ async function savePostToApi(post) {
       channel: post.channel || "article",
       tone: post.tone || "accent",
       badge: post.badge || "",
-      title: post.title || "",
+      title: rawTitle,
       tags: post.tags || [],
       summary: post.summary || [],
       body: post.body || [],
@@ -486,6 +502,14 @@ async function saveContactToApi(contact) {
     }
   });
   return data.contact;
+}
+
+async function recordPostViewToApi(postId) {
+  const data = await callApi("recordPostView", { id: postId });
+  return {
+    totalViews: Number(data.totalViews || 0),
+    uniqueViewCount: Number(data.uniqueViewCount || 0)
+  };
 }
 
 async function fetchProfileFromApi() {
@@ -628,6 +652,70 @@ async function awardDailyVisitPointIfNeeded() {
 function clearCurrentUser() {
   localStorage.removeItem(LS_KEY_USER);
   localStorage.removeItem(LS_KEY_TOKEN);
+}
+
+function normalizePostContentParts(post){
+  const src = post || {};
+  const normalized = normalizePost({ ...src, title: "__KEEP_RAW_TITLE__" });
+  return {
+    channel: normalized.channel || "article",
+    title: String(src.title || ""),
+    tags: Array.isArray(normalized.tags) ? normalized.tags : [],
+    body: Array.isArray(normalized.body) ? normalized.body : [],
+    ctaText: normalized.cta?.text || "",
+    ctaUrl: normalized.cta?.url || "",
+    images: Array.isArray(normalized.media?.images) ? normalized.media.images : [],
+    video: normalized.media?.video || ""
+  };
+}
+
+function buildPostContentSignature(post){
+  return JSON.stringify(normalizePostContentParts(post));
+}
+
+function hasMeaningfulPostContent(post){
+  const parts = normalizePostContentParts(post);
+  return Boolean(
+    parts.title.trim() ||
+    parts.tags.length ||
+    parts.body.length ||
+    parts.ctaText.trim() ||
+    parts.ctaUrl.trim() ||
+    parts.images.length ||
+    parts.video.trim()
+  );
+}
+
+async function autoSaveCurrentPostDraftIfNeeded(){
+  const adminPage = document.querySelector('.page[data-page="admin"]');
+  if (!adminPage || !adminPage.classList.contains("page--active")) return false;
+
+  if (state.adminTab === "editor") {
+    const rawTitle = (($("#pTitle")?.value) || "").trim();
+    if (!rawTitle) return false;
+    const draft = collectForm();
+    draft.title = rawTitle;
+    if (state.newEditorDraftId) draft.id = state.newEditorDraftId;
+    const signature = buildPostContentSignature(draft);
+    if (!hasMeaningfulPostContent(draft)) return false;
+    if (signature === state.newEditorLastSavedSignature) return false;
+    await saveEditor("draft", { silentSuccess: true, silentError: true, skipRefresh: true, isAutoSave: true });
+    return true;
+  }
+
+  if (state.adminTab === "edit" && state.editingId) {
+    const rawTitle = (($("#eTitle")?.value) || "").trim();
+    if (!rawTitle) return false;
+    const draft = collectEditForm();
+    draft.title = rawTitle;
+    const signature = buildPostContentSignature(draft);
+    if (!hasMeaningfulPostContent(draft)) return false;
+    if (signature === state.editEditorLastSavedSignature) return false;
+    await saveEditForm("draft", { silentSuccess: true, silentError: true, skipRefresh: true, isAutoSave: true });
+    return true;
+  }
+
+  return false;
 }
 
 function updateProfileButton(user = getCurrentUser()) {
@@ -1071,6 +1159,17 @@ function renderVideoEmbed(url){
 }
 
 // ===== Drawer =====
+function applyPostViewStatsLocally(postId, stats = {}) {
+  const idx = cloudPosts.findIndex(post => post.id === postId);
+  if (idx < 0) return;
+  const current = cloudPosts[idx] || {};
+  cloudPosts[idx] = normalizePost({
+    ...current,
+    totalViews: Number(stats.totalViews || current.totalViews || 0),
+    uniqueViewCount: Number(stats.uniqueViewCount || current.uniqueViewCount || 0)
+  });
+}
+
 function openDrawer(articleId){
   const a = allArticles().find(x => x.id === articleId);
   if(!a) return;
@@ -1117,6 +1216,20 @@ function openDrawer(articleId){
     cta.style.display = "none";
   }
   renderSaveBtn();
+
+  if (getCurrentUser()) {
+    recordPostViewToApi(a.id)
+      .then(stats => {
+        applyPostViewStatsLocally(a.id, stats);
+      })
+      .catch(err => {
+        if (isAuthError(err)) {
+          handleAuthFailure(err.message || "セッションの有効期限が切れました。");
+          return;
+        }
+        console.warn("Failed to record post view:", err);
+      });
+  }
 }
 
 function closeDrawer(){
@@ -1185,6 +1298,7 @@ function setActivePage(key){
     key = "home";
   }
 
+  state.activePage = key;
   $$(".page").forEach(p => p.classList.remove("page--active"));
   const page = $(`.page[data-page="${key}"]`);
   if(page) page.classList.add("page--active");
@@ -1216,7 +1330,17 @@ function scheduleItems(){
       status: e.status || "public"
     }))
     .filter(it => !!it.date)
-    .sort((a,b) => (a.date < b.date ? -1 : 1));
+    .sort((a, b) => {
+      const dateCmp = String(a.date || "").localeCompare(String(b.date || ""));
+      if (dateCmp !== 0) return dateCmp;
+
+      const aTime = String(a.startTime || "99:99");
+      const bTime = String(b.startTime || "99:99");
+      const timeCmp = aTime.localeCompare(bTime);
+      if (timeCmp !== 0) return timeCmp;
+
+      return String(a.title || "").localeCompare(String(b.title || ""));
+    });
 }
 
 function normalizeDateForCalendar(value){
@@ -1874,6 +1998,10 @@ function renderAdmin(){
           <div class="aitem__date">${formatDateJP(a.date)}</div>
         </div>
         <div class="aitem__sub">#${escapeHtml(channelLabel(a.channel))} / ${escapeHtml(a.badge || "")} / ${escapeHtml(a.status || "public")}</div>
+        <div class="aitem__stats">
+          <span class="aitem__stat">総閲覧数 ${Number(a.totalViews || 0)}</span>
+          <span class="aitem__stat">閲覧ユーザー数 ${Number(a.uniqueViewCount || 0)}</span>
+        </div>
       </div>
     `).join("");
 
@@ -1892,6 +2020,8 @@ function renderAdmin(){
 
 function clearEditor(){
   state.editingId = null;
+  state.newEditorDraftId = null;
+  state.newEditorLastSavedSignature = "";
   $("#postForm").reset();
   $("#pChannel").value = "article";
   $("#pTags").value = "";
@@ -1908,6 +2038,7 @@ function clearEditor(){
 }
 
 function clearEditForm(){
+  state.editEditorLastSavedSignature = "";
   const form = $("#editForm");
   if(form) form.reset();
   $("#eChannel").value = "article";
@@ -1943,6 +2074,7 @@ function startEdit(id){
   renderVidInsertButton("eVideo", "eBody", "eVidInsert");
   const statusView = $("#eStatusView");
   if (statusView) statusView.textContent = a.status || "public";
+  state.editEditorLastSavedSignature = buildPostContentSignature(a);
   syncEditButtons();
 }
 
@@ -1992,6 +2124,7 @@ function collectForm(){
   const video = ($("#pVideo").value || "").trim();
 
   const a = normalizePost({
+    id: state.newEditorDraftId || undefined,
     channel,
     tone: "accent",
     badge: badgeTextFromChannel(channel),
@@ -2005,6 +2138,7 @@ function collectForm(){
     media: { images, video }
   });
 
+  a.title = title;
   return a;
 }
 
@@ -2024,7 +2158,7 @@ function collectEditForm(){
     .split("\n").map(s=>s.trim()).filter(Boolean);
   const video = ($("#eVideo").value || "").trim();
 
-  return normalizePost({
+  const a = normalizePost({
     id: state.editingId || undefined,
     channel,
     tone: "accent",
@@ -2037,13 +2171,22 @@ function collectEditForm(){
     cta: ctaUrl ? { text: ctaText || "開く", url: ctaUrl } : null,
     media: { images, video }
   });
+
+  a.title = title;
+  return a;
 }
 
-async function saveEditor(status){
+async function saveEditor(status, opts = {}){
+  const rawTitle = (("#pTitle" && $("#pTitle")) ? $("#pTitle").value : "").trim();
+  if(!rawTitle){
+    if (!opts.silentError) alert("タイトルは必須です。");
+    return null;
+  }
   const a = collectForm();
+  a.title = rawTitle;
   if(!a.title){
-    alert("タイトルは必須です。");
-    return;
+    if (!opts.silentError) alert("タイトルは必須です。");
+    return null;
   }
   a.status = status || "public";
 
@@ -2064,6 +2207,8 @@ async function saveEditor(status){
     const saved = await savePostToApi(a);
 
     const normalized = mapApiPost(saved);
+    state.newEditorDraftId = normalized.id || state.newEditorDraftId;
+    state.newEditorLastSavedSignature = buildPostContentSignature(normalized);
 
     // cloudPosts を即更新
     const cidx = cloudPosts.findIndex(x => x.id === normalized.id);
@@ -2075,15 +2220,23 @@ async function saveEditor(status){
     const statusView = $("#pStatusView");
     if (statusView) statusView.textContent = normalized.status || a.status;
     syncAdminButtons();
-    showToast("投稿を保存しました");
+    if (!opts.silentSuccess) {
+      showToast(opts.isAutoSave ? "下書きを自動保存しました" : "投稿を保存しました");
+    }
 
-    refreshFromCloud({ silent: false, skipNotify: true }).catch(err => {
-      console.warn("Cloud resync failed:", err);
-    });
-
+    if (!opts.skipRefresh) {
+      refreshFromCloud({ silent: false, skipNotify: true }).catch(err => {
+        console.warn("Cloud resync failed:", err);
+      });
+    }
+    return normalized;
   } catch (err) {
     console.error(err);
-    alert("保存に失敗しました。\n" + (err.message || err));
+    if (!opts.silentError) {
+      alert("保存に失敗しました。\n" + (err.message || err));
+      return null;
+    }
+    throw err;
   } finally {
     if (btnSave) {
       btnSave.disabled = false;
@@ -2094,16 +2247,22 @@ async function saveEditor(status){
   }
 }
 
-async function saveEditForm(status){
+async function saveEditForm(status, opts = {}){
   if (!state.editingId) {
-    alert("編集対象の記事が見つかりません。");
-    return;
+    if (!opts.silentError) alert("編集対象の記事が見つかりません。");
+    return null;
   }
 
+  const rawTitle = (("#eTitle" && $("#eTitle")) ? $("#eTitle").value : "").trim();
+  if(!rawTitle){
+    if (!opts.silentError) alert("タイトルは必須です。");
+    return null;
+  }
   const a = collectEditForm();
+  a.title = rawTitle;
   if(!a.title){
-    alert("タイトルは必須です。");
-    return;
+    if (!opts.silentError) alert("タイトルは必須です。");
+    return null;
   }
   a.status = status || "public";
 
@@ -2123,6 +2282,7 @@ async function saveEditForm(status){
 
     const saved = await savePostToApi(a);
     const normalized = mapApiPost(saved);
+    state.editEditorLastSavedSignature = buildPostContentSignature(normalized);
 
     const cidx = cloudPosts.findIndex(x => x.id === normalized.id);
     if(cidx >= 0) cloudPosts[cidx] = normalized;
@@ -2133,14 +2293,23 @@ async function saveEditForm(status){
     const statusView = $("#eStatusView");
     if (statusView) statusView.textContent = normalized.status || a.status;
     syncEditButtons();
-    showToast("投稿を保存しました");
+    if (!opts.silentSuccess) {
+      showToast(opts.isAutoSave ? "下書きを自動保存しました" : "投稿を保存しました");
+    }
 
-    refreshFromCloud({ silent: false, skipNotify: true }).catch(err => {
-      console.warn("Cloud resync failed:", err);
-    });
+    if (!opts.skipRefresh) {
+      refreshFromCloud({ silent: false, skipNotify: true }).catch(err => {
+        console.warn("Cloud resync failed:", err);
+      });
+    }
+    return normalized;
   } catch (err) {
     console.error(err);
-    alert("保存に失敗しました。\n" + (err.message || err));
+    if (!opts.silentError) {
+      alert("保存に失敗しました。\n" + (err.message || err));
+      return null;
+    }
+    throw err;
   } finally {
     if (btnSave) {
       btnSave.disabled = false;
@@ -2343,11 +2512,16 @@ function bind(){
   // nav
   const navRoot = document.querySelector(".bottomnav");
   if(navRoot){
-    navRoot.addEventListener("click", (e) => {
+    navRoot.addEventListener("click", async (e) => {
       const btn = e.target.closest(".navitem");
       if(!btn) return;
       const key = btn.dataset.nav;
       if(!key) return;
+      try {
+        await autoSaveCurrentPostDraftIfNeeded();
+      } catch (err) {
+        console.warn("Auto draft save failed before page switch:", err);
+      }
       setActivePage(key);
     });
   }
@@ -2443,23 +2617,43 @@ function bind(){
   });
 
   // admin
-  on("#btnNewPost", "click", () => {
+  on("#btnNewPost", "click", async () => {
+    try {
+      await autoSaveCurrentPostDraftIfNeeded();
+    } catch (err) {
+      console.warn("Auto draft save failed before opening new editor:", err);
+    }
     state.adminTab = "editor";
     clearEditor();
     syncAdminButtons();
     renderAdmin();
   });
 
-  on("#adminTabEditor", "click", () => {
+  on("#adminTabEditor", "click", async () => {
+    try {
+      await autoSaveCurrentPostDraftIfNeeded();
+    } catch (err) {
+      console.warn("Auto draft save failed before switching admin tab:", err);
+    }
     state.adminTab = "editor";
     renderAdmin();
   });
-  on("#adminTabList", "click", () => {
+  on("#adminTabList", "click", async () => {
+    try {
+      await autoSaveCurrentPostDraftIfNeeded();
+    } catch (err) {
+      console.warn("Auto draft save failed before switching admin tab:", err);
+    }
     state.adminTab = "list";
     renderAdmin();
   });
-  on("#adminTabEdit", "click", () => {
+  on("#adminTabEdit", "click", async () => {
     if (!state.editingId) return;
+    try {
+      await autoSaveCurrentPostDraftIfNeeded();
+    } catch (err) {
+      console.warn("Auto draft save failed before switching admin tab:", err);
+    }
     state.adminTab = "edit";
     renderAdmin();
   });
@@ -2918,7 +3112,7 @@ function bind(){
 // ===== Init =====
 async function init(){
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("./sw.js").catch(err => {
+    navigator.serviceWorker.register("./sw.js?v=46").catch(err => {
       console.warn("SW registration failed:", err);
     });
   }
