@@ -686,35 +686,88 @@ function hasMeaningfulPostContent(post){
   );
 }
 
-async function autoSaveCurrentPostDraftIfNeeded(){
+function validatePostCtaFields(ctaText, ctaUrl, silentError = false){
+  const hasUrl = !!String(ctaUrl || "").trim();
+  const hasText = !!String(ctaText || "").trim();
+
+  if (hasUrl && !hasText) {
+    if (!silentError) {
+      alert("CTA URLを入力する場合は、CTAテキストも入力してください。");
+    }
+    return false;
+  }
+  return true;
+}
+
+function getPostSaveToastMessage(status){
+  const s = normalizeStatusValue(status, "public");
+  if (s === "draft") return "下書き保存しました";
+  if (s === "private") return "非公開で保存しました";
+  return "投稿しました";
+}
+
+function isArticleAdminEditingActive(){
   const adminPage = document.querySelector('.page[data-page="admin"]');
-  if (!adminPage || !adminPage.classList.contains("page--active")) return false;
+  return !!(
+    adminPage &&
+    adminPage.classList.contains("page--active") &&
+    (state.adminTab === "editor" || state.adminTab === "edit")
+  );
+}
 
-  if (state.adminTab === "editor") {
-    const rawTitle = (($("#pTitle")?.value) || "").trim();
-    if (!rawTitle) return false;
-    const draft = collectForm();
-    draft.title = rawTitle;
-    if (state.newEditorDraftId) draft.id = state.newEditorDraftId;
-    const signature = buildPostContentSignature(draft);
-    if (!hasMeaningfulPostContent(draft)) return false;
-    if (signature === state.newEditorLastSavedSignature) return false;
-    await saveEditor("draft", { silentSuccess: true, silentError: true, skipRefresh: true, isAutoSave: true });
-    return true;
+function hasUnsavedNewEditorChanges(){
+  if (!isArticleAdminEditingActive() || state.adminTab !== "editor") return false;
+  const draft = collectForm();
+  const signature = buildPostContentSignature(draft);
+  return hasMeaningfulPostContent(draft) && signature !== state.newEditorLastSavedSignature;
+}
+
+function hasUnsavedEditEditorChanges(){
+  if (!isArticleAdminEditingActive() || state.adminTab !== "edit" || !state.editingId) return false;
+  const draft = collectEditForm();
+  const signature = buildPostContentSignature(draft);
+  return hasMeaningfulPostContent(draft) && signature !== state.editEditorLastSavedSignature;
+}
+
+function getNewEditorPersistStatus(){
+  if (!state.newEditorDraftId) return "draft";
+  const current = cloudPosts.find(x => x.id === state.newEditorDraftId);
+  return normalizeStatusValue(current?.status, "draft");
+}
+
+function getEditingPostPersistStatus(){
+  const current = cloudPosts.find(x => x.id === state.editingId);
+  return normalizeStatusValue(current?.status, "draft");
+}
+
+async function confirmArticleChangesBeforeLeave(){
+  if (!isArticleAdminEditingActive()) return true;
+
+  const hasNewChanges = hasUnsavedNewEditorChanges();
+  const hasEditChanges = hasUnsavedEditEditorChanges();
+
+  if (!hasNewChanges && !hasEditChanges) return true;
+
+  const wantsSave = confirm(
+    "未保存の変更があります。\n\nOK：保存して移動\nキャンセル：次の確認へ"
+  );
+
+  if (wantsSave) {
+    const saved = hasNewChanges
+      ? await saveEditor(getNewEditorPersistStatus())
+      : await saveEditForm(getEditingPostPersistStatus());
+
+    return !!saved;
   }
 
-  if (state.adminTab === "edit" && state.editingId) {
-    const rawTitle = (($("#eTitle")?.value) || "").trim();
-    if (!rawTitle) return false;
-    const draft = collectEditForm();
-    draft.title = rawTitle;
-    const signature = buildPostContentSignature(draft);
-    if (!hasMeaningfulPostContent(draft)) return false;
-    if (signature === state.editEditorLastSavedSignature) return false;
-    await saveEditForm("draft", { silentSuccess: true, silentError: true, skipRefresh: true, isAutoSave: true });
-    return true;
-  }
+  const wantsDiscard = confirm(
+    "保存せずに移動しますか？\n\nOK：保存せず移動\nキャンセル：現在の画面に残る"
+  );
 
+  return wantsDiscard;
+}
+
+async function autoSaveCurrentPostDraftIfNeeded(){
   return false;
 }
 
@@ -2118,7 +2171,6 @@ function collectForm(){
   const ctaText = $("#pCtaText").value.trim();
   const ctaUrl = $("#pCtaUrl").value.trim();
 
-  // ★ここを追加（画像URLと動画URLを読む）
   const images = ($("#pImages").value || "")
     .split("\n").map(s=>s.trim()).filter(Boolean);
   const video = ($("#pVideo").value || "").trim();
@@ -2132,9 +2184,7 @@ function collectForm(){
     tags,
     summary: [],
     body,
-    cta: ctaUrl ? { text: ctaText || "開く", url: ctaUrl } : null,
-
-    // ★ここを追加（a の中に media を入れる）
+    cta: ctaUrl ? { text: ctaText, url: ctaUrl } : null,
     media: { images, video }
   });
 
@@ -2168,7 +2218,7 @@ function collectEditForm(){
     tags,
     summary: [],
     body,
-    cta: ctaUrl ? { text: ctaText || "開く", url: ctaUrl } : null,
+    cta: ctaUrl ? { text: ctaText, url: ctaUrl } : null,
     media: { images, video }
   });
 
@@ -2182,12 +2232,19 @@ async function saveEditor(status, opts = {}){
     if (!opts.silentError) alert("タイトルは必須です。");
     return null;
   }
+
   const a = collectForm();
   a.title = rawTitle;
+
   if(!a.title){
     if (!opts.silentError) alert("タイトルは必須です。");
     return null;
   }
+
+  if (!validatePostCtaFields(a.cta?.text || "", a.cta?.url || "", opts.silentError)) {
+    return null;
+  }
+
   a.status = status || "public";
 
   const statusBtnMap = {
@@ -2205,23 +2262,26 @@ async function saveEditor(status, opts = {}){
     }
 
     const saved = await savePostToApi(a);
-
     const normalized = mapApiPost(saved);
-    state.newEditorDraftId = normalized.id || state.newEditorDraftId;
-    state.newEditorLastSavedSignature = buildPostContentSignature(normalized);
 
-    // cloudPosts を即更新
     const cidx = cloudPosts.findIndex(x => x.id === normalized.id);
-    if(cidx >= 0) cloudPosts[cidx] = normalized;
+    if (cidx >= 0) cloudPosts[cidx] = normalized;
     else cloudPosts.unshift(normalized);
+
+    if (normalizeStatusValue(normalized.status || a.status, "public") === "public") {
+      clearEditor();
+    } else {
+      state.newEditorDraftId = normalized.id || state.newEditorDraftId;
+      state.newEditorLastSavedSignature = buildPostContentSignature(normalized);
+      const statusView = $("#pStatusView");
+      if (statusView) statusView.textContent = normalized.status || a.status;
+      syncAdminButtons();
+    }
 
     renderAll();
 
-    const statusView = $("#pStatusView");
-    if (statusView) statusView.textContent = normalized.status || a.status;
-    syncAdminButtons();
     if (!opts.silentSuccess) {
-      showToast(opts.isAutoSave ? "下書きを自動保存しました" : "投稿を保存しました");
+      showToast(getPostSaveToastMessage(normalized.status || a.status));
     }
 
     if (!opts.skipRefresh) {
@@ -2229,6 +2289,7 @@ async function saveEditor(status, opts = {}){
         console.warn("Cloud resync failed:", err);
       });
     }
+
     return normalized;
   } catch (err) {
     console.error(err);
@@ -2258,12 +2319,19 @@ async function saveEditForm(status, opts = {}){
     if (!opts.silentError) alert("タイトルは必須です。");
     return null;
   }
+
   const a = collectEditForm();
   a.title = rawTitle;
+
   if(!a.title){
     if (!opts.silentError) alert("タイトルは必須です。");
     return null;
   }
+
+  if (!validatePostCtaFields(a.cta?.text || "", a.cta?.url || "", opts.silentError)) {
+    return null;
+  }
+
   a.status = status || "public";
 
   const statusBtnMap = {
@@ -2282,19 +2350,28 @@ async function saveEditForm(status, opts = {}){
 
     const saved = await savePostToApi(a);
     const normalized = mapApiPost(saved);
-    state.editEditorLastSavedSignature = buildPostContentSignature(normalized);
 
     const cidx = cloudPosts.findIndex(x => x.id === normalized.id);
     if(cidx >= 0) cloudPosts[cidx] = normalized;
     else cloudPosts.unshift(normalized);
 
+    const finalStatus = normalizeStatusValue(normalized.status || a.status, "public");
+
+    if (finalStatus === "public") {
+      state.adminTab = "list";
+      state.editingId = null;
+      clearEditForm();
+    } else {
+      state.editEditorLastSavedSignature = buildPostContentSignature(normalized);
+      const statusView = $("#eStatusView");
+      if (statusView) statusView.textContent = normalized.status || a.status;
+      syncEditButtons();
+    }
+
     renderAll();
 
-    const statusView = $("#eStatusView");
-    if (statusView) statusView.textContent = normalized.status || a.status;
-    syncEditButtons();
     if (!opts.silentSuccess) {
-      showToast(opts.isAutoSave ? "下書きを自動保存しました" : "投稿を保存しました");
+      showToast(getPostSaveToastMessage(normalized.status || a.status));
     }
 
     if (!opts.skipRefresh) {
@@ -2302,6 +2379,7 @@ async function saveEditForm(status, opts = {}){
         console.warn("Cloud resync failed:", err);
       });
     }
+
     return normalized;
   } catch (err) {
     console.error(err);
@@ -2515,13 +2593,14 @@ function bind(){
     navRoot.addEventListener("click", async (e) => {
       const btn = e.target.closest(".navitem");
       if(!btn) return;
+
       const key = btn.dataset.nav;
       if(!key) return;
-      try {
-        await autoSaveCurrentPostDraftIfNeeded();
-      } catch (err) {
-        console.warn("Auto draft save failed before page switch:", err);
-      }
+      if (key === state.activePage) return;
+
+      const canLeave = await confirmArticleChangesBeforeLeave();
+      if (!canLeave) return;
+
       setActivePage(key);
     });
   }
@@ -2617,12 +2696,8 @@ function bind(){
   });
 
   // admin
-  on("#btnNewPost", "click", async () => {
-    try {
-      await autoSaveCurrentPostDraftIfNeeded();
-    } catch (err) {
-      console.warn("Auto draft save failed before opening new editor:", err);
-    }
+  on("#btnNewPost", "click", (e) => {
+    e.preventDefault();
     state.adminTab = "editor";
     clearEditor();
     syncAdminButtons();
@@ -2630,30 +2705,32 @@ function bind(){
   });
 
   on("#adminTabEditor", "click", async () => {
-    try {
-      await autoSaveCurrentPostDraftIfNeeded();
-    } catch (err) {
-      console.warn("Auto draft save failed before switching admin tab:", err);
-    }
+    if (state.adminTab === "editor") return;
+
+    const canLeave = await confirmArticleChangesBeforeLeave();
+    if (!canLeave) return;
+
     state.adminTab = "editor";
     renderAdmin();
   });
+
   on("#adminTabList", "click", async () => {
-    try {
-      await autoSaveCurrentPostDraftIfNeeded();
-    } catch (err) {
-      console.warn("Auto draft save failed before switching admin tab:", err);
-    }
+    if (state.adminTab === "list") return;
+
+    const canLeave = await confirmArticleChangesBeforeLeave();
+    if (!canLeave) return;
+
     state.adminTab = "list";
     renderAdmin();
   });
+
   on("#adminTabEdit", "click", async () => {
     if (!state.editingId) return;
-    try {
-      await autoSaveCurrentPostDraftIfNeeded();
-    } catch (err) {
-      console.warn("Auto draft save failed before switching admin tab:", err);
-    }
+    if (state.adminTab === "edit") return;
+
+    const canLeave = await confirmArticleChangesBeforeLeave();
+    if (!canLeave) return;
+
     state.adminTab = "edit";
     renderAdmin();
   });
