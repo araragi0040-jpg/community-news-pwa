@@ -1,6 +1,6 @@
 {
-  "name": "Community News (DEMO)",
-  "short_name": "News DEMO",
+  "name": "Community News",
+  "short_name": "News",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
