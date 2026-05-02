@@ -15,6 +15,10 @@ const LS_KEY_EVENTS_CACHE = "community_news_events_cache_v1";
 const LS_KEY_DAILY_POINT_DATE_PREFIX = "community_news_daily_point_date_v1:";
 const ITEMS_PER_PAGE = 10;
 
+function getGachaAppUrl() {
+  return String(window.APP_CONFIG?.GACHA_APP_URL || "").trim();
+}
+
 const CHANNELS = [
   { key:"all", label:"All", tone:"accent" },
   { key:"article", label:"記事", tone:"accent" },
@@ -532,6 +536,14 @@ async function saveProfileToApi(profile) {
 async function touchDailyPointToApi() {
   const data = await callApi("touchDailyPoint");
   return Number(data.points || 0);
+}
+
+async function createGachaTicketToApi() {
+  const data = await callApi("createGachaTicket");
+  return {
+    ticket: data.ticket || "",
+    expiresAt: data.expiresAt || ""
+  };
 }
 
 async function uploadImageToApi(file) {
@@ -1825,6 +1837,64 @@ async function saveProfileFromModal() {
   }
 }
 
+async function openGachaFromProfile() {
+  const msg = $("#profileMsg");
+  if (msg) msg.textContent = "";
+
+  const user = getCurrentUser();
+  if (!user) {
+    if (msg) msg.textContent = "ログイン後に語り場ガチャを利用できます。";
+    return;
+  }
+
+  const gachaUrl = getGachaAppUrl();
+  if (!gachaUrl) {
+    if (msg) msg.textContent = "語り場ガチャのURLが設定されていません。";
+    return;
+  }
+
+  const btn = $("#profileGachaBtn");
+  const oldText = btn ? btn.textContent : "";
+
+  try {
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "接続中...";
+    }
+
+    const data = await createGachaTicketToApi();
+
+    if (!data.ticket) {
+      throw new Error("ガチャ用チケットの発行に失敗しました。");
+    }
+
+    const url = new URL(gachaUrl, window.location.href);
+    url.searchParams.set("ticket", data.ticket);
+    url.searchParams.set("from", "news");
+
+    window.location.href = url.toString();
+
+  } catch (err) {
+    console.error(err);
+
+    if (isAuthError(err)) {
+      handleAuthFailure(err.message || "セッションの有効期限が切れました。");
+      closeProfileModal();
+      return;
+    }
+
+    if (msg) {
+      msg.textContent = formatErrorMessage(err, "語り場ガチャを開けませんでした。");
+    }
+
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = oldText || "語り場ガチャへ";
+    }
+  }
+}
+
 function renderCalendar(){
   const calRoot = $("#cal");
   if(!calRoot) return;
@@ -2608,6 +2678,11 @@ function bind(){
   on("#btnProfile", "click", () => {
     openProfileModal();
   });
+
+   on("#profileGachaBtn", "click", (e) => {
+  e.preventDefault();
+  openGachaFromProfile();
+});
 
   on("#btnProfileLogout", "click", () => {
     if (!confirm("ログアウトしますか？")) return;
