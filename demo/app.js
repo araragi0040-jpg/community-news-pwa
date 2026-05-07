@@ -3261,6 +3261,20 @@ function bind(){
   });
 }
 
+function showGachaConnectOverlay() {
+  const overlay = document.getElementById("gachaConnectOverlay");
+  if (!overlay) return;
+  overlay.classList.add("is-open");
+  overlay.setAttribute("aria-hidden", "false");
+}
+
+function hideGachaConnectOverlay() {
+  const overlay = document.getElementById("gachaConnectOverlay");
+  if (!overlay) return;
+  overlay.classList.remove("is-open");
+  overlay.setAttribute("aria-hidden", "true");
+}
+
 // ===== Init =====
 async function init(){
   if ("serviceWorker" in navigator) {
