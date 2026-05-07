@@ -1887,14 +1887,13 @@ async function openGachaFromProfile() {
     function resetGachaConnectState() {
   hideGachaConnectOverlay();
 
-  const btn = $("#profileGachaBtn");
+  const btn = document.getElementById("profileGachaBtn");
   if (btn) {
     btn.disabled = false;
     btn.textContent = "語り場ガチャへ";
   }
 }
 
-// ブラウザバックでニュースサイトへ戻った時に、接続中表示を必ず消す
 window.addEventListener("pageshow", () => {
   resetGachaConnectState();
 });
