@@ -604,6 +604,25 @@
   </div>
 </div>
 
+  <script>
+  window.addEventListener("pageshow", function () {
+    var overlay = document.getElementById("gachaConnectOverlay");
+    if (overlay) {
+      overlay.classList.remove("is-open");
+      overlay.style.display = "none";
+      overlay.setAttribute("aria-hidden", "true");
+    }
+
+    var btn = document.getElementById("profileGachaBtn");
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "語り場ガチャへ";
+    }
+
+    document.body.style.overflow = "";
+  });
+</script>
+
   <script src="config.js?v=48"></script>
   <script src="./app.js?v=48"></script>
 </body>
