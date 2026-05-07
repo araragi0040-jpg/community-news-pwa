@@ -1877,7 +1877,11 @@ async function openGachaFromProfile() {
     url.searchParams.set("returnUrl", window.location.origin + window.location.pathname);
 
     isRedirecting = true;
-    window.location.href = url.toString();
+
+// BFCacheに「ローディング表示中の画面」が保存されないよう、遷移直前に閉じる
+forceCloseGachaConnectOverlay();
+
+window.location.href = url.toString();
 
   } catch (err) {
     console.error(err);
@@ -3289,6 +3293,8 @@ function bind(){
 function showGachaConnectOverlay() {
   const overlay = document.getElementById("gachaConnectOverlay");
   if (!overlay) return;
+
+  overlay.style.display = "flex";
   overlay.classList.add("is-open");
   overlay.setAttribute("aria-hidden", "false");
 }
@@ -3296,9 +3302,45 @@ function showGachaConnectOverlay() {
 function hideGachaConnectOverlay() {
   const overlay = document.getElementById("gachaConnectOverlay");
   if (!overlay) return;
+
   overlay.classList.remove("is-open");
+  overlay.style.display = "none";
   overlay.setAttribute("aria-hidden", "true");
 }
+
+function forceCloseGachaConnectOverlay() {
+  const overlay = document.getElementById("gachaConnectOverlay");
+  if (overlay) {
+    overlay.classList.remove("is-open");
+    overlay.style.display = "none";
+    overlay.setAttribute("aria-hidden", "true");
+  }
+
+  const btn = document.getElementById("profileGachaBtn");
+  if (btn) {
+    btn.disabled = false;
+    btn.textContent = "語り場ガチャへ";
+  }
+
+  document.body.style.overflow = "";
+}
+
+// ブラウザバックで復元された時
+window.addEventListener("pageshow", () => {
+  forceCloseGachaConnectOverlay();
+});
+
+// ページが離脱・保存される直前
+window.addEventListener("pagehide", () => {
+  forceCloseGachaConnectOverlay();
+});
+
+// タブ復帰時にも念のため解除
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) {
+    forceCloseGachaConnectOverlay();
+  }
+});
 
 // ===== Init =====
 async function init(){
