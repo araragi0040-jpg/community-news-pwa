@@ -1884,6 +1884,21 @@ async function openGachaFromProfile() {
 
     hideGachaConnectOverlay();
 
+    function resetGachaConnectState() {
+  hideGachaConnectOverlay();
+
+  const btn = $("#profileGachaBtn");
+  if (btn) {
+    btn.disabled = false;
+    btn.textContent = "語り場ガチャへ";
+  }
+}
+
+// ブラウザバックでニュースサイトへ戻った時に、接続中表示を必ず消す
+window.addEventListener("pageshow", () => {
+  resetGachaConnectState();
+});
+
     if (isAuthError(err)) {
       handleAuthFailure(err.message || "セッションの有効期限が切れました。");
       closeProfileModal();
