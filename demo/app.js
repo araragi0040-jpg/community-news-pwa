@@ -1874,6 +1874,7 @@ async function openGachaFromProfile() {
     const url = new URL(gachaUrl, window.location.href);
     url.searchParams.set("ticket", data.ticket);
     url.searchParams.set("from", "news");
+    url.searchParams.set("returnUrl", window.location.origin + window.location.pathname);
 
     isRedirecting = true;
     window.location.href = url.toString();
