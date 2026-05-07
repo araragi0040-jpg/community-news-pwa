@@ -1855,8 +1855,11 @@ async function openGachaFromProfile() {
 
   const btn = $("#profileGachaBtn");
   const oldText = btn ? btn.textContent : "";
+  let isRedirecting = false;
 
   try {
+    showGachaConnectOverlay();
+
     if (btn) {
       btn.disabled = true;
       btn.textContent = "接続中...";
@@ -1872,10 +1875,13 @@ async function openGachaFromProfile() {
     url.searchParams.set("ticket", data.ticket);
     url.searchParams.set("from", "news");
 
+    isRedirecting = true;
     window.location.href = url.toString();
 
   } catch (err) {
     console.error(err);
+
+    hideGachaConnectOverlay();
 
     if (isAuthError(err)) {
       handleAuthFailure(err.message || "セッションの有効期限が切れました。");
@@ -1888,6 +1894,10 @@ async function openGachaFromProfile() {
     }
 
   } finally {
+    if (!isRedirecting) {
+      hideGachaConnectOverlay();
+    }
+
     if (btn) {
       btn.disabled = false;
       btn.textContent = oldText || "語り場ガチャへ";
