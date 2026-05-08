@@ -584,6 +584,45 @@
   </div>
 </div>
 
+  <div id="gachaConnectOverlay" class="gacha-connect-overlay" aria-hidden="true">
+  <div class="gacha-connect-card">
+    <div class="gacha-connect-orbit">
+      <span></span>
+      <span></span>
+      <span></span>
+    </div>
+
+    <div class="gacha-connect-core">
+      <div class="gacha-connect-capsule">
+        <div class="gacha-connect-capsule-top"></div>
+        <div class="gacha-connect-capsule-bottom"></div>
+      </div>
+    </div>
+
+    <div class="gacha-connect-title">語り場ガチャへ接続中...</div>
+    <div class="gacha-connect-sub">移動しています</div>
+  </div>
+</div>
+
+  <script>
+  window.addEventListener("pageshow", function () {
+    var overlay = document.getElementById("gachaConnectOverlay");
+    if (overlay) {
+      overlay.classList.remove("is-open");
+      overlay.style.display = "none";
+      overlay.setAttribute("aria-hidden", "true");
+    }
+
+    var btn = document.getElementById("profileGachaBtn");
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "語り場ガチャへ";
+    }
+
+    document.body.style.overflow = "";
+  });
+</script>
+
   <script src="config.js?v=48"></script>
   <script src="./app.js?v=48"></script>
 </body>
