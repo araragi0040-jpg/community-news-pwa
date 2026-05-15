@@ -635,6 +635,11 @@ svg{ width:22px; height:22px; fill: currentColor; }
   font-size: 12px;
 }
 
+button.pill{
+  cursor: pointer;
+  font: inherit;
+}
+
 .article{
   height: calc(100% - 58px);
   overflow:auto;
@@ -1147,6 +1152,14 @@ svg{ width:22px; height:22px; fill: currentColor; }
   width:100%;
   border-radius:16px;
   display:block;
+}
+
+.media-caption{
+  margin-top: 6px;
+  color: #9ca3af;
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center;
 }
 .brand {
   display: flex;

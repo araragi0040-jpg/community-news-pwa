@@ -118,6 +118,8 @@ let cloudPosts = [];
 let cloudEvents = [];
 let latestPostKey = "";
 let latestPostSnapshot = null;
+let latestOpsPostKey = "";
+let latestOpsPostSnapshot = null;
 let deferredInstallPrompt = null;
 let installHelpTimerId = null;
 
@@ -1256,8 +1258,21 @@ function openDrawer(articleId){
   const meta = $("#aMeta");
   const tags = a.tags || [];
   if (meta) {
-    meta.innerHTML = tags.map(t => `<span class="pill">${escapeHtml(t)}</span>`).join("");
+    meta.innerHTML = tags.map(t => `<button type="button" class="pill" data-tag="${escapeAttr(t)}">${escapeHtml(t)}</button>`).join("");
     meta.style.display = tags.length ? "" : "none";
+    $$("button.pill[data-tag]", meta).forEach(btn => {
+      btn.addEventListener("click", () => {
+        const tag = String(btn.dataset.tag || "").trim();
+        if (!tag) return;
+        closeDrawer();
+        setActivePage("home");
+        const q = $("#q");
+        if (q) q.value = tag;
+        state.query = tag;
+        state.currentPage = 1;
+        renderFeed();
+      });
+    });
   }
 
   const sum = $("#aSummaryList");
@@ -1599,7 +1614,17 @@ function renderEventAdminPanel(){
   panel.hidden = !isAdmin;
   if (!isAdmin) return;
 
+  const cursor = state.scheduleCursor instanceof Date ? new Date(state.scheduleCursor) : new Date();
+  const viewYear = cursor.getFullYear();
+  const viewMonth = cursor.getMonth();
   const events = cloudEvents
+    .filter(ev => {
+      const parsed = parseDate(ev.date);
+      if (!parsed || parsed === "-") return false;
+      const dateObj = new Date(parsed + "T00:00:00");
+      if (Number.isNaN(dateObj.getTime())) return false;
+      return dateObj.getFullYear() === viewYear && dateObj.getMonth() === viewMonth;
+    })
     .slice()
     .sort((a, b) => (parseDate(a.date) < parseDate(b.date) ? 1 : -1));
 
@@ -1887,20 +1912,6 @@ window.location.href = url.toString();
     console.error(err);
 
     hideGachaConnectOverlay();
-
-    function resetGachaConnectState() {
-  hideGachaConnectOverlay();
-
-  const btn = document.getElementById("profileGachaBtn");
-  if (btn) {
-    btn.disabled = false;
-    btn.textContent = "語り場ガチャへ";
-  }
-}
-
-window.addEventListener("pageshow", () => {
-  resetGachaConnectState();
-});
 
     if (isAuthError(err)) {
       handleAuthFailure(err.message || "セッションの有効期限が切れました。");
@@ -2512,6 +2523,8 @@ function updateLatestPostKey(posts){
   if(!Array.isArray(posts) || posts.length === 0){
     latestPostKey = "";
     latestPostSnapshot = null;
+    latestOpsPostKey = "";
+    latestOpsPostSnapshot = null;
     return;
   }
   const sorted = posts
@@ -2524,6 +2537,19 @@ function updateLatestPostKey(posts){
     title: top.title || "",
     date: parseDate(top.date)
   };
+
+  const opsTop = sorted.find(post => post.channel === "ops") || null;
+  if (opsTop) {
+    latestOpsPostKey = `${opsTop.id}:${parseDate(opsTop.date)}`;
+    latestOpsPostSnapshot = {
+      id: opsTop.id || "",
+      title: opsTop.title || "",
+      date: parseDate(opsTop.date)
+    };
+  } else {
+    latestOpsPostKey = "";
+    latestOpsPostSnapshot = null;
+  }
 }
 
 function showNotifyBanner(postTitle = ""){
@@ -2563,10 +2589,77 @@ function isStandaloneMode() {
   return window.matchMedia?.("(display-mode: standalone)")?.matches || window.navigator.standalone === true;
 }
 
+async function savePushSubscriptionToApi(subscription) {
+  if (!subscription) return;
+  await callApi("savePushSubscription", { subscription });
+}
+
+async function removePushSubscriptionToApi(subscription) {
+  if (!subscription) return;
+  await callApi("removePushSubscription", {
+    endpoint: String(subscription.endpoint || "")
+  });
+}
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
+async function ensurePushSubscription() {
+  if (!("serviceWorker" in navigator)) return;
+  if (!("PushManager" in window)) return;
+  if (!("Notification" in window)) return;
+  if (Notification.permission !== "granted") return;
+
+  const vapidPublicKey = String(window.APP_CONFIG?.PUSH_VAPID_PUBLIC_KEY || "").trim();
+  if (!vapidPublicKey) return;
+
+  const registration = await navigator.serviceWorker.ready;
+  const currentSub = await registration.pushManager.getSubscription();
+  if (currentSub) {
+    await savePushSubscriptionToApi(currentSub.toJSON());
+    return;
+  }
+
+  const appServerKey = urlBase64ToUint8Array(vapidPublicKey);
+  const subscription = await registration.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: appServerKey
+  });
+  await savePushSubscriptionToApi(subscription.toJSON());
+}
+
+async function cleanupPushSubscription() {
+  if (!("serviceWorker" in navigator)) return;
+  if (!("PushManager" in window)) return;
+  const registration = await navigator.serviceWorker.ready;
+  const currentSub = await registration.pushManager.getSubscription();
+  if (!currentSub) return;
+  await removePushSubscriptionToApi(currentSub.toJSON());
+  await currentSub.unsubscribe();
+}
+
 function requestSystemNotificationPermission() {
   if (!("Notification" in window)) return;
+  if (Notification.permission === "granted") {
+    ensurePushSubscription().catch(() => {});
+    return;
+  }
   if (Notification.permission !== "default") return;
-  Notification.requestPermission().catch(() => {});
+  Notification.requestPermission()
+    .then((permission) => {
+      if (permission === "granted") {
+        ensurePushSubscription().catch(() => {});
+      }
+    })
+    .catch(() => {});
 }
 
 function showNewPostSystemNotification(post) {
@@ -2600,6 +2693,7 @@ async function refreshFromCloud(opts = {}){
         : fetchEventsFromApi()
     ]);
     const prevKey = latestPostKey;
+    const prevOpsKey = latestOpsPostKey;
     cloudPosts = posts;
     cloudEvents = events;
     saveCachedPosts(posts);
@@ -2610,6 +2704,9 @@ async function refreshFromCloud(opts = {}){
     if (!opts.skipNotify && prevKey && prevKey !== latestPostKey) {
       showNotifyBanner(latestPostSnapshot?.title || "");
       showNewPostSystemNotification(latestPostSnapshot);
+    }
+    if (!opts.skipNotify && prevOpsKey && prevOpsKey !== latestOpsPostKey && latestOpsPostSnapshot) {
+      showNewPostSystemNotification(latestOpsPostSnapshot);
     }
   } catch (err) {
     if (isAuthError(err)) {
@@ -2638,6 +2735,7 @@ function setupInstallButton(){
   window.addEventListener("appinstalled", () => {
     deferredInstallPrompt = null;
     applyAuthUI();
+    requestSystemNotificationPermission();
   });
 }
 
@@ -2715,6 +2813,7 @@ function bind(){
 
   on("#btnProfileLogout", "click", () => {
     if (!confirm("ログアウトしますか？")) return;
+    cleanupPushSubscription().catch(() => {});
     clearCurrentUser();
     clearAuthToken();
     hideNotifyBanner();
@@ -3271,12 +3370,14 @@ function bind(){
   on("#btnInstall", "click", async () => {
     if (!deferredInstallPrompt) {
       openInstallHelpModal();
+      requestSystemNotificationPermission();
       return;
     }
     deferredInstallPrompt.prompt();
     await deferredInstallPrompt.userChoice;
     deferredInstallPrompt = null;
     applyAuthUI();
+    requestSystemNotificationPermission();
   });
   on("#notifyRefresh", "click", async () => {
     try {
@@ -3345,7 +3446,7 @@ document.addEventListener("visibilitychange", () => {
 // ===== Init =====
 async function init(){
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("./sw.js?v=46").catch(err => {
+    navigator.serviceWorker.register("./sw.js?v=48").catch(err => {
       console.warn("SW registration failed:", err);
     });
   }
