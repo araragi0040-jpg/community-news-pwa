@@ -10,6 +10,11 @@ function ensureWebPushConfigured() {
   webpush.setVapidDetails(subject, publicKey, privateKey);
 }
 
+function isGoneSubscriptionError(err) {
+  const status = err && (err.statusCode || err.status);
+  return status === 404 || status === 410;
+}
+
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ ok: false, error: "method_not_allowed" });
@@ -29,7 +34,7 @@ module.exports = async function handler(req, res) {
     const subscriptions = Array.isArray(body.subscriptions) ? body.subscriptions : [];
     const title = String(payload.title || "語り場ニュース");
     const message = String(payload.body || "新しいお知らせがあります。");
-    const icon = String(payload.icon || "./favicon.png");
+    const icon = String(payload.icon || "");
     const url = String(payload.url || "/");
 
     const pushPayload = JSON.stringify({
@@ -43,7 +48,8 @@ module.exports = async function handler(req, res) {
     const result = {
       ok: true,
       sent: 0,
-      failed: 0
+      failed: 0,
+      expiredEndpoints: []
     };
 
     for (const sub of subscriptions) {
@@ -51,13 +57,18 @@ module.exports = async function handler(req, res) {
       try {
         await webpush.sendNotification(sub, pushPayload);
         result.sent += 1;
-      } catch (_err) {
+      } catch (err) {
         result.failed += 1;
+        if (isGoneSubscriptionError(err)) {
+          result.expiredEndpoints.push(String(sub.endpoint));
+        }
+        console.warn("webpush.sendNotification failed:", sub.endpoint, err && err.message ? err.message : err);
       }
     }
 
     return res.status(200).json(result);
   } catch (err) {
+    console.error("push send handler error:", err);
     return res.status(500).json({
       ok: false,
       error: "server_error",
