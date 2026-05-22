@@ -2530,13 +2530,20 @@ function updateLatestPostKey(posts){
   const sorted = posts
     .slice()
     .sort((a, b) => (parseDate(a.date) < parseDate(b.date) ? 1 : -1));
-  const top = sorted[0];
-  latestPostKey = `${top.id}:${parseDate(top.date)}`;
-  latestPostSnapshot = {
-    id: top.id || "",
-    title: top.title || "",
-    date: parseDate(top.date)
-  };
+
+  const articleTop = sorted.find(post => post.channel !== "ops") || null;
+  if (articleTop) {
+    latestPostKey = `${articleTop.id}:${parseDate(articleTop.date)}`;
+    latestPostSnapshot = {
+      id: articleTop.id || "",
+      title: articleTop.title || "",
+      date: parseDate(articleTop.date),
+      channel: articleTop.channel || "article"
+    };
+  } else {
+    latestPostKey = "";
+    latestPostSnapshot = null;
+  }
 
   const opsTop = sorted.find(post => post.channel === "ops") || null;
   if (opsTop) {
@@ -2544,7 +2551,8 @@ function updateLatestPostKey(posts){
     latestOpsPostSnapshot = {
       id: opsTop.id || "",
       title: opsTop.title || "",
-      date: parseDate(opsTop.date)
+      date: parseDate(opsTop.date),
+      channel: "ops"
     };
   } else {
     latestOpsPostKey = "";
@@ -2552,13 +2560,18 @@ function updateLatestPostKey(posts){
   }
 }
 
-function showNotifyBanner(postTitle = ""){
+function showNotifyBanner(postTitle = "", channel = "article"){
   const banner = $("#notifyBanner");
   const text = $("#notifyBannerText");
+  const isOps = String(channel || "").trim() === "ops";
   if (text) {
-    text.textContent = postTitle
-      ? `新しい記事が投稿されました。「${postTitle}」を読む`
-      : "新しい記事があります";
+    if (postTitle) {
+      text.textContent = isOps
+        ? `運営からのお知らせ。「${postTitle}」を読む`
+        : `新しい記事が投稿されました。「${postTitle}」を読む`;
+    } else {
+      text.textContent = isOps ? "運営からのお知らせがあります" : "新しい記事があります";
+    }
   }
   if (banner) banner.hidden = false;
 }
@@ -2612,6 +2625,10 @@ function urlBase64ToUint8Array(base64String) {
   return outputArray;
 }
 
+function warnPushSubscription(err, context) {
+  console.warn(`[push] ${context}:`, err);
+}
+
 async function ensurePushSubscription() {
   if (!("serviceWorker" in navigator)) return;
   if (!("PushManager" in window)) return;
@@ -2619,21 +2636,29 @@ async function ensurePushSubscription() {
   if (Notification.permission !== "granted") return;
 
   const vapidPublicKey = String(window.APP_CONFIG?.PUSH_VAPID_PUBLIC_KEY || "").trim();
-  if (!vapidPublicKey) return;
-
-  const registration = await navigator.serviceWorker.ready;
-  const currentSub = await registration.pushManager.getSubscription();
-  if (currentSub) {
-    await savePushSubscriptionToApi(currentSub.toJSON());
+  if (!vapidPublicKey) {
+    warnPushSubscription("PUSH_VAPID_PUBLIC_KEY is empty", "ensurePushSubscription");
     return;
   }
 
-  const appServerKey = urlBase64ToUint8Array(vapidPublicKey);
-  const subscription = await registration.pushManager.subscribe({
-    userVisibleOnly: true,
-    applicationServerKey: appServerKey
-  });
-  await savePushSubscriptionToApi(subscription.toJSON());
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    const currentSub = await registration.pushManager.getSubscription();
+    if (currentSub) {
+      await savePushSubscriptionToApi(currentSub.toJSON());
+      return;
+    }
+
+    const appServerKey = urlBase64ToUint8Array(vapidPublicKey);
+    const subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: appServerKey
+    });
+    await savePushSubscriptionToApi(subscription.toJSON());
+  } catch (err) {
+    warnPushSubscription(err, "ensurePushSubscription");
+    throw err;
+  }
 }
 
 async function cleanupPushSubscription() {
@@ -2649,28 +2674,29 @@ async function cleanupPushSubscription() {
 function requestSystemNotificationPermission() {
   if (!("Notification" in window)) return;
   if (Notification.permission === "granted") {
-    ensurePushSubscription().catch(() => {});
+    ensurePushSubscription().catch(err => warnPushSubscription(err, "requestSystemNotificationPermission"));
     return;
   }
   if (Notification.permission !== "default") return;
   Notification.requestPermission()
     .then((permission) => {
       if (permission === "granted") {
-        ensurePushSubscription().catch(() => {});
+        ensurePushSubscription().catch(err => warnPushSubscription(err, "requestSystemNotificationPermission"));
       }
     })
-    .catch(() => {});
+    .catch(err => warnPushSubscription(err, "Notification.requestPermission"));
 }
 
 function showNewPostSystemNotification(post) {
   if (!post?.title) return;
   if (!("Notification" in window)) return;
   if (Notification.permission !== "granted") return;
-  const notification = new Notification("新しい記事が投稿されました。", {
+  const isOps = String(post.channel || "").trim() === "ops";
+  const notification = new Notification(isOps ? "運営からのお知らせ" : "新しい記事が投稿されました。", {
     body: `「${post.title}」を読む`,
     icon: "./favicon.png",
     badge: "./favicon.png",
-    tag: `new-post-${post.id || post.date || Date.now()}`
+    tag: `${isOps ? "ops" : "article"}-${post.id || post.date || Date.now()}`
   });
   notification.onclick = () => {
     window.focus();
@@ -2701,11 +2727,12 @@ async function refreshFromCloud(opts = {}){
     updateLatestPostKey(posts);
     if (!opts.silent) renderAll();
     setFeedLoading(false);
-    if (!opts.skipNotify && prevKey && prevKey !== latestPostKey) {
-      showNotifyBanner(latestPostSnapshot?.title || "");
+    if (!opts.skipNotify && prevKey && prevKey !== latestPostKey && latestPostSnapshot) {
+      showNotifyBanner(latestPostSnapshot.title || "", latestPostSnapshot.channel || "article");
       showNewPostSystemNotification(latestPostSnapshot);
     }
     if (!opts.skipNotify && prevOpsKey && prevOpsKey !== latestOpsPostKey && latestOpsPostSnapshot) {
+      showNotifyBanner(latestOpsPostSnapshot.title || "", "ops");
       showNewPostSystemNotification(latestOpsPostSnapshot);
     }
   } catch (err) {
@@ -2727,6 +2754,9 @@ function setupInstallButton(){
     e.preventDefault();
     deferredInstallPrompt = e;
     clearInstallHelpTimer();
+    if (getCurrentUser()) {
+      requestSystemNotificationPermission();
+    }
     if (getCurrentUser() && !isStandaloneMode()) {
       const btn = $("#btnInstall");
       if (btn) btn.hidden = false;
@@ -3446,7 +3476,7 @@ document.addEventListener("visibilitychange", () => {
 // ===== Init =====
 async function init(){
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("./sw.js?v=48").catch(err => {
+    navigator.serviceWorker.register("./sw.js?v=49").catch(err => {
       console.warn("SW registration failed:", err);
     });
   }
