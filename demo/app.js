@@ -2635,11 +2635,16 @@ async function ensurePushSubscription() {
   if (!("Notification" in window)) return;
   if (Notification.permission !== "granted") return;
 
-  const vapidPublicKey = String(window.APP_CONFIG?.PUSH_VAPID_PUBLIC_KEY || "").trim();
-  if (!vapidPublicKey) {
-    warnPushSubscription("PUSH_VAPID_PUBLIC_KEY is empty", "ensurePushSubscription");
-    return;
-  }
+const vapidPublicKey = String(
+  window.APP_CONFIG?.PUSH_VAPID_PUBLIC_KEY ||
+  window.APP_CONFIG?.VAPID_PUBLIC_KEY ||
+  ""
+).trim();
+
+if (!vapidPublicKey) {
+  warnPushSubscription("PUSH_VAPID_PUBLIC_KEY / VAPID_PUBLIC_KEY is empty", "ensurePushSubscription");
+  return;
+}
 
   try {
     const registration = await navigator.serviceWorker.ready;
