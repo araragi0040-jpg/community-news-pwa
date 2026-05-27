@@ -13,7 +13,6 @@ const LS_KEY_TOKEN = "community_news_token_v1";
 const LS_KEY_POSTS_CACHE = "community_news_posts_cache_v1";
 const LS_KEY_EVENTS_CACHE = "community_news_events_cache_v1";
 const LS_KEY_DAILY_POINT_DATE_PREFIX = "community_news_daily_point_date_v1:";
-const LS_KEY_PUSH_ENDPOINT = "community_news_push_endpoint_v1";
 const ITEMS_PER_PAGE = 10;
 
 function getGachaAppUrl() {
@@ -816,10 +815,10 @@ function clearInstallHelpTimer() {
 function scheduleInstallButtonVisibility() {
   const btn = $("#btnInstall");
   clearInstallHelpTimer();
-  if (btn) btn.hidden = true;
-  updateNotificationButton().catch(err => warnPushSubscription(err, "updateNotificationButton"));
+  if (!btn) return;
+  btn.hidden = true;
 
-  if (!btn || !getCurrentUser() || isStandaloneMode()) return;
+  if (!getCurrentUser() || isStandaloneMode()) return;
 
   if (deferredInstallPrompt) {
     btn.hidden = false;
@@ -853,8 +852,6 @@ function applyAuthUI() {
     updateProfileButton(null);
     const installBtn = document.getElementById("btnInstall");
     if (installBtn) installBtn.hidden = true;
-    const notifyBtn = document.getElementById("btnNotify");
-    if (notifyBtn) notifyBtn.hidden = true;
     clearInstallHelpTimer();
     return;
   }
@@ -2605,43 +2602,9 @@ function isStandaloneMode() {
   return window.matchMedia?.("(display-mode: standalone)")?.matches || window.navigator.standalone === true;
 }
 
-function isPushSupported() {
-  return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
-}
-
-function getSavedPushEndpoint() {
-  return String(localStorage.getItem(LS_KEY_PUSH_ENDPOINT) || "").trim();
-}
-
-function markPushSubscriptionSaved(subscription) {
-  const endpoint = String(subscription?.endpoint || "").trim();
-  if (endpoint) localStorage.setItem(LS_KEY_PUSH_ENDPOINT, endpoint);
-}
-
-function clearSavedPushEndpoint() {
-  localStorage.removeItem(LS_KEY_PUSH_ENDPOINT);
-}
-
-function isPushSubscriptionSaved(subscription) {
-  const endpoint = String(subscription?.endpoint || "").trim();
-  return !!endpoint && getSavedPushEndpoint() === endpoint;
-}
-
-function arrayBuffersEqual(a, b) {
-  if (!a || !b) return false;
-  const aa = a instanceof Uint8Array ? a : new Uint8Array(a);
-  const bb = b instanceof Uint8Array ? b : new Uint8Array(b);
-  if (aa.byteLength !== bb.byteLength) return false;
-  for (let i = 0; i < aa.byteLength; i += 1) {
-    if (aa[i] !== bb[i]) return false;
-  }
-  return true;
-}
-
 async function savePushSubscriptionToApi(subscription) {
   if (!subscription) return;
   await callApi("savePushSubscription", { subscription });
-  markPushSubscriptionSaved(subscription);
 }
 
 async function removePushSubscriptionToApi(subscription) {
@@ -2666,50 +2629,10 @@ function warnPushSubscription(err, context) {
   console.warn(`[push] ${context}:`, err);
 }
 
-async function getCurrentPushSubscription() {
-  if (!isPushSupported()) return null;
-  const registration = await navigator.serviceWorker.ready;
-  return registration.pushManager.getSubscription();
-}
-
-async function updateNotificationButton() {
-  const btn = $("#btnNotify");
-  if (!btn) return;
-
-  btn.hidden = true;
-  btn.disabled = false;
-  btn.title = "通知を有効化";
-  btn.setAttribute("aria-label", "通知を有効化");
-
-  if (!getCurrentUser() || !isPushSupported()) return;
-
-  if (Notification.permission === "denied") {
-    btn.hidden = false;
-    btn.title = "通知がブロックされています。ブラウザ設定から許可してください。";
-    btn.setAttribute("aria-label", "通知がブロックされています");
-    return;
-  }
-
-  if (Notification.permission === "default") {
-    btn.hidden = false;
-    return;
-  }
-
-  try {
-    const currentSub = await getCurrentPushSubscription();
-    if (!currentSub || !isPushSubscriptionSaved(currentSub)) {
-      btn.hidden = false;
-      btn.title = currentSub ? "通知を再登録" : "通知を有効化";
-      btn.setAttribute("aria-label", btn.title);
-    }
-  } catch (err) {
-    warnPushSubscription(err, "updateNotificationButton");
-    btn.hidden = false;
-  }
-}
-
 async function ensurePushSubscription() {
-  if (!isPushSupported()) return;
+  if (!("serviceWorker" in navigator)) return;
+  if (!("PushManager" in window)) return;
+  if (!("Notification" in window)) return;
   if (Notification.permission !== "granted") return;
 
   const vapidPublicKey = String(window.APP_CONFIG?.PUSH_VAPID_PUBLIC_KEY || "").trim();
@@ -2718,30 +2641,15 @@ async function ensurePushSubscription() {
     return;
   }
 
-  const appServerKey = urlBase64ToUint8Array(vapidPublicKey);
-
   try {
     const registration = await navigator.serviceWorker.ready;
-    let currentSub = await registration.pushManager.getSubscription();
-
-    // VAPIDキーを変えた後も古い購読が残ることがあるため、キー不一致なら作り直す。
-    const currentKey = currentSub?.options?.applicationServerKey;
-    if (currentSub && currentKey && !arrayBuffersEqual(currentKey, appServerKey)) {
-      try {
-        await removePushSubscriptionToApi(currentSub.toJSON());
-      } catch (removeErr) {
-        warnPushSubscription(removeErr, "remove old mismatched subscription");
-      }
-      await currentSub.unsubscribe();
-      clearSavedPushEndpoint();
-      currentSub = null;
-    }
-
+    const currentSub = await registration.pushManager.getSubscription();
     if (currentSub) {
       await savePushSubscriptionToApi(currentSub.toJSON());
       return;
     }
 
+    const appServerKey = urlBase64ToUint8Array(vapidPublicKey);
     const subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey: appServerKey
@@ -2750,97 +2658,33 @@ async function ensurePushSubscription() {
   } catch (err) {
     warnPushSubscription(err, "ensurePushSubscription");
     throw err;
-  } finally {
-    updateNotificationButton().catch(err => warnPushSubscription(err, "updateNotificationButton"));
   }
 }
 
 async function cleanupPushSubscription() {
-  if (!isPushSupported()) return;
+  if (!("serviceWorker" in navigator)) return;
+  if (!("PushManager" in window)) return;
   const registration = await navigator.serviceWorker.ready;
   const currentSub = await registration.pushManager.getSubscription();
-  if (!currentSub) {
-    clearSavedPushEndpoint();
-    return;
-  }
-  try {
-    await removePushSubscriptionToApi(currentSub.toJSON());
-  } finally {
-    clearSavedPushEndpoint();
-    await currentSub.unsubscribe();
-    updateNotificationButton().catch(err => warnPushSubscription(err, "updateNotificationButton"));
-  }
-}
-
-function requestNotificationPermissionCompat() {
-  const result = Notification.requestPermission();
-  if (result && typeof result.then === "function") return result;
-  return Promise.resolve(Notification.permission);
+  if (!currentSub) return;
+  await removePushSubscriptionToApi(currentSub.toJSON());
+  await currentSub.unsubscribe();
 }
 
 function requestSystemNotificationPermission() {
-  if (!isPushSupported()) {
-    updateNotificationButton().catch(() => {});
-    return;
-  }
-
-  // 自動実行ではブラウザの権限ダイアログを出さず、許可済みなら購読だけ同期する。
-  // iOS/Safari対策として、初回許可は必ずユーザー操作（#btnNotify）から行う。
+  if (!("Notification" in window)) return;
   if (Notification.permission === "granted") {
     ensurePushSubscription().catch(err => warnPushSubscription(err, "requestSystemNotificationPermission"));
     return;
   }
-
-  updateNotificationButton().catch(err => warnPushSubscription(err, "updateNotificationButton"));
-}
-
-async function enablePushNotificationsFromUserAction() {
-  const btn = $("#btnNotify");
-  const oldTitle = btn ? btn.title : "";
-
-  if (!getCurrentUser()) {
-    showToast("ログイン後に通知を有効化できます。");
-    return;
-  }
-  if (!isPushSupported()) {
-    showToast("この端末・ブラウザはPush通知に対応していません。");
-    return;
-  }
-  if (Notification.permission === "denied") {
-    showToast("通知がブロックされています。ブラウザ設定から許可してください。", 5000);
-    await updateNotificationButton();
-    return;
-  }
-
-  try {
-    if (btn) {
-      btn.disabled = true;
-      btn.title = "通知を設定中...";
-    }
-
-    let permission = Notification.permission;
-    if (permission === "default") {
-      permission = await requestNotificationPermissionCompat();
-    }
-
-    if (permission !== "granted") {
-      showToast("通知が許可されませんでした。");
-      await updateNotificationButton();
-      return;
-    }
-
-    await ensurePushSubscription();
-    showToast("Push通知を有効化しました。");
-  } catch (err) {
-    warnPushSubscription(err, "enablePushNotificationsFromUserAction");
-    showToast("Push通知の設定に失敗しました。時間をおいて再試行してください。", 5000);
-  } finally {
-    if (btn) {
-      btn.disabled = false;
-      btn.title = oldTitle || "通知を有効化";
-    }
-    updateNotificationButton().catch(err => warnPushSubscription(err, "updateNotificationButton"));
-  }
+  if (Notification.permission !== "default") return;
+  Notification.requestPermission()
+    .then((permission) => {
+      if (permission === "granted") {
+        ensurePushSubscription().catch(err => warnPushSubscription(err, "requestSystemNotificationPermission"));
+      }
+    })
+    .catch(err => warnPushSubscription(err, "Notification.requestPermission"));
 }
 
 function showNewPostSystemNotification(post) {
@@ -3565,10 +3409,6 @@ function bind(){
     applyAuthUI();
     requestSystemNotificationPermission();
   });
-  on("#btnNotify", "click", async (e) => {
-    e.preventDefault();
-    await enablePushNotificationsFromUserAction();
-  });
   on("#notifyRefresh", "click", async () => {
     try {
       await refreshFromCloud({ silent: false, skipNotify: true });
@@ -3630,14 +3470,13 @@ window.addEventListener("pagehide", () => {
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden) {
     forceCloseGachaConnectOverlay();
-    requestSystemNotificationPermission();
   }
 });
 
 // ===== Init =====
 async function init(){
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("./sw.js?v=50").catch(err => {
+    navigator.serviceWorker.register("./sw.js?v=49").catch(err => {
       console.warn("SW registration failed:", err);
     });
   }
