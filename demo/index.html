@@ -8,7 +8,7 @@
   <link rel="icon" href="./favicon.png" type="image/png">
   <link rel="apple-touch-icon" href="./favicon.png">
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=49" />
+  <link rel="stylesheet" href="./styles.css?v=50" />
 </head>
 <body>
   <div class="auth" id="authGate">
@@ -70,6 +70,11 @@
       </div>
 
       <div class="topbar__actions">
+        <button class="iconbtn" id="btnNotify" aria-label="通知を有効化" title="通知を有効化" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22zm7-6v-5c0-3.07-1.63-5.64-4.5-6.32V4a2.5 2.5 0 0 0-5 0v.68C6.64 5.36 5 7.92 5 11v5l-2 2v1h18v-1l-2-2z"/>
+          </svg>
+        </button>
         <button class="iconbtn" id="btnInstall" aria-label="Install" title="インストール" hidden>
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
@@ -623,7 +628,7 @@
   });
 </script>
 
-  <script src="config.js?v=49"></script>
-  <script src="./app.js?v=49"></script>
+  <script src="config.js?v=50"></script>
+  <script src="./app.js?v=50"></script>
 </body>
 </html>
