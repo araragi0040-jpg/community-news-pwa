@@ -3479,11 +3479,21 @@ document.addEventListener("visibilitychange", () => {
 });
 
 // ===== Init =====
-async function init(){
+async function init() {
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("./sw.js?v=49").catch(err => {
+    try {
+      const registration = await navigator.serviceWorker.register("./sw.js?v=50", {
+        scope: "./"
+      });
+
+      console.log("SW registered:", registration.scope);
+
+      await navigator.serviceWorker.ready;
+      console.log("SW ready");
+
+    } catch (err) {
       console.warn("SW registration failed:", err);
-    });
+    }
   }
 
   bind();
@@ -3525,4 +3535,9 @@ async function init(){
     console.warn("Cloud refresh failed:", err);
   });
 }
-init();
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", init);
+} else {
+  init();
+}
