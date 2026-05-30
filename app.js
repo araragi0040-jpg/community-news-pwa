@@ -118,6 +118,8 @@ let cloudPosts = [];
 let cloudEvents = [];
 let latestPostKey = "";
 let latestPostSnapshot = null;
+let latestOpsPostKey = "";
+let latestOpsPostSnapshot = null;
 let deferredInstallPrompt = null;
 let installHelpTimerId = null;
 
@@ -1256,8 +1258,21 @@ function openDrawer(articleId){
   const meta = $("#aMeta");
   const tags = a.tags || [];
   if (meta) {
-    meta.innerHTML = tags.map(t => `<span class="pill">${escapeHtml(t)}</span>`).join("");
+    meta.innerHTML = tags.map(t => `<button type="button" class="pill" data-tag="${escapeAttr(t)}">${escapeHtml(t)}</button>`).join("");
     meta.style.display = tags.length ? "" : "none";
+    $$("button.pill[data-tag]", meta).forEach(btn => {
+      btn.addEventListener("click", () => {
+        const tag = String(btn.dataset.tag || "").trim();
+        if (!tag) return;
+        closeDrawer();
+        setActivePage("home");
+        const q = $("#q");
+        if (q) q.value = tag;
+        state.query = tag;
+        state.currentPage = 1;
+        renderFeed();
+      });
+    });
   }
 
   const sum = $("#aSummaryList");
@@ -1599,7 +1614,17 @@ function renderEventAdminPanel(){
   panel.hidden = !isAdmin;
   if (!isAdmin) return;
 
+  const cursor = state.scheduleCursor instanceof Date ? new Date(state.scheduleCursor) : new Date();
+  const viewYear = cursor.getFullYear();
+  const viewMonth = cursor.getMonth();
   const events = cloudEvents
+    .filter(ev => {
+      const parsed = parseDate(ev.date);
+      if (!parsed || parsed === "-") return false;
+      const dateObj = new Date(parsed + "T00:00:00");
+      if (Number.isNaN(dateObj.getTime())) return false;
+      return dateObj.getFullYear() === viewYear && dateObj.getMonth() === viewMonth;
+    })
     .slice()
     .sort((a, b) => (parseDate(a.date) < parseDate(b.date) ? 1 : -1));
 
@@ -1887,20 +1912,6 @@ window.location.href = url.toString();
     console.error(err);
 
     hideGachaConnectOverlay();
-
-    function resetGachaConnectState() {
-  hideGachaConnectOverlay();
-
-  const btn = document.getElementById("profileGachaBtn");
-  if (btn) {
-    btn.disabled = false;
-    btn.textContent = "語り場ガチャへ";
-  }
-}
-
-window.addEventListener("pageshow", () => {
-  resetGachaConnectState();
-});
 
     if (isAuthError(err)) {
       handleAuthFailure(err.message || "セッションの有効期限が切れました。");
@@ -2512,27 +2523,55 @@ function updateLatestPostKey(posts){
   if(!Array.isArray(posts) || posts.length === 0){
     latestPostKey = "";
     latestPostSnapshot = null;
+    latestOpsPostKey = "";
+    latestOpsPostSnapshot = null;
     return;
   }
   const sorted = posts
     .slice()
     .sort((a, b) => (parseDate(a.date) < parseDate(b.date) ? 1 : -1));
-  const top = sorted[0];
-  latestPostKey = `${top.id}:${parseDate(top.date)}`;
-  latestPostSnapshot = {
-    id: top.id || "",
-    title: top.title || "",
-    date: parseDate(top.date)
-  };
+
+  const articleTop = sorted.find(post => post.channel !== "ops") || null;
+  if (articleTop) {
+    latestPostKey = `${articleTop.id}:${parseDate(articleTop.date)}`;
+    latestPostSnapshot = {
+      id: articleTop.id || "",
+      title: articleTop.title || "",
+      date: parseDate(articleTop.date),
+      channel: articleTop.channel || "article"
+    };
+  } else {
+    latestPostKey = "";
+    latestPostSnapshot = null;
+  }
+
+  const opsTop = sorted.find(post => post.channel === "ops") || null;
+  if (opsTop) {
+    latestOpsPostKey = `${opsTop.id}:${parseDate(opsTop.date)}`;
+    latestOpsPostSnapshot = {
+      id: opsTop.id || "",
+      title: opsTop.title || "",
+      date: parseDate(opsTop.date),
+      channel: "ops"
+    };
+  } else {
+    latestOpsPostKey = "";
+    latestOpsPostSnapshot = null;
+  }
 }
 
-function showNotifyBanner(postTitle = ""){
+function showNotifyBanner(postTitle = "", channel = "article"){
   const banner = $("#notifyBanner");
   const text = $("#notifyBannerText");
+  const isOps = String(channel || "").trim() === "ops";
   if (text) {
-    text.textContent = postTitle
-      ? `新しい記事が投稿されました。「${postTitle}」を読む`
-      : "新しい記事があります";
+    if (postTitle) {
+      text.textContent = isOps
+        ? `運営からのお知らせ。「${postTitle}」を読む`
+        : `新しい記事が投稿されました。「${postTitle}」を読む`;
+    } else {
+      text.textContent = isOps ? "運営からのお知らせがあります" : "新しい記事があります";
+    }
   }
   if (banner) banner.hidden = false;
 }
@@ -2563,21 +2602,106 @@ function isStandaloneMode() {
   return window.matchMedia?.("(display-mode: standalone)")?.matches || window.navigator.standalone === true;
 }
 
+async function savePushSubscriptionToApi(subscription) {
+  if (!subscription) return;
+  await callApi("savePushSubscription", { subscription });
+}
+
+async function removePushSubscriptionToApi(subscription) {
+  if (!subscription) return;
+  await callApi("removePushSubscription", {
+    endpoint: String(subscription.endpoint || "")
+  });
+}
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
+function warnPushSubscription(err, context) {
+  console.warn(`[push] ${context}:`, err);
+}
+
+async function ensurePushSubscription() {
+  if (!("serviceWorker" in navigator)) return;
+  if (!("PushManager" in window)) return;
+  if (!("Notification" in window)) return;
+  if (Notification.permission !== "granted") return;
+
+const vapidPublicKey = String(
+  window.APP_CONFIG?.PUSH_VAPID_PUBLIC_KEY ||
+  window.APP_CONFIG?.VAPID_PUBLIC_KEY ||
+  ""
+).trim();
+
+if (!vapidPublicKey) {
+  warnPushSubscription("PUSH_VAPID_PUBLIC_KEY / VAPID_PUBLIC_KEY is empty", "ensurePushSubscription");
+  return;
+}
+
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    const currentSub = await registration.pushManager.getSubscription();
+    if (currentSub) {
+      await savePushSubscriptionToApi(currentSub.toJSON());
+      return;
+    }
+
+    const appServerKey = urlBase64ToUint8Array(vapidPublicKey);
+    const subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: appServerKey
+    });
+    await savePushSubscriptionToApi(subscription.toJSON());
+  } catch (err) {
+    warnPushSubscription(err, "ensurePushSubscription");
+    throw err;
+  }
+}
+
+async function cleanupPushSubscription() {
+  if (!("serviceWorker" in navigator)) return;
+  if (!("PushManager" in window)) return;
+  const registration = await navigator.serviceWorker.ready;
+  const currentSub = await registration.pushManager.getSubscription();
+  if (!currentSub) return;
+  await removePushSubscriptionToApi(currentSub.toJSON());
+  await currentSub.unsubscribe();
+}
+
 function requestSystemNotificationPermission() {
   if (!("Notification" in window)) return;
+  if (Notification.permission === "granted") {
+    ensurePushSubscription().catch(err => warnPushSubscription(err, "requestSystemNotificationPermission"));
+    return;
+  }
   if (Notification.permission !== "default") return;
-  Notification.requestPermission().catch(() => {});
+  Notification.requestPermission()
+    .then((permission) => {
+      if (permission === "granted") {
+        ensurePushSubscription().catch(err => warnPushSubscription(err, "requestSystemNotificationPermission"));
+      }
+    })
+    .catch(err => warnPushSubscription(err, "Notification.requestPermission"));
 }
 
 function showNewPostSystemNotification(post) {
   if (!post?.title) return;
   if (!("Notification" in window)) return;
   if (Notification.permission !== "granted") return;
-  const notification = new Notification("新しい記事が投稿されました。", {
+  const isOps = String(post.channel || "").trim() === "ops";
+  const notification = new Notification(isOps ? "運営からのお知らせ" : "新しい記事が投稿されました。", {
     body: `「${post.title}」を読む`,
     icon: "./favicon.png",
     badge: "./favicon.png",
-    tag: `new-post-${post.id || post.date || Date.now()}`
+    tag: `${isOps ? "ops" : "article"}-${post.id || post.date || Date.now()}`
   });
   notification.onclick = () => {
     window.focus();
@@ -2600,6 +2724,7 @@ async function refreshFromCloud(opts = {}){
         : fetchEventsFromApi()
     ]);
     const prevKey = latestPostKey;
+    const prevOpsKey = latestOpsPostKey;
     cloudPosts = posts;
     cloudEvents = events;
     saveCachedPosts(posts);
@@ -2607,9 +2732,13 @@ async function refreshFromCloud(opts = {}){
     updateLatestPostKey(posts);
     if (!opts.silent) renderAll();
     setFeedLoading(false);
-    if (!opts.skipNotify && prevKey && prevKey !== latestPostKey) {
-      showNotifyBanner(latestPostSnapshot?.title || "");
+    if (!opts.skipNotify && prevKey && prevKey !== latestPostKey && latestPostSnapshot) {
+      showNotifyBanner(latestPostSnapshot.title || "", latestPostSnapshot.channel || "article");
       showNewPostSystemNotification(latestPostSnapshot);
+    }
+    if (!opts.skipNotify && prevOpsKey && prevOpsKey !== latestOpsPostKey && latestOpsPostSnapshot) {
+      showNotifyBanner(latestOpsPostSnapshot.title || "", "ops");
+      showNewPostSystemNotification(latestOpsPostSnapshot);
     }
   } catch (err) {
     if (isAuthError(err)) {
@@ -2630,6 +2759,9 @@ function setupInstallButton(){
     e.preventDefault();
     deferredInstallPrompt = e;
     clearInstallHelpTimer();
+    if (getCurrentUser()) {
+      requestSystemNotificationPermission();
+    }
     if (getCurrentUser() && !isStandaloneMode()) {
       const btn = $("#btnInstall");
       if (btn) btn.hidden = false;
@@ -2638,6 +2770,7 @@ function setupInstallButton(){
   window.addEventListener("appinstalled", () => {
     deferredInstallPrompt = null;
     applyAuthUI();
+    requestSystemNotificationPermission();
   });
 }
 
@@ -2715,6 +2848,7 @@ function bind(){
 
   on("#btnProfileLogout", "click", () => {
     if (!confirm("ログアウトしますか？")) return;
+    cleanupPushSubscription().catch(() => {});
     clearCurrentUser();
     clearAuthToken();
     hideNotifyBanner();
@@ -3271,12 +3405,14 @@ function bind(){
   on("#btnInstall", "click", async () => {
     if (!deferredInstallPrompt) {
       openInstallHelpModal();
+      requestSystemNotificationPermission();
       return;
     }
     deferredInstallPrompt.prompt();
     await deferredInstallPrompt.userChoice;
     deferredInstallPrompt = null;
     applyAuthUI();
+    requestSystemNotificationPermission();
   });
   on("#notifyRefresh", "click", async () => {
     try {
@@ -3343,11 +3479,21 @@ document.addEventListener("visibilitychange", () => {
 });
 
 // ===== Init =====
-async function init(){
+async function init() {
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("./sw.js?v=46").catch(err => {
+    try {
+      const registration = await navigator.serviceWorker.register("./sw.js?v=push-prod-1", {
+        scope: "./"
+      });
+
+      console.log("SW registered:", registration.scope);
+
+      await navigator.serviceWorker.ready;
+      console.log("SW ready");
+
+    } catch (err) {
       console.warn("SW registration failed:", err);
-    });
+    }
   }
 
   bind();
@@ -3389,4 +3535,9 @@ async function init(){
     console.warn("Cloud refresh failed:", err);
   });
 }
-init();
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", init);
+} else {
+  init();
+}
