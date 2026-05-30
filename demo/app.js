@@ -3482,7 +3482,7 @@ document.addEventListener("visibilitychange", () => {
 async function init() {
   if ("serviceWorker" in navigator) {
     try {
-      const registration = await navigator.serviceWorker.register("./sw.js?v=50", {
+      const registration = await navigator.serviceWorker.register("./sw.js?v=push-demo-3", {
         scope: "./"
       });
 
