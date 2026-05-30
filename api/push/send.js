@@ -52,21 +52,21 @@ async function fetchSubscriptionsFromGAS(secret) {
 }
 
 module.exports = async function handler(req, res) {
-  const allowedOrigins = [
-    "https://araragi0040-jpg.github.io",
-    "https://community-news-pwa.vercel.app"
-  ];
+  // ==============================
+  // CORS設定
+  // GitHub Pages demo から Vercel API を叩けるようにする
+  // ==============================
+  const origin = req.headers.origin || "*";
 
-  const origin = req.headers.origin;
-
-  if (allowedOrigins.includes(origin)) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
-  }
-
+  res.setHeader("Access-Control-Allow-Origin", origin);
   res.setHeader("Vary", "Origin");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization, X-Requested-With"
+  );
 
+  // preflight request 対応
   if (req.method === "OPTIONS") {
     return res.status(200).end();
   }
@@ -97,10 +97,12 @@ module.exports = async function handler(req, res) {
     if (!expectedSecret || secret !== expectedSecret) {
       return res.status(401).json({
         ok: false,
-        error: "unauthorized"
+        error: "unauthorized",
+        message: "secretが一致しません。"
       });
     }
 
+    // payload形式・直書き形式の両方に対応
     const payload = body.payload || {};
 
     const title = String(payload.title || body.title || "語り場ニュース");
@@ -109,11 +111,12 @@ module.exports = async function handler(req, res) {
     const url = String(payload.url || body.url || "/");
     const type = String(payload.type || body.type || "admin_notice");
 
+    // body.subscriptions があればそれを使う
+    // なければGAS/スプシから取得する
     let subscriptions = Array.isArray(body.subscriptions)
       ? body.subscriptions
       : [];
 
-    // subscriptions がリクエストに無ければ、GAS/スプシから取得
     if (subscriptions.length === 0) {
       subscriptions = await fetchSubscriptionsFromGAS(secret);
     }
