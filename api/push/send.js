@@ -16,8 +16,30 @@ function isGoneSubscriptionError(err) {
 }
 
 module.exports = async function handler(req, res) {
+  const allowedOrigins = [
+    "https://araragi0040-jpg.github.io",
+    "https://community-news-pwa.vercel.app"
+  ];
+
+  const origin = req.headers.origin;
+
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+  }
+
+  res.setHeader("Vary", "Origin");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
+
   if (req.method !== "POST") {
-    return res.status(405).json({ ok: false, error: "method_not_allowed" });
+    return res.status(405).json({
+      ok: false,
+      message: "Method Not Allowed"
+    });
   }
 
   try {
