@@ -66,6 +66,60 @@ svg{ width:22px; height:22px; fill: currentColor; }
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-shrink: 0;
+}
+
+.gacha-linkbtn{
+  height: 42px;
+  min-width: 76px;
+  padding: 0 12px;
+  border-radius: 14px;
+  border: 1px solid var(--stroke);
+  background: linear-gradient(135deg, #fffaf2, #fff);
+  color: var(--text-strong);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-weight: 760;
+  font-size: 13px;
+  letter-spacing: .02em;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(111, 80, 48, .08);
+  transition: transform .12s ease, background .12s ease, box-shadow .12s ease;
+}
+
+.gacha-linkbtn:hover{
+  background: #fff7ea;
+}
+
+.gacha-linkbtn:active{
+  transform: scale(.98);
+}
+
+.gacha-linkbtn[hidden]{
+  display: none !important;
+}
+
+.gacha-linkbtn__icon{
+  font-size: 15px;
+  line-height: 1;
+}
+
+.gacha-linkbtn__text{
+  white-space: nowrap;
+}
+
+@media (max-width: 380px){
+  .gacha-linkbtn{
+    min-width: 42px;
+    width: 42px;
+    padding: 0;
+  }
+
+  .gacha-linkbtn__text{
+    display: none;
+  }
 }
 
 .brand__logo{
