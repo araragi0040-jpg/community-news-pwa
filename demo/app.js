@@ -95,6 +95,8 @@ let state = {
   currentPage: 1,
   drawerOpen: false,
   activeArticleId: null,
+  articleHistoryStack: [],
+  articleInsertTargetId: "",
 
   // schedule
   calYear: null,
@@ -1134,10 +1136,14 @@ function renderVidInsertButton(videoInputId, bodyTextareaId, containerId){
 
 const INLINE_IMG_RE = /\{\{画像([12])(?::([^}]+))?\}\}/;
 const INLINE_VID_RE = /\{\{動画\}\}/;
-const INLINE_TOKEN_RE = /\{\{画像([12])(?::([^}]+))?\}\}|\{\{動画\}\}/g;
+const INLINE_ARTICLE_RE = /\{\{記事:([^}]+)\}\}/;
+const INLINE_TOKEN_RE = /\{\{画像([12])(?::([^}]+))?\}\}|\{\{動画\}\}|\{\{記事:([^}]+)\}\}/g;
 
 function bodyHasMarkers(a){
-  return (a.body || []).some(p => INLINE_IMG_RE.test(p.trim()) || INLINE_VID_RE.test(p.trim()));
+  return (a.body || []).some(p => {
+    const text = String(p || "").trim();
+    return INLINE_IMG_RE.test(text) || INLINE_VID_RE.test(text) || INLINE_ARTICLE_RE.test(text);
+  });
 }
 
 function mediaHtml(a, heroOnly){
@@ -1175,6 +1181,27 @@ function renderInlineImage(url, caption){
   return html;
 }
 
+function renderInlineArticleCard(postId){
+  const id = String(postId || "").trim();
+  const post = allArticles().find(x => x.id === id);
+  if (!post) {
+    return `
+      <div class="related-article-card related-article-card--missing">
+        <div class="related-article-card__label">関連記事</div>
+        <div class="related-article-card__title">記事が見つかりません</div>
+      </div>
+    `;
+  }
+
+  return `
+    <button class="related-article-card" type="button" data-related-article="${escapeAttr(post.id)}">
+      <div class="related-article-card__label">関連記事</div>
+      <div class="related-article-card__title">${escapeHtml(post.title || "(no title)")}</div>
+      <div class="related-article-card__meta">${escapeHtml(formatDateJP(post.date))}　${escapeHtml(channelLabel(post.channel))}</div>
+    </button>
+  `;
+}
+
 function renderBodyWithInlineMedia(a){
   const images = a.media?.images || [];
   const videoUrl = a.media?.video || "";
@@ -1185,7 +1212,7 @@ function renderBodyWithInlineMedia(a){
     const parts = [];
     let lastIndex = 0;
 
-    source.replace(INLINE_TOKEN_RE, (match, imgIdx, caption, offset) => {
+    source.replace(INLINE_TOKEN_RE, (match, imgIdx, caption, articleId, offset) => {
       const before = source.slice(lastIndex, offset).trim();
       if (before) parts.push(`<p>${escapeHtml(before)}</p>`);
 
@@ -1193,8 +1220,10 @@ function renderBodyWithInlineMedia(a){
         const idx = Number(imgIdx);
         const url = images[idx];
         if (url) parts.push(renderInlineImage(url, caption || ""));
-      } else if (videoUrl) {
-        parts.push(`<div class="media-inline">${renderVideoEmbed(videoUrl)}</div>`);
+      } else if (match === "{{動画}}") {
+        if (videoUrl) parts.push(`<div class="media-inline">${renderVideoEmbed(videoUrl)}</div>`);
+      } else if (match.startsWith("{{記事:")) {
+        parts.push(renderInlineArticleCard(articleId || ""));
       }
 
       lastIndex = offset + match.length;
@@ -1233,6 +1262,116 @@ function renderVideoEmbed(url){
   return `<div class="media__link"><a href="${escapeAttr(url)}" target="_blank" rel="noopener">動画を開く</a></div>`;
 }
 
+function getPastArticleCandidates(){
+  const excludeId = state.articleInsertTargetId === "eBody" ? state.editingId : state.newEditorDraftId;
+  return allArticles()
+    .filter(post => post.id && post.id !== excludeId)
+    .sort((a, b) => (parseDate(a.date) < parseDate(b.date) ? 1 : -1));
+}
+
+function openArticlePicker(targetTextareaId){
+  state.articleInsertTargetId = targetTextareaId || "";
+  const modal = $("#articlePickerModal");
+  const search = $("#articlePickerSearch");
+  if (search) search.value = "";
+  renderArticlePickerList();
+  if (modal) {
+    modal.classList.add("eventmodal--open");
+    modal.setAttribute("aria-hidden", "false");
+  }
+  setTimeout(() => {
+    const input = $("#articlePickerSearch");
+    if (input) input.focus();
+  }, 0);
+}
+
+function closeArticlePicker(){
+  const modal = $("#articlePickerModal");
+  if (modal) {
+    modal.classList.remove("eventmodal--open");
+    modal.setAttribute("aria-hidden", "true");
+  }
+}
+
+function renderArticlePickerList(){
+  const list = $("#articlePickerList");
+  if (!list) return;
+
+  const q = String($("#articlePickerSearch")?.value || "").trim().toLowerCase();
+  const items = getPastArticleCandidates()
+    .filter(post => {
+      if (!q) return true;
+      return String(post.title || "").toLowerCase().includes(q);
+    });
+
+  if (!items.length) {
+    list.innerHTML = `
+      <div class="empty">
+        <div class="empty__icon">🔎</div>
+        <div class="empty__title">該当する公開記事がありません</div>
+        <div class="empty__text">タイトルの検索語を変更してください。</div>
+      </div>
+    `;
+    return;
+  }
+
+  list.innerHTML = items.map(post => `
+    <button class="article-picker-item" type="button" data-pick-article="${escapeAttr(post.id)}">
+      <span class="article-picker-item__title">${escapeHtml(post.title || "(no title)")}</span>
+      <span class="article-picker-item__meta">${escapeHtml(formatDateJP(post.date))} / ${escapeHtml(channelLabel(post.channel))}</span>
+    </button>
+  `).join("");
+
+  $$(".article-picker-item", list).forEach(btn => {
+    btn.addEventListener("click", () => {
+      insertArticleMarkerToTarget(btn.dataset.pickArticle || "");
+    });
+  });
+}
+
+function insertArticleMarkerToTarget(postId){
+  const id = String(postId || "").trim();
+  if (!id) return;
+
+  const textarea = document.getElementById(state.articleInsertTargetId || "");
+  if (!textarea) {
+    closeArticlePicker();
+    return;
+  }
+
+  const marker = `{{記事:${id}}}`;
+  const needsBreak = textarea.value.trim().length > 0;
+  const text = needsBreak ? `\n\n${marker}\n\n` : `${marker}\n\n`;
+  insertAtCursor(textarea, text);
+  closeArticlePicker();
+  showToast("過去記事リンクを挿入しました");
+}
+
+function bindRelatedArticleCards(root){
+  const scope = root || document;
+  $$(".related-article-card[data-related-article]", scope).forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const id = String(btn.dataset.relatedArticle || "").trim();
+      if (!id || id === state.activeArticleId) return;
+      openDrawer(id, { fromRelated: true });
+    });
+  });
+}
+
+function renderArticleBackButton(){
+  const btn = $("#btnArticleBack");
+  if (!btn) return;
+  btn.hidden = !(Array.isArray(state.articleHistoryStack) && state.articleHistoryStack.length);
+}
+
+function goBackArticle(){
+  if (!Array.isArray(state.articleHistoryStack) || !state.articleHistoryStack.length) return;
+  const prevId = state.articleHistoryStack.pop();
+  openDrawer(prevId, { fromHistory: true });
+}
+
 // ===== Drawer =====
 function applyPostViewStatsLocally(postId, stats = {}) {
   const idx = cloudPosts.findIndex(post => post.id === postId);
@@ -1245,9 +1384,17 @@ function applyPostViewStatsLocally(postId, stats = {}) {
   });
 }
 
-function openDrawer(articleId){
+function openDrawer(articleId, opts = {}){
+  const currentArticleId = state.activeArticleId;
   const a = allArticles().find(x => x.id === articleId);
   if(!a) return;
+
+  if (opts.fromRelated && currentArticleId && currentArticleId !== a.id) {
+    if (!Array.isArray(state.articleHistoryStack)) state.articleHistoryStack = [];
+    state.articleHistoryStack.push(currentArticleId);
+  } else if (!opts.fromHistory) {
+    state.articleHistoryStack = [];
+  }
 
   state.drawerOpen = true;
   state.activeArticleId = a.id;
@@ -1294,6 +1441,8 @@ function openDrawer(articleId){
     (hasMarkers
       ? renderBodyWithInlineMedia(a)
       : (a.body||[]).map(p => `<p>${escapeHtml(p)}</p>`).join(""));
+  bindRelatedArticleCards(body);
+  renderArticleBackButton();
 
   const cta = $("#cta");
   if(a.cta && a.cta.url){
@@ -1323,9 +1472,11 @@ function openDrawer(articleId){
 function closeDrawer(){
   state.drawerOpen = false;
   state.activeArticleId = null;
+  state.articleHistoryStack = [];
   $("#drawer").classList.remove("drawer--open");
   $("#drawer").setAttribute("aria-hidden","true");
   document.body.classList.remove("no-scroll");
+  renderArticleBackButton();
 }
 
 function renderSaveBtn(){
@@ -2807,6 +2958,11 @@ function bind(){
   on("#profileModalScrim", "click", closeProfileModal);
   on("#profileModalClose", "click", closeProfileModal);
 
+  on("#articlePickerScrim", "click", closeArticlePicker);
+  on("#articlePickerClose", "click", closeArticlePicker);
+  on("#articlePickerSearch", "input", renderArticlePickerList);
+  on("#btnArticleBack", "click", goBackArticle);
+
   // search
   on("#q", "input", (e) => {
     state.query = e.target.value;
@@ -3009,6 +3165,16 @@ function bind(){
   on("#btnEditPrivatePost", "click", (e) => {
     e.preventDefault();
     saveEditForm("private");
+  });
+
+  on("#btnInsertPastPost", "click", (e) => {
+    e.preventDefault();
+    openArticlePicker("pBody");
+  });
+
+  on("#btnEditInsertPastPost", "click", (e) => {
+    e.preventDefault();
+    openArticlePicker("eBody");
   });
 
   ["pTitle","pChannel","pTags","pBody","pCtaText","pCtaUrl"].forEach(id=>{
@@ -3495,7 +3661,7 @@ document.addEventListener("visibilitychange", () => {
 async function init() {
   if ("serviceWorker" in navigator) {
     try {
-      const registration = await navigator.serviceWorker.register("./sw.js?v=push-demo-gacha-top-1", {
+      const registration = await navigator.serviceWorker.register("./sw.js?v=50", {
         scope: "./"
       });
 
