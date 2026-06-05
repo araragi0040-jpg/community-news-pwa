@@ -806,6 +806,12 @@ function updateProfileButton(user = getCurrentUser()) {
   }
 }
 
+function updateTopGachaButton(user = getCurrentUser()) {
+  const btn = $("#topGachaBtn");
+  if (!btn) return;
+  btn.hidden = !user || !getGachaAppUrl();
+}
+
 function clearInstallHelpTimer() {
   if (!installHelpTimerId) return;
   clearTimeout(installHelpTimerId);
@@ -850,6 +856,7 @@ function applyAuthUI() {
     if (adminNav) adminNav.style.display = "none";
     if (adminPage) adminPage.style.display = "none";
     updateProfileButton(null);
+    updateTopGachaButton(null);
     const installBtn = document.getElementById("btnInstall");
     if (installBtn) installBtn.hidden = true;
     clearInstallHelpTimer();
@@ -864,6 +871,7 @@ function applyAuthUI() {
   if (adminNav) adminNav.style.display = isAdmin ? "flex" : "none";
   if (adminPage) adminPage.style.display = isAdmin ? "" : "none";
   updateProfileButton(user);
+  updateTopGachaButton(user);
   scheduleInstallButtonVisibility();
 }
 
@@ -2841,6 +2849,11 @@ function bind(){
     openProfileModal();
   });
 
+  on("#topGachaBtn", "click", (e) => {
+    e.preventDefault();
+    openGachaFromProfile();
+  });
+
    on("#profileGachaBtn", "click", (e) => {
   e.preventDefault();
   openGachaFromProfile();
@@ -3482,7 +3495,7 @@ document.addEventListener("visibilitychange", () => {
 async function init() {
   if ("serviceWorker" in navigator) {
     try {
-      const registration = await navigator.serviceWorker.register("./sw.js?v=push-prod-1", {
+      const registration = await navigator.serviceWorker.register("./sw.js?v=push-prod-gacha-top-2", {
         scope: "./"
       });
 
