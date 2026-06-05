@@ -1269,9 +1269,44 @@ function getPastArticleCandidates(){
     .sort((a, b) => (parseDate(a.date) < parseDate(b.date) ? 1 : -1));
 }
 
+function ensureArticlePickerModal(){
+  let modal = $("#articlePickerModal");
+  if (modal) return modal;
+
+  modal = document.createElement("div");
+  modal.className = "eventmodal";
+  modal.id = "articlePickerModal";
+  modal.setAttribute("aria-hidden", "true");
+  modal.innerHTML = `
+    <div class="eventmodal__scrim" id="articlePickerScrim"></div>
+    <div class="eventmodal__panel" role="dialog" aria-modal="true" aria-label="Past article picker">
+      <div class="eventmodal__head">
+        <div class="eventmodal__title">過去記事を挿入</div>
+        <button class="iconbtn" id="articlePickerClose" aria-label="Close" type="button">×</button>
+      </div>
+      <div class="eventmodal__body">
+        <div class="article-picker__searchwrap">
+          <input class="input article-picker__search" id="articlePickerSearch" type="text" placeholder="過去記事のタイトルで検索">
+        </div>
+        <div class="article-picker__list" id="articlePickerList"></div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  return modal;
+}
+
 function openArticlePicker(targetTextareaId){
-  state.articleInsertTargetId = targetTextareaId || "";
-  const modal = $("#articlePickerModal");
+  const targetId = String(targetTextareaId || "").trim();
+  const textarea = document.getElementById(targetId);
+  if (!textarea) {
+    console.warn("過去記事の挿入先が見つかりません:", targetId);
+    showToast("本文欄が見つかりませんでした");
+    return;
+  }
+
+  state.articleInsertTargetId = targetId;
+  const modal = ensureArticlePickerModal();
   const search = $("#articlePickerSearch");
   if (search) search.value = "";
   renderArticlePickerList();
@@ -1321,12 +1356,6 @@ function renderArticlePickerList(){
       <span class="article-picker-item__meta">${escapeHtml(formatDateJP(post.date))} / ${escapeHtml(channelLabel(post.channel))}</span>
     </button>
   `).join("");
-
-  $$(".article-picker-item", list).forEach(btn => {
-    btn.addEventListener("click", () => {
-      insertArticleMarkerToTarget(btn.dataset.pickArticle || "");
-    });
-  });
 }
 
 function insertArticleMarkerToTarget(postId){
@@ -2949,6 +2978,41 @@ function bind(){
     el.addEventListener(ev, fn);
     return el;
   };
+
+  // 過去記事挿入は、キャッシュ差分や動的生成に強いように委譲イベントでも拾う
+  if (!window.__KATARIBA_ARTICLE_PICKER_DELEGATED_BOUND__) {
+    window.__KATARIBA_ARTICLE_PICKER_DELEGATED_BOUND__ = true;
+
+    document.addEventListener("click", (e) => {
+      if (e.defaultPrevented) return;
+
+      const insertBtn = e.target.closest("#btnInsertPastPost, #btnEditInsertPastPost");
+      if (insertBtn) {
+        e.preventDefault();
+        const targetId = insertBtn.id === "btnEditInsertPastPost" ? "eBody" : "pBody";
+        openArticlePicker(targetId);
+        return;
+      }
+
+      const pickBtn = e.target.closest(".article-picker-item[data-pick-article]");
+      if (pickBtn) {
+        e.preventDefault();
+        insertArticleMarkerToTarget(pickBtn.dataset.pickArticle || "");
+        return;
+      }
+
+      if (e.target.closest("#articlePickerClose") || e.target.id === "articlePickerScrim") {
+        e.preventDefault();
+        closeArticlePicker();
+      }
+    });
+
+    document.addEventListener("input", (e) => {
+      if (e.target && e.target.id === "articlePickerSearch") {
+        renderArticlePickerList();
+      }
+    });
+  }
 
   // Event modal
   on("#eventModalScrim", "click", closeEventModal);

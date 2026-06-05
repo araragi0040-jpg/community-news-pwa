@@ -648,6 +648,11 @@
       btn.textContent = "語り場ガチャへ";
     }
 
+    var topBtn = document.getElementById("topGachaBtn");
+    if (topBtn) {
+      topBtn.disabled = false;
+    }
+
     document.body.style.overflow = "";
   });
 </script>
