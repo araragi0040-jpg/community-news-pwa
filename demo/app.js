@@ -859,6 +859,15 @@ function updateProfileButton(user = getCurrentUser()) {
   }
 }
 
+
+function updateTopGachaButton(user = getCurrentUser()) {
+  const btn = $("#topGachaBtn");
+  if (!btn) return;
+  const hasUser = !!user;
+  const hasGachaUrl = !!getGachaAppUrl();
+  btn.hidden = !(hasUser && hasGachaUrl);
+}
+
 function clearInstallHelpTimer() {
   if (!installHelpTimerId) return;
   clearTimeout(installHelpTimerId);
@@ -899,16 +908,30 @@ function applyAuthUI() {
 
   if (!authGate || !appRoot) return;
 
+  const isAdmin = isAdminUser(user);
+  const isEventManager = canManageEvents(user);
+
   if (!user) {
     authGate.hidden = false;
     appRoot.hidden = true;
-    if (adminNav) adminNav.style.display = "none";
-    if (adminPage) adminPage.style.display = "none";
+
+    if (adminNav) {
+      adminNav.hidden = true;
+      adminNav.style.display = "none";
+    }
+    if (adminPage) {
+      adminPage.hidden = true;
+      adminPage.style.display = "none";
+    }
     if (eventAdminNav) {
       eventAdminNav.hidden = true;
       eventAdminNav.style.display = "none";
     }
-    if (eventAdminPage) eventAdminPage.style.display = "none";
+    if (eventAdminPage) {
+      eventAdminPage.hidden = true;
+      eventAdminPage.style.display = "none";
+    }
+
     updateProfileButton(null);
     updateTopGachaButton(null);
     const installBtn = document.getElementById("btnInstall");
@@ -920,16 +943,31 @@ function applyAuthUI() {
   authGate.hidden = true;
   appRoot.hidden = false;
 
-  const isAdmin = isAdminUser(user);
-  const isEventManager = canManageEvents(user);
+  if (adminNav) {
+    adminNav.hidden = !isAdmin;
+    adminNav.style.display = isAdmin ? "flex" : "none";
+  }
+  if (adminPage) {
+    adminPage.hidden = !isAdmin;
+    adminPage.style.display = isAdmin ? "" : "none";
+  }
 
-  if (adminNav) adminNav.style.display = isAdmin ? "flex" : "none";
-  if (adminPage) adminPage.style.display = isAdmin ? "" : "none";
   if (eventAdminNav) {
     eventAdminNav.hidden = !isEventManager;
     eventAdminNav.style.display = isEventManager ? "flex" : "none";
   }
-  if (eventAdminPage) eventAdminPage.style.display = isEventManager ? "" : "none";
+  if (eventAdminPage) {
+    eventAdminPage.hidden = !isEventManager;
+    eventAdminPage.style.display = isEventManager ? "" : "none";
+  }
+
+  if (!isAdmin && state.activePage === "admin") {
+    state.activePage = "home";
+  }
+  if (!isEventManager && state.activePage === "event-admin") {
+    state.activePage = "home";
+  }
+
   updateProfileButton(user);
   updateTopGachaButton(user);
   scheduleInstallButtonVisibility();
@@ -3011,35 +3049,58 @@ async function refreshFromCloud(opts = {}){
     const isAdmin = isAdminUser(user);
     const isEventManager = canManageEvents(user);
 
-    const postsPromise = isAdmin ? fetchAllPostsFromApi() : fetchPostsFromApi();
-    const eventsPromise = isAdmin ? fetchAllEventsFromApi() : fetchEventsFromApi();
-    const editableEventsPromise = isAdmin
-      ? Promise.resolve(null)
-      : (isEventManager
-        ? fetchEditableEventsFromApi().catch(err => {
-            console.warn("Editable events fetch failed. GAS側に listEditableEvents が未実装の可能性があります:", err);
-            return null;
-          })
-        : Promise.resolve([]));
+    let posts = [];
+    let events = [];
+    let editableList = [];
 
-    const [posts, events, editableList] = await Promise.all([
-      postsPromise,
-      eventsPromise,
-      editableEventsPromise
-    ]);
+    try {
+      posts = isAdmin ? await fetchAllPostsFromApi() : await fetchPostsFromApi();
+    } catch (postErr) {
+      console.warn("Posts fetch failed. Falling back to public posts/cache:", postErr);
+      try {
+        posts = await fetchPostsFromApi();
+      } catch (_publicPostErr) {
+        posts = loadCachedPosts();
+        if (!posts.length) throw postErr;
+      }
+    }
+
+    try {
+      // カレンダー表示用は、権限に関係なく公開イベントを取得する。
+      // これにより、編集用APIが失敗しても通常のイベント表示は止めない。
+      events = await fetchEventsFromApi();
+    } catch (eventErr) {
+      console.warn("Public events fetch failed. Falling back to cache:", eventErr);
+      events = loadCachedEvents();
+      if (!events.length) throw eventErr;
+    }
+
+    if (isAdmin) {
+      try {
+        editableList = await fetchAllEventsFromApi();
+      } catch (err) {
+        console.warn("All events fetch failed. Falling back to public events for display:", err);
+        editableList = events.slice();
+      }
+    } else if (isEventManager) {
+      try {
+        editableList = await fetchEditableEventsFromApi();
+      } catch (err) {
+        console.warn("Editable events fetch failed. GAS側の listEditableEvents / 権限設定 / 再デプロイを確認してください:", err);
+        editableList = events.filter(ev => canEditEvent(ev, user));
+      }
+    } else {
+      editableList = [];
+    }
 
     const prevKey = latestPostKey;
     const prevOpsKey = latestOpsPostKey;
-    cloudPosts = posts;
-    cloudEvents = events;
-    editableEvents = isAdmin
-      ? events.slice()
-      : (Array.isArray(editableList)
-        ? editableList
-        : events.filter(ev => canEditEvent(ev, user)));
-    saveCachedPosts(posts);
-    saveCachedEvents(events);
-    updateLatestPostKey(posts);
+    cloudPosts = Array.isArray(posts) ? posts : [];
+    cloudEvents = Array.isArray(events) ? events : [];
+    editableEvents = Array.isArray(editableList) ? editableList : [];
+    saveCachedPosts(cloudPosts);
+    saveCachedEvents(cloudEvents);
+    updateLatestPostKey(cloudPosts);
     if (!opts.silent) renderAll();
     setFeedLoading(false);
     if (!opts.skipNotify && prevKey && prevKey !== latestPostKey && latestPostSnapshot) {
@@ -3058,12 +3119,12 @@ async function refreshFromCloud(opts = {}){
     setFeedLoading(false, "記事の読み込みに失敗しました。時間をおいて再読み込みしてください。");
     const msg = formatErrorMessage(err, "データの取得に失敗しました。");
     if (!opts.silent && opts.showError !== false) {
-      alert(`データ更新に失敗しました。
-${msg}`);
+      alert(`データ更新に失敗しました。\n${msg}`);
     }
     throw err;
   }
 }
+
 function setupInstallButton(){
   window.addEventListener("beforeinstallprompt", (e) => {
     e.preventDefault();
@@ -3191,7 +3252,12 @@ function bind(){
     openProfileModal();
   });
 
-   on("#profileGachaBtn", "click", (e) => {
+   on("#topGachaBtn", "click", (e) => {
+    e.preventDefault();
+    openGachaFromProfile();
+  });
+
+  on("#profileGachaBtn", "click", (e) => {
   e.preventDefault();
   openGachaFromProfile();
 });
@@ -3843,7 +3909,7 @@ document.addEventListener("visibilitychange", () => {
 async function init() {
   if ("serviceWorker" in navigator) {
     try {
-      const registration = await navigator.serviceWorker.register("./sw.js?v=event-editor-demo-1", {
+      const registration = await navigator.serviceWorker.register("./sw.js?v=event-editor-demo-2", {
         scope: "./"
       });
 

@@ -2196,3 +2196,9 @@ button.pill{
   }
   .gacha-linkbtn__text{ display: none; }
 }
+
+/* Role-based nav is hidden by default until applyAuthUI decides it is allowed. */
+.navitem[data-nav="admin"][hidden],
+.navitem[data-nav="event-admin"][hidden]{
+  display: none !important;
+}
