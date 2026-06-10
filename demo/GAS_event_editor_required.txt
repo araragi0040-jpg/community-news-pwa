@@ -1,0 +1,75 @@
+GAS側に必要な実装仕様
+
+1. Usersシート role
+以下の3種類を許可してください。
+- member
+- event_editor
+- admin
+
+2. Eventsシートに追加推奨の列
+- createdByUserId
+- createdByName
+- createdByEmail
+- updatedByUserId
+- updatedAt
+
+3. saveEvent の権限
+新規作成:
+- admin: 作成OK
+- event_editor: 作成OK。ただし status は public に固定推奨
+- member: 作成不可
+
+編集:
+- admin: 全イベント編集OK
+- event_editor: event.createdByUserId === loginUser.id のイベントのみ編集OK
+- member: 編集不可
+
+保存時:
+- 新規イベントの場合、createdByUserId / createdByName / createdByEmail をログイン中ユーザーからGAS側で設定
+- 編集時、createdBy系はクライアントから来た値を信用せず、既存値を維持
+- updatedByUserId / updatedAt は保存のたびにGAS側で更新
+
+4. deleteEvent の権限
+- admin: 全イベント削除OK
+- event_editor: 自分が作成したイベントのみ削除OK
+- member: 削除不可
+
+5. 追加API action
+フロント側は event_editor の自分のイベント一覧取得に以下を呼びます。
+
+action = listEditableEvents
+
+返却内容:
+{
+  ok: true,
+  events: [
+    {
+      id,
+      title,
+      date,
+      startTime,
+      endTime,
+      description,
+      location,
+      imageUrls,
+      ctaUrl,
+      status,
+      createdAt,
+      updatedAt,
+      createdByUserId,
+      createdByName,
+      createdByEmail,
+      updatedByUserId
+    }
+  ]
+}
+
+権限:
+- admin: 全イベントを返す
+- event_editor: createdByUserId が自分のイベントのみ返す
+- member: 空配列または権限エラー
+
+6. listEvents / listAllEvents
+- listEvents は公開イベント表示用なので、publicイベントを返せばOK
+- 可能であれば createdByUserId 等も含めるとフロント側の補助表示が安定します
+- listAllEvents は admin のみ許可

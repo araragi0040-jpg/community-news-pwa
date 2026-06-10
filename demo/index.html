@@ -8,7 +8,7 @@
   <link rel="icon" href="./favicon.png" type="image/png">
   <link rel="apple-touch-icon" href="./favicon.png">
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=push-demo-related-articles-3" />
+  <link rel="stylesheet" href="./styles.css?v=event-editor-demo-1" />
 </head>
 <body>
   <div class="auth" id="authGate">
@@ -154,6 +154,18 @@
 
     <div id="cal"></div>
 
+  </section>
+</section>
+
+
+    <!-- Event Admin Page -->
+    <section class="page" data-page="event-admin">
+      <section class="pane pane--schedule">
+        <div class="pane__head">
+          <h2 class="pane__title">イベント管理</h2>
+          <p class="pane__sub">イベント編集者は、自分が追加したイベントのみ編集できます</p>
+        </div>
+
     <div class="event-form-panel" id="eventFormPanel" hidden>
       <div class="admin-tabs" role="tablist" aria-label="Event tabs">
         <button class="admin-tab admin-tab--active" id="btnEventListTab" type="button">イベント一覧</button>
@@ -212,6 +224,7 @@
             <input class="input" id="evCtaUrl" placeholder="https://..." />
           </label>
 
+          <div class="hint" id="eventEditorRoleHint"></div>
           <div class="hint">
             現在の状態: <span id="evStatusView">未設定</span>
           </div>
@@ -226,8 +239,8 @@
         </form>
       </div>
     </div>
-  </section>
-</section>
+      </section>
+    </section>
 
     <!-- Saved Page -->
     <section class="page" data-page="saved">
@@ -467,6 +480,13 @@
     <span>Contact</span>
   </button>
 
+      <button class="navitem" data-nav="event-admin" aria-label="Event Admin" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M7 2h2v2h6V2h2v2h3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h4V2zm15 8H2v10h20V10zM3 8h18V6H3v2z"/>
+        </svg>
+        <span>Event</span>
+      </button>
+
       <button class="navitem" data-nav="admin" aria-label="Admin">
         <!-- pencil icon -->
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -597,6 +617,7 @@
   </div>
 </div>
 
+
 <!-- Past Article Picker Modal -->
 <div class="eventmodal" id="articlePickerModal" aria-hidden="true">
   <div class="eventmodal__scrim" id="articlePickerScrim"></div>
@@ -652,17 +673,11 @@
       btn.textContent = "語り場ガチャへ";
     }
 
-    var topBtn = document.getElementById("topGachaBtn");
-    if (topBtn) {
-      topBtn.disabled = false;
-      topBtn.innerHTML = '<span class="gacha-linkbtn__icon" aria-hidden="true">🎁</span><span class="gacha-linkbtn__text">ガチャ</span>';
-    }
-
     document.body.style.overflow = "";
   });
 </script>
 
-  <script src="./config.js?v=push-demo-related-articles-3"></script>
-  <script src="./app.js?v=push-demo-related-articles-3"></script>
+  <script src="./config.js?v=event-editor-demo-1"></script>
+  <script src="./app.js?v=event-editor-demo-1"></script>
 </body>
 </html>
