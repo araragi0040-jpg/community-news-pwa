@@ -1,57 +1,3 @@
-
-
-.gacha-linkbtn{
-  height: 42px;
-  min-width: 76px;
-  padding: 0 12px;
-  border-radius: 14px;
-  border: 1px solid var(--stroke);
-  background: linear-gradient(135deg, #fffaf2, #fff);
-  color: var(--text-strong);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  font-weight: 760;
-  font-size: 13px;
-  letter-spacing: .02em;
-  cursor: pointer;
-  box-shadow: 0 6px 18px rgba(111, 80, 48, .08);
-  transition: transform .12s ease, background .12s ease, box-shadow .12s ease;
-}
-
-.gacha-linkbtn:hover{
-  background: #fff7ea;
-}
-
-.gacha-linkbtn:active{
-  transform: scale(.98);
-}
-
-.gacha-linkbtn[hidden]{
-  display: none !important;
-}
-
-.gacha-linkbtn__icon{
-  font-size: 15px;
-  line-height: 1;
-}
-
-.gacha-linkbtn__text{
-  white-space: nowrap;
-}
-
-@media (max-width: 380px){
-  .gacha-linkbtn{
-    min-width: 42px;
-    width: 42px;
-    padding: 0;
-  }
-
-  .gacha-linkbtn__text{
-    display: none;
-  }
-}
 /* ============ Base ============ */
 :root{
   --bg: #ffffff;
@@ -2118,23 +2064,49 @@ button.pill{
   }
 }
 
+/* ===== Added: Top gacha button / article links / event editor role ===== */
+.topbar__actions{
+  flex-shrink: 0;
+}
 
-/* ===== Past Article Insert / Related Article Cards ===== */
+.gacha-linkbtn{
+  height: 42px;
+  min-width: 76px;
+  padding: 0 12px;
+  border-radius: 14px;
+  border: 1px solid var(--stroke);
+  background: linear-gradient(135deg, #fffaf2, #fff);
+  color: var(--text-strong);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-weight: 760;
+  font-size: 13px;
+  letter-spacing: .02em;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(111, 80, 48, .08);
+  transition: transform .12s ease, background .12s ease, box-shadow .12s ease;
+}
+.gacha-linkbtn:hover{ background: #fff7ea; }
+.gacha-linkbtn:active{ transform: scale(.98); }
+.gacha-linkbtn[hidden]{ display: none !important; }
+.gacha-linkbtn__icon{ font-size: 15px; line-height: 1; }
+.gacha-linkbtn__text{ white-space: nowrap; }
+
 .editor-tools{
   display: flex;
-  justify-content: flex-start;
   gap: 8px;
-  margin: -2px 0 14px;
+  flex-wrap: wrap;
+  margin: -2px 0 12px;
 }
 
 .article-picker__list{
   display: grid;
   gap: 8px;
-  max-height: min(52vh, 420px);
+  max-height: 52vh;
   overflow: auto;
-  padding-right: 2px;
 }
-
 .article-picker-item{
   width: 100%;
   text-align: left;
@@ -2142,26 +2114,16 @@ button.pill{
   background: #fff;
   border-radius: 14px;
   padding: 10px 12px;
+  cursor: pointer;
   display: grid;
   gap: 4px;
-  cursor: pointer;
-  color: var(--text);
 }
-
-.article-picker-item:hover{
-  background: rgba(176,125,79,.08);
-}
-
-.article-picker-item:active{
-  transform: scale(.995);
-}
-
+.article-picker-item:hover{ background: rgba(176,125,79,.08); }
 .article-picker-item__title{
   font-weight: 820;
   color: var(--text-strong);
   line-height: 1.45;
 }
-
 .article-picker-item__meta{
   font-size: 12px;
   color: var(--muted);
@@ -2169,76 +2131,104 @@ button.pill{
 
 .related-article-card{
   width: 100%;
-  margin: 14px 0;
-  border: 1px solid rgba(176,125,79,.24);
-  border-radius: 16px;
-  background:
-    linear-gradient(135deg, rgba(176,125,79,.10), rgba(255,255,255,.96));
-  padding: 12px 14px;
   text-align: left;
-  display: grid;
-  gap: 4px;
+  display: block;
+  border: 1px solid rgba(176,125,79,.24);
+  background: linear-gradient(180deg, #fffaf4, #fff);
+  border-radius: 16px;
+  padding: 12px 14px;
+  margin: 12px 0;
   cursor: pointer;
   color: var(--text);
-  box-shadow: 0 8px 22px rgba(75,50,30,.06);
+  font: inherit;
 }
-
-.related-article-card:hover{
-  background:
-    linear-gradient(135deg, rgba(176,125,79,.16), rgba(255,255,255,.98));
-}
-
-.related-article-card:active{
-  transform: scale(.995);
-}
-
-.related-article-card--missing{
-  cursor: default;
-  opacity: .72;
-}
-
+.related-article-card:hover{ background: rgba(176,125,79,.08); }
+.related-article-card--missing{ cursor: default; opacity: .72; }
 .related-article-card__label{
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
   color: var(--accent);
-  letter-spacing: .04em;
+  margin-bottom: 5px;
 }
-
 .related-article-card__title{
   font-size: 15px;
   font-weight: 860;
   color: var(--text-strong);
   line-height: 1.45;
 }
-
 .related-article-card__meta{
+  margin-top: 6px;
   font-size: 12px;
   color: var(--muted);
 }
 
 .drawer-backbtn{
-  border: 1px solid rgba(176,125,79,.24);
-  background: rgba(176,125,79,.10);
+  border: 1px solid rgba(176,125,79,.22);
+  background: #fff;
   color: var(--text-strong);
   border-radius: 999px;
-  padding: 6px 10px;
+  padding: 7px 10px;
   font-size: 12px;
   font-weight: 760;
   cursor: pointer;
   white-space: nowrap;
 }
+.drawer-backbtn:hover{ background: rgba(176,125,79,.08); }
 
-.drawer-backbtn:hover{
-  background: rgba(176,125,79,.16);
+.event-form-panel .hint#eventEditorRoleHint{
+  color: var(--text-soft);
+  background: rgba(176,125,79,.08);
+  border: 1px solid rgba(176,125,79,.18);
+  border-radius: 12px;
+  padding: 8px 10px;
 }
 
 @media (max-width: 420px){
-  .drawer__meta{
-    flex-wrap: wrap;
-  }
-
-  .drawer-backbtn{
-    padding: 5px 9px;
-  }
+  .bottomnav{ gap: 4px; padding-left: 6px; padding-right: 6px; }
+  .navitem{ width: 64px; padding-left: 6px; padding-right: 6px; }
 }
 
+@media (max-width: 380px){
+  .gacha-linkbtn{
+    min-width: 42px;
+    width: 42px;
+    padding: 0;
+  }
+  .gacha-linkbtn__text{ display: none; }
+}
+
+/* Role-based nav is hidden by default until applyAuthUI decides it is allowed. */
+.navitem[data-nav="admin"][hidden],
+.navitem[data-nav="event-admin"][hidden]{
+  display: none !important;
+}
+
+
+/* ===== Event Admin Filter ===== */
+.event-admin-filter{
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+  padding: 12px 12px 0;
+  align-items: end;
+}
+
+.event-admin-filter__field{
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.event-admin-filter__hint{
+  grid-column: 1 / -1;
+  font-size: 12px;
+  color: var(--muted);
+  padding: 2px 2px 0;
+}
+
+@media (max-width: 560px){
+  .event-admin-filter{
+    grid-template-columns: 1fr;
+  }
+}

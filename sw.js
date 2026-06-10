@@ -1,9 +1,9 @@
-﻿const CACHE_NAME = "community-news-prod-related-articles-1";
+const CACHE_NAME = "community-news-prod-event-editor-1";
 const ASSETS = [
   "./",
-  "./index.html?v=push-prod-related-articles-1",
-  "./styles.css?v=push-prod-related-articles-1",
-  "./app.js?v=push-prod-related-articles-1",
+  "./index.html?v=event-editor-prod-1",
+  "./styles.css?v=event-editor-prod-1",
+  "./app.js?v=event-editor-prod-1",
   "./manifest.webmanifest",
   "./favicon.png",
   "./logo.png"

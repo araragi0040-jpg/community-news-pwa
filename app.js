@@ -1,4 +1,4 @@
-﻿/* Community News Wire Sample
+/* Community News Wire Sample
    + Schedule Tab
    + Admin: Create/Edit/Delete posts (localStorage)
    + Export / Import JSON
@@ -109,6 +109,8 @@ let state = {
   editingId: null, // post id
   adminTab: "editor", // "editor" | "list" | "edit"
   eventAdminTab: "list", // "list" | "editor"
+  eventAdminFilterMode: "month", // "month" | "all"
+  eventAdminYearMonth: "", // YYYY-MM
   editingEventId: null,
   activePage: "home",
   newEditorDraftId: null,
@@ -118,6 +120,7 @@ let state = {
 
 let cloudPosts = [];
 let cloudEvents = [];
+let editableEvents = [];
 let latestPostKey = "";
 let latestPostSnapshot = null;
 let latestOpsPostKey = "";
@@ -321,9 +324,47 @@ function mapApiEvent(event){
     imageUrls: Array.isArray(event.imageUrls) ? event.imageUrls : [],
     ctaUrl: event.ctaUrl || "",
     status: normalizeStatusValue(event.status, "public"),
-    createdAt: event.createdAt || ""
+    createdAt: event.createdAt || "",
+    updatedAt: event.updatedAt || "",
+    createdByUserId: event.createdByUserId || event.createdBy || "",
+    createdByName: event.createdByName || "",
+    createdByEmail: event.createdByEmail || "",
+    updatedByUserId: event.updatedByUserId || ""
   };
 }
+
+function normalizeRoleValue(role){
+  return String(role || "member").trim().toLowerCase().replace(/[\s-]+/g, "_");
+}
+
+function isAdminUser(user = getCurrentUser()){
+  return normalizeRoleValue(user?.role) === "admin";
+}
+
+function isEventEditorUser(user = getCurrentUser()){
+  return normalizeRoleValue(user?.role) === "event_editor";
+}
+
+function canManageEvents(user = getCurrentUser()){
+  return !!user && (isAdminUser(user) || isEventEditorUser(user));
+}
+
+function canEditEvent(event, user = getCurrentUser()){
+  if (!user || !event) return false;
+  if (isAdminUser(user)) return true;
+  if (!isEventEditorUser(user)) return false;
+  return String(event.createdByUserId || "") === String(user.id || "");
+}
+
+function editableEventsForCurrentUser(){
+  const user = getCurrentUser();
+  if (!canManageEvents(user)) return [];
+  if (isAdminUser(user)) {
+    return (editableEvents.length ? editableEvents : cloudEvents).slice();
+  }
+  return editableEvents.filter(ev => canEditEvent(ev, user));
+}
+
 
 function getAuthToken() {
   return (localStorage.getItem(LS_KEY_TOKEN) || "").trim();
@@ -444,6 +485,17 @@ async function fetchAllEventsFromApi() {
   return (data.events || []).map(mapApiEvent);
 }
 
+async function fetchEditableEventsFromApi() {
+  const url = buildApiGetUrl("listEditableEvents", true);
+  const res = await fetch(url, {
+    cache: "no-store"
+  });
+  const data = await parseApiJson(res, "listEditableEvents");
+  if (!data.ok) throw new Error(data.message || "Failed to fetch editable events");
+  return (data.events || []).map(mapApiEvent);
+}
+
+
 async function deletePostFromApi(id) {
   await callApi("deletePost", { id });
   return true;
@@ -495,7 +547,12 @@ async function saveEventToApi(event) {
       imageUrls: event.imageUrls || [],
       ctaUrl: event.ctaUrl || "",
       status: event.status || "public",
-      createdAt: event.createdAt || ""
+      createdAt: event.createdAt || "",
+      updatedAt: event.updatedAt || "",
+      createdByUserId: event.createdByUserId || "",
+      createdByName: event.createdByName || "",
+      createdByEmail: event.createdByEmail || "",
+      updatedByUserId: event.updatedByUserId || ""
     }
   });
   return mapApiEvent(data.event || {});
@@ -637,6 +694,7 @@ function saveCurrentUser(user) {
   const parsedPoints = Number(u.points || 0);
   const safeUser = {
     ...u,
+    role: normalizeRoleValue(u.role || "member"),
     nickname: String(u.nickname || "").trim(),
     iconUrl: String(u.iconUrl || "").trim(),
     hobby: String(u.hobby || "").trim(),
@@ -808,10 +866,13 @@ function updateProfileButton(user = getCurrentUser()) {
   }
 }
 
+
 function updateTopGachaButton(user = getCurrentUser()) {
   const btn = $("#topGachaBtn");
   if (!btn) return;
-  btn.hidden = !user || !getGachaAppUrl();
+  const hasUser = !!user;
+  const hasGachaUrl = !!getGachaAppUrl();
+  btn.hidden = !(hasUser && hasGachaUrl);
 }
 
 function clearInstallHelpTimer() {
@@ -849,14 +910,35 @@ function applyAuthUI() {
   const appRoot = document.getElementById("appRoot");
   const adminNav = document.querySelector('.navitem[data-nav="admin"]');
   const adminPage = document.querySelector('.page[data-page="admin"]');
+  const eventAdminNav = document.querySelector('.navitem[data-nav="event-admin"]');
+  const eventAdminPage = document.querySelector('.page[data-page="event-admin"]');
 
   if (!authGate || !appRoot) return;
+
+  const isAdmin = isAdminUser(user);
+  const isEventManager = canManageEvents(user);
 
   if (!user) {
     authGate.hidden = false;
     appRoot.hidden = true;
-    if (adminNav) adminNav.style.display = "none";
-    if (adminPage) adminPage.style.display = "none";
+
+    if (adminNav) {
+      adminNav.hidden = true;
+      adminNav.style.display = "none";
+    }
+    if (adminPage) {
+      adminPage.hidden = true;
+      adminPage.style.display = "none";
+    }
+    if (eventAdminNav) {
+      eventAdminNav.hidden = true;
+      eventAdminNav.style.display = "none";
+    }
+    if (eventAdminPage) {
+      eventAdminPage.hidden = true;
+      eventAdminPage.style.display = "none";
+    }
+
     updateProfileButton(null);
     updateTopGachaButton(null);
     const installBtn = document.getElementById("btnInstall");
@@ -868,10 +950,31 @@ function applyAuthUI() {
   authGate.hidden = true;
   appRoot.hidden = false;
 
-  const isAdmin = user.role === "admin";
+  if (adminNav) {
+    adminNav.hidden = !isAdmin;
+    adminNav.style.display = isAdmin ? "flex" : "none";
+  }
+  if (adminPage) {
+    adminPage.hidden = !isAdmin;
+    adminPage.style.display = isAdmin ? "" : "none";
+  }
 
-  if (adminNav) adminNav.style.display = isAdmin ? "flex" : "none";
-  if (adminPage) adminPage.style.display = isAdmin ? "" : "none";
+  if (eventAdminNav) {
+    eventAdminNav.hidden = !isEventManager;
+    eventAdminNav.style.display = isEventManager ? "flex" : "none";
+  }
+  if (eventAdminPage) {
+    eventAdminPage.hidden = !isEventManager;
+    eventAdminPage.style.display = isEventManager ? "" : "none";
+  }
+
+  if (!isAdmin && state.activePage === "admin") {
+    state.activePage = "home";
+  }
+  if (!isEventManager && state.activePage === "event-admin") {
+    state.activePage = "home";
+  }
+
   updateProfileButton(user);
   updateTopGachaButton(user);
   scheduleInstallButtonVisibility();
@@ -1202,6 +1305,7 @@ function renderInlineArticleCard(postId){
   `;
 }
 
+
 function renderBodyWithInlineMedia(a){
   const images = a.media?.images || [];
   const videoUrl = a.media?.video || "";
@@ -1212,7 +1316,12 @@ function renderBodyWithInlineMedia(a){
     const parts = [];
     let lastIndex = 0;
 
-    source.replace(INLINE_TOKEN_RE, (match, imgIdx, caption, articleId, offset) => {
+    source.replace(INLINE_TOKEN_RE, (...args) => {
+      const match = args[0];
+      const imgIdx = args[1];
+      const caption = args[2];
+      const articleId = args[3];
+      const offset = args[args.length - 2];
       const before = source.slice(lastIndex, offset).trim();
       if (before) parts.push(`<p>${escapeHtml(before)}</p>`);
 
@@ -1285,10 +1394,12 @@ function ensureArticlePickerModal(){
         <button class="iconbtn" id="articlePickerClose" aria-label="Close" type="button">×</button>
       </div>
       <div class="eventmodal__body">
-        <div class="article-picker__searchwrap">
+        <label class="field">
+          <div class="field__label">タイトル検索</div>
           <input class="input article-picker__search" id="articlePickerSearch" type="text" placeholder="過去記事のタイトルで検索">
-        </div>
+        </label>
         <div class="article-picker__list" id="articlePickerList"></div>
+        <div class="hint">選択すると本文のカーソル位置に関連記事カード用のリンクが挿入されます。</div>
       </div>
     </div>
   `;
@@ -1334,10 +1445,7 @@ function renderArticlePickerList(){
 
   const q = String($("#articlePickerSearch")?.value || "").trim().toLowerCase();
   const items = getPastArticleCandidates()
-    .filter(post => {
-      if (!q) return true;
-      return String(post.title || "").toLowerCase().includes(q);
-    });
+    .filter(post => !q || String(post.title || "").toLowerCase().includes(q));
 
   if (!items.length) {
     list.innerHTML = `
@@ -1370,7 +1478,13 @@ function insertArticleMarkerToTarget(postId){
 
   const marker = `{{記事:${id}}}`;
   const needsBreak = textarea.value.trim().length > 0;
-  const text = needsBreak ? `\n\n${marker}\n\n` : `${marker}\n\n`;
+  const text = needsBreak ? `
+
+${marker}
+
+` : `${marker}
+
+`;
   insertAtCursor(textarea, text);
   closeArticlePicker();
   showToast("過去記事リンクを挿入しました");
@@ -1562,7 +1676,10 @@ function renderContact(){
 function setActivePage(key){
   const user = getCurrentUser();
 
-  if (key === "admin" && (!user || user.role !== "admin")) {
+  if (key === "admin" && (!user || !isAdminUser(user))) {
+    key = "home";
+  }
+  if (key === "event-admin" && (!user || !canManageEvents(user))) {
     key = "home";
   }
 
@@ -1578,6 +1695,7 @@ function setActivePage(key){
   if(key === "saved") renderSaved();
   if(key === "contact") renderContact();
   if(key === "schedule") renderCalendar();
+  if(key === "event-admin") renderEventAdminPanel();
   if(key === "admin") renderAdmin();
 }
 
@@ -1684,7 +1802,7 @@ function clearEventForm(){
 }
 
 function startEditEvent(id){
-  const event = cloudEvents.find(e => e.id === id);
+  const event = editableEvents.find(e => e.id === id) || cloudEvents.find(e => e.id === id);
   if (!event) return;
   state.editingEventId = event.id;
   state.eventAdminTab = "editor";
@@ -1721,6 +1839,7 @@ function syncEventButtons(){
 }
 
 function collectEventForm(){
+  const current = editableEvents.find(e => e.id === state.editingEventId) || cloudEvents.find(e => e.id === state.editingEventId) || {};
   return {
     id: state.editingEventId || "",
     title: ($("#evTitle").value || "").trim(),
@@ -1731,7 +1850,13 @@ function collectEventForm(){
     location: ($("#evLocation").value || "").trim(),
     imageUrls: ($("#evImageUrls").value || "").split("\n").map(s => s.trim()).filter(Boolean),
     ctaUrl: ($("#evCtaUrl").value || "").trim(),
-    status: "public"
+    status: "public",
+    createdAt: current.createdAt || "",
+    updatedAt: current.updatedAt || "",
+    createdByUserId: current.createdByUserId || "",
+    createdByName: current.createdByName || "",
+    createdByEmail: current.createdByEmail || "",
+    updatedByUserId: current.updatedByUserId || ""
   };
 }
 
@@ -1741,7 +1866,8 @@ async function saveEventEditor(status){
     alert("イベント名・開催日・開始時間は必須です。");
     return;
   }
-  event.status = status || "public";
+  const user = getCurrentUser();
+  event.status = isEventEditorUser(user) ? "public" : (status || "public");
 
   const buttonMap = {
     public: "#btnEventPublish",
@@ -1756,17 +1882,35 @@ async function saveEventEditor(status){
       btn.disabled = true;
       btn.textContent = "保存中...";
     }
-    const saved = await saveEventToApi(event);
+    const savedRaw = await saveEventToApi(event);
+    const saved = mapApiEvent({
+      ...event,
+      ...savedRaw,
+      createdByUserId: savedRaw.createdByUserId || event.createdByUserId || user?.id || "",
+      createdByName: savedRaw.createdByName || event.createdByName || user?.name || user?.nickname || "",
+      createdByEmail: savedRaw.createdByEmail || event.createdByEmail || user?.email || ""
+    });
     const idx = cloudEvents.findIndex(e => e.id === saved.id);
     if (idx >= 0) cloudEvents[idx] = saved;
     else cloudEvents.unshift(saved);
+    const eidx = editableEvents.findIndex(e => e.id === saved.id);
+    if (eidx >= 0) editableEvents[eidx] = saved;
+    else if (canEditEvent(saved, user)) editableEvents.unshift(saved);
+    state.editingEventId = saved.id || state.editingEventId;
     const statusView = $("#evStatusView");
     if (statusView) statusView.textContent = saved.status || event.status;
     renderAll();
     showToast("イベントを保存しました");
+    refreshFromCloud({ silent: true, skipNotify: true, showError: false }).catch(refreshErr => {
+      console.warn("Event resync failed:", refreshErr);
+    });
   } catch (err) {
     console.error(err);
-    alert("イベント保存に失敗しました。\n" + (err.message || err));
+    let message = err.message || String(err);
+    if (err.code === "FORBIDDEN" || /Admin privileges required|Event editor privileges required|edit only events/i.test(message)) {
+      message += "\n\n確認してください：\n・usersシートのroleが admin または event_editor になっているか\n・role変更後に一度ログアウト→再ログインしたか\n・GASを最新版に差し替えて新しいバージョンで再デプロイしたか";
+    }
+    alert("イベント保存に失敗しました。\n" + message);
   } finally {
     if (btn) {
       btn.disabled = false;
@@ -1781,12 +1925,53 @@ async function deleteCurrentEvent(){
   try {
     await deleteEventFromApi(state.editingEventId);
     cloudEvents = cloudEvents.filter(e => e.id !== state.editingEventId);
+    editableEvents = editableEvents.filter(e => e.id !== state.editingEventId);
     clearEventForm();
     state.eventAdminTab = "list";
     renderAll();
   } catch (err) {
     console.error(err);
     alert("イベント削除に失敗しました。\n" + (err.message || err));
+  }
+}
+
+
+function getCurrentYearMonthValue(){
+  const cursor = state.scheduleCursor instanceof Date ? new Date(state.scheduleCursor) : new Date();
+  const y = cursor.getFullYear();
+  const m = String(cursor.getMonth() + 1).padStart(2, "0");
+  return `${y}-${m}`;
+}
+
+function ensureEventAdminFilterDefaults(){
+  if (!state.eventAdminFilterMode) state.eventAdminFilterMode = "month";
+  if (!state.eventAdminYearMonth) state.eventAdminYearMonth = getCurrentYearMonthValue();
+}
+
+function getEventYearMonth(event){
+  const parsed = parseDate(event?.date || "");
+  if (!parsed || parsed === "-" || parsed.length < 7) return "";
+  return parsed.slice(0, 7);
+}
+
+function getFilteredEditableEventsForAdminPanel(){
+  ensureEventAdminFilterDefaults();
+  const all = editableEventsForCurrentUser();
+  if (state.eventAdminFilterMode === "all") return all;
+  const ym = String(state.eventAdminYearMonth || "").trim();
+  if (!ym) return all;
+  return all.filter(ev => getEventYearMonth(ev) === ym);
+}
+
+function renderEventAdminFilterSummary(totalCount, visibleCount){
+  const hint = $("#eventAdminFilterHint");
+  if (!hint) return;
+  if (state.eventAdminFilterMode === "all") {
+    hint.textContent = `全期間：${visibleCount}件`;
+  } else {
+    const ym = String(state.eventAdminYearMonth || "");
+    const label = ym ? ym.replace("-", "年") + "月" : "年月未指定";
+    hint.textContent = `${label}：${visibleCount}件 / 全${totalCount}件`;
   }
 }
 
@@ -1798,30 +1983,37 @@ function renderEventAdminPanel(){
   const user = getCurrentUser();
   if (!panel || !list) return;
 
-  const isAdmin = user?.role === "admin";
-  panel.hidden = !isAdmin;
-  if (!isAdmin) return;
+  const canManage = canManageEvents(user);
+  panel.hidden = !canManage;
+  if (!canManage) return;
 
-  const cursor = state.scheduleCursor instanceof Date ? new Date(state.scheduleCursor) : new Date();
-  const viewYear = cursor.getFullYear();
-  const viewMonth = cursor.getMonth();
-  const events = cloudEvents
-    .filter(ev => {
-      const parsed = parseDate(ev.date);
-      if (!parsed || parsed === "-") return false;
-      const dateObj = new Date(parsed + "T00:00:00");
-      if (Number.isNaN(dateObj.getTime())) return false;
-      return dateObj.getFullYear() === viewYear && dateObj.getMonth() === viewMonth;
-    })
+  ensureEventAdminFilterDefaults();
+  const rangeSelect = $("#eventAdminRange");
+  const monthInput = $("#eventAdminMonth");
+  if (rangeSelect) rangeSelect.value = state.eventAdminFilterMode;
+  if (monthInput) {
+    monthInput.value = state.eventAdminYearMonth || getCurrentYearMonthValue();
+    monthInput.hidden = state.eventAdminFilterMode === "all";
+  }
+
+  const totalEvents = editableEventsForCurrentUser();
+  const events = getFilteredEditableEventsForAdminPanel()
     .slice()
-    .sort((a, b) => (parseDate(a.date) < parseDate(b.date) ? 1 : -1));
+    .sort((a, b) => {
+      const ad = parseDate(a.date);
+      const bd = parseDate(b.date);
+      if (ad !== bd) return ad < bd ? 1 : -1;
+      return String(a.startTime || "").localeCompare(String(b.startTime || ""));
+    });
+
+  renderEventAdminFilterSummary(totalEvents.length, events.length);
 
   list.innerHTML = events.length ? events.map(ev => `
     <button class="event-admin-item" type="button" data-evid="${escapeAttr(ev.id)}">
       <span>${escapeHtml(ev.title || "(no title)")}</span>
-      <span>${escapeHtml(formatDateJP(ev.date))} / ${escapeHtml(ev.status || "public")}</span>
+      <span>${escapeHtml(formatDateJP(ev.date))} / ${escapeHtml(ev.status || "public")}${isAdminUser(user) && ev.createdByName ? ` / ${escapeHtml(ev.createdByName)}` : ""}</span>
     </button>
-  `).join("") : `<div class="empty__text">イベントがありません。</div>`;
+  `).join("") : `<div class="empty__text">条件に合う編集可能なイベントがありません。</div>`;
 
   $$(".event-admin-item", list).forEach(btn => {
     btn.addEventListener("click", () => startEditEvent(btn.dataset.evid));
@@ -1833,8 +2025,22 @@ function renderEventAdminPanel(){
   if (btnNew) btnNew.classList.toggle("admin-tab--active", state.eventAdminTab === "editor");
   if (editor) editor.hidden = state.eventAdminTab !== "editor";
   if (listPanel) listPanel.hidden = state.eventAdminTab !== "list";
-}
 
+  const btnPublish = $("#btnEventPublish");
+  const btnDraft = $("#btnEventDraft");
+  const btnPrivate = $("#btnEventPrivate");
+  const statusHint = $("#eventEditorRoleHint");
+  const adminMode = isAdminUser(user);
+  if (btnPublish) btnPublish.textContent = adminMode ? "投稿" : "公開する";
+  if (btnDraft) btnDraft.hidden = !adminMode;
+  if (btnPrivate) btnPrivate.hidden = !adminMode;
+  if (statusHint) {
+    statusHint.textContent = adminMode
+      ? "管理者は全イベントの編集と公開状態の変更ができます。"
+      : "イベント編集者は、自分が追加したイベントのみ編集できます。保存すると即公開されます。";
+  }
+  syncEventButtons();
+}
 function openEventModal(dateStr, events){
   const modal = $("#eventModal");
   const title = $("#eventModalTitle");
@@ -2705,6 +2911,9 @@ function renderAll(){
   if ($(`.page[data-page="schedule"]`)?.classList.contains("page--active")) {
     renderCalendar();
   }
+  if ($(`.page[data-page="event-admin"]`)?.classList.contains("page--active")) {
+    renderEventAdminPanel();
+  }
 }
 
 function updateLatestPostKey(posts){
@@ -2903,21 +3112,61 @@ function showNewPostSystemNotification(post) {
 async function refreshFromCloud(opts = {}){
   try {
     const user = getCurrentUser();
-    const [posts, events] = await Promise.all([
-      user?.role === "admin"
-        ? fetchAllPostsFromApi()
-        : fetchPostsFromApi(),
-      user?.role === "admin"
-        ? fetchAllEventsFromApi()
-        : fetchEventsFromApi()
-    ]);
+    const isAdmin = isAdminUser(user);
+    const isEventManager = canManageEvents(user);
+
+    let posts = [];
+    let events = [];
+    let editableList = [];
+
+    try {
+      posts = isAdmin ? await fetchAllPostsFromApi() : await fetchPostsFromApi();
+    } catch (postErr) {
+      console.warn("Posts fetch failed. Falling back to public posts/cache:", postErr);
+      try {
+        posts = await fetchPostsFromApi();
+      } catch (_publicPostErr) {
+        posts = loadCachedPosts();
+        if (!posts.length) throw postErr;
+      }
+    }
+
+    try {
+      // カレンダー表示用は、権限に関係なく公開イベントを取得する。
+      // これにより、編集用APIが失敗しても通常のイベント表示は止めない。
+      events = await fetchEventsFromApi();
+    } catch (eventErr) {
+      console.warn("Public events fetch failed. Falling back to cache:", eventErr);
+      events = loadCachedEvents();
+      if (!events.length) throw eventErr;
+    }
+
+    if (isAdmin) {
+      try {
+        editableList = await fetchAllEventsFromApi();
+      } catch (err) {
+        console.warn("All events fetch failed. Falling back to public events for display:", err);
+        editableList = events.slice();
+      }
+    } else if (isEventManager) {
+      try {
+        editableList = await fetchEditableEventsFromApi();
+      } catch (err) {
+        console.warn("Editable events fetch failed. GAS側の listEditableEvents / 権限設定 / 再デプロイを確認してください:", err);
+        editableList = events.filter(ev => canEditEvent(ev, user));
+      }
+    } else {
+      editableList = [];
+    }
+
     const prevKey = latestPostKey;
     const prevOpsKey = latestOpsPostKey;
-    cloudPosts = posts;
-    cloudEvents = events;
-    saveCachedPosts(posts);
-    saveCachedEvents(events);
-    updateLatestPostKey(posts);
+    cloudPosts = Array.isArray(posts) ? posts : [];
+    cloudEvents = Array.isArray(events) ? events : [];
+    editableEvents = Array.isArray(editableList) ? editableList : [];
+    saveCachedPosts(cloudPosts);
+    saveCachedEvents(cloudEvents);
+    updateLatestPostKey(cloudPosts);
     if (!opts.silent) renderAll();
     setFeedLoading(false);
     if (!opts.skipNotify && prevKey && prevKey !== latestPostKey && latestPostSnapshot) {
@@ -2979,6 +3228,7 @@ function bind(){
     return el;
   };
 
+
   // 過去記事挿入は、キャッシュ差分や動的生成に強いように委譲イベントでも拾う
   if (!window.__KATARIBA_ARTICLE_PICKER_DELEGATED_BOUND__) {
     window.__KATARIBA_ARTICLE_PICKER_DELEGATED_BOUND__ = true;
@@ -3021,7 +3271,6 @@ function bind(){
   on("#installHelpModalClose", "click", closeInstallHelpModal);
   on("#profileModalScrim", "click", closeProfileModal);
   on("#profileModalClose", "click", closeProfileModal);
-
   on("#articlePickerScrim", "click", closeArticlePicker);
   on("#articlePickerClose", "click", closeArticlePicker);
   on("#articlePickerSearch", "input", renderArticlePickerList);
@@ -3069,12 +3318,12 @@ function bind(){
     openProfileModal();
   });
 
-  on("#topGachaBtn", "click", (e) => {
+   on("#topGachaBtn", "click", (e) => {
     e.preventDefault();
     openGachaFromProfile();
   });
 
-   on("#profileGachaBtn", "click", (e) => {
+  on("#profileGachaBtn", "click", (e) => {
   e.preventDefault();
   openGachaFromProfile();
 });
@@ -3119,12 +3368,22 @@ function bind(){
 
   on("#btnEventListTab", "click", () => {
     state.eventAdminTab = "list";
-    renderCalendar();
+    renderEventAdminPanel();
   });
   on("#btnEventNewTab", "click", () => {
     state.eventAdminTab = "editor";
     clearEventForm();
-    renderCalendar();
+    renderEventAdminPanel();
+  });
+  on("#eventAdminRange", "change", (e) => {
+    state.eventAdminFilterMode = e.target.value === "all" ? "all" : "month";
+    ensureEventAdminFilterDefaults();
+    renderEventAdminPanel();
+  });
+  on("#eventAdminMonth", "change", (e) => {
+    state.eventAdminYearMonth = e.target.value || getCurrentYearMonthValue();
+    state.eventAdminFilterMode = "month";
+    renderEventAdminPanel();
   });
   on("#btnEventPublish", "click", (e) => {
     e.preventDefault();
@@ -3230,12 +3489,10 @@ function bind(){
     e.preventDefault();
     saveEditForm("private");
   });
-
   on("#btnInsertPastPost", "click", (e) => {
     e.preventDefault();
     openArticlePicker("pBody");
   });
-
   on("#btnEditInsertPastPost", "click", (e) => {
     e.preventDefault();
     openArticlePicker("eBody");
@@ -3389,6 +3646,9 @@ function bind(){
         }
         if (cachedEvents.length > 0) {
           cloudEvents = cachedEvents;
+          editableEvents = canManageEvents(getCurrentUser())
+            ? cachedEvents.filter(ev => canEditEvent(ev, getCurrentUser()))
+            : [];
         }
         renderAll();
         setFeedLoading(!hasPostCache);
@@ -3725,7 +3985,7 @@ document.addEventListener("visibilitychange", () => {
 async function init() {
   if ("serviceWorker" in navigator) {
     try {
-      const registration = await navigator.serviceWorker.register("./sw.js?v=push-prod-related-articles-1", {
+      const registration = await navigator.serviceWorker.register("./sw.js?v=event-editor-prod-1", {
         scope: "./"
       });
 
@@ -3766,6 +4026,9 @@ async function init() {
   }
   if (cachedEvents.length > 0) {
     cloudEvents = cachedEvents;
+    editableEvents = canManageEvents(getCurrentUser())
+      ? cachedEvents.filter(ev => canEditEvent(ev, getCurrentUser()))
+      : [];
   }
 
   requestSystemNotificationPermission();
