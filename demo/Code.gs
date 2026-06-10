@@ -594,7 +594,7 @@ if (action === "listPushSubscriptionsForServer") {
     id: obj.id || "",
     email: obj.email || "",
     name: obj.name || "",
-    role: obj.role || "member",
+    role: normalizeRoleValue(obj.role || "member"),
     status: obj.status || "active",
     nickname: obj.nickname || "",
     iconUrl: obj.iconUrl || "",
@@ -1349,7 +1349,7 @@ function toHex(bytes) {
 function createToken(userId, role) {
   const payloadObj = {
     uid: String(userId || ""),
-    role: String(role || "member"),
+    role: normalizeRoleValue(role || "member"),
     exp: Math.floor(Date.now() / 1000) + TOKEN_TTL_SECONDS
   };
   const payload = JSON.stringify(payloadObj);
@@ -1390,18 +1390,22 @@ function requireAuth(token) {
   return user;
 }
 
+function normalizeRoleValue(role) {
+  return String(role || "member").trim().toLowerCase().replace(/[\s-]+/g, "_");
+}
+
 function requireAdmin(token) {
   const user = requireAuth(token);
-  if (String(user.role || "member") !== "admin") throw fail("Admin privileges required", "FORBIDDEN");
+  if (normalizeRoleValue(user.role) !== "admin") throw fail("Admin privileges required", "FORBIDDEN");
   return user;
 }
 
 function isAdminRole(user) {
-  return String((user && user.role) || "member") === "admin";
+  return normalizeRoleValue(user && user.role) === "admin";
 }
 
 function isEventEditorRole(user) {
-  return String((user && user.role) || "member") === "event_editor";
+  return normalizeRoleValue(user && user.role) === "event_editor";
 }
 
 function canManageEventsRole(user) {
@@ -1443,7 +1447,7 @@ function findUserById(userId) {
         id: obj.id || "",
         email: obj.email || "",
         name: obj.name || "",
-        role: obj.role || "member",
+        role: normalizeRoleValue(obj.role || "member"),
         status: obj.status || "active",
         nickname: obj.nickname || "",
         iconUrl: obj.iconUrl || "",

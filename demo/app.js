@@ -109,6 +109,8 @@ let state = {
   editingId: null, // post id
   adminTab: "editor", // "editor" | "list" | "edit"
   eventAdminTab: "list", // "list" | "editor"
+  eventAdminFilterMode: "month", // "month" | "all"
+  eventAdminYearMonth: "", // YYYY-MM
   editingEventId: null,
   activePage: "home",
   newEditorDraftId: null,
@@ -331,12 +333,16 @@ function mapApiEvent(event){
   };
 }
 
+function normalizeRoleValue(role){
+  return String(role || "member").trim().toLowerCase().replace(/[\s-]+/g, "_");
+}
+
 function isAdminUser(user = getCurrentUser()){
-  return String(user?.role || "") === "admin";
+  return normalizeRoleValue(user?.role) === "admin";
 }
 
 function isEventEditorUser(user = getCurrentUser()){
-  return String(user?.role || "") === "event_editor";
+  return normalizeRoleValue(user?.role) === "event_editor";
 }
 
 function canManageEvents(user = getCurrentUser()){
@@ -688,6 +694,7 @@ function saveCurrentUser(user) {
   const parsedPoints = Number(u.points || 0);
   const safeUser = {
     ...u,
+    role: normalizeRoleValue(u.role || "member"),
     nickname: String(u.nickname || "").trim(),
     iconUrl: String(u.iconUrl || "").trim(),
     hobby: String(u.hobby || "").trim(),
@@ -1894,9 +1901,16 @@ async function saveEventEditor(status){
     if (statusView) statusView.textContent = saved.status || event.status;
     renderAll();
     showToast("イベントを保存しました");
+    refreshFromCloud({ silent: true, skipNotify: true, showError: false }).catch(refreshErr => {
+      console.warn("Event resync failed:", refreshErr);
+    });
   } catch (err) {
     console.error(err);
-    alert("イベント保存に失敗しました。\n" + (err.message || err));
+    let message = err.message || String(err);
+    if (err.code === "FORBIDDEN" || /Admin privileges required|Event editor privileges required|edit only events/i.test(message)) {
+      message += "\n\n確認してください：\n・usersシートのroleが admin または event_editor になっているか\n・role変更後に一度ログアウト→再ログインしたか\n・GASを最新版に差し替えて新しいバージョンで再デプロイしたか";
+    }
+    alert("イベント保存に失敗しました。\n" + message);
   } finally {
     if (btn) {
       btn.disabled = false;
@@ -1921,6 +1935,46 @@ async function deleteCurrentEvent(){
   }
 }
 
+
+function getCurrentYearMonthValue(){
+  const cursor = state.scheduleCursor instanceof Date ? new Date(state.scheduleCursor) : new Date();
+  const y = cursor.getFullYear();
+  const m = String(cursor.getMonth() + 1).padStart(2, "0");
+  return `${y}-${m}`;
+}
+
+function ensureEventAdminFilterDefaults(){
+  if (!state.eventAdminFilterMode) state.eventAdminFilterMode = "month";
+  if (!state.eventAdminYearMonth) state.eventAdminYearMonth = getCurrentYearMonthValue();
+}
+
+function getEventYearMonth(event){
+  const parsed = parseDate(event?.date || "");
+  if (!parsed || parsed === "-" || parsed.length < 7) return "";
+  return parsed.slice(0, 7);
+}
+
+function getFilteredEditableEventsForAdminPanel(){
+  ensureEventAdminFilterDefaults();
+  const all = editableEventsForCurrentUser();
+  if (state.eventAdminFilterMode === "all") return all;
+  const ym = String(state.eventAdminYearMonth || "").trim();
+  if (!ym) return all;
+  return all.filter(ev => getEventYearMonth(ev) === ym);
+}
+
+function renderEventAdminFilterSummary(totalCount, visibleCount){
+  const hint = $("#eventAdminFilterHint");
+  if (!hint) return;
+  if (state.eventAdminFilterMode === "all") {
+    hint.textContent = `全期間：${visibleCount}件`;
+  } else {
+    const ym = String(state.eventAdminYearMonth || "");
+    const label = ym ? ym.replace("-", "年") + "月" : "年月未指定";
+    hint.textContent = `${label}：${visibleCount}件 / 全${totalCount}件`;
+  }
+}
+
 function renderEventAdminPanel(){
   const panel = $("#eventFormPanel");
   const list = $("#eventAdminItems");
@@ -1933,7 +1987,17 @@ function renderEventAdminPanel(){
   panel.hidden = !canManage;
   if (!canManage) return;
 
-  const events = editableEventsForCurrentUser()
+  ensureEventAdminFilterDefaults();
+  const rangeSelect = $("#eventAdminRange");
+  const monthInput = $("#eventAdminMonth");
+  if (rangeSelect) rangeSelect.value = state.eventAdminFilterMode;
+  if (monthInput) {
+    monthInput.value = state.eventAdminYearMonth || getCurrentYearMonthValue();
+    monthInput.hidden = state.eventAdminFilterMode === "all";
+  }
+
+  const totalEvents = editableEventsForCurrentUser();
+  const events = getFilteredEditableEventsForAdminPanel()
     .slice()
     .sort((a, b) => {
       const ad = parseDate(a.date);
@@ -1942,12 +2006,14 @@ function renderEventAdminPanel(){
       return String(a.startTime || "").localeCompare(String(b.startTime || ""));
     });
 
+  renderEventAdminFilterSummary(totalEvents.length, events.length);
+
   list.innerHTML = events.length ? events.map(ev => `
     <button class="event-admin-item" type="button" data-evid="${escapeAttr(ev.id)}">
       <span>${escapeHtml(ev.title || "(no title)")}</span>
       <span>${escapeHtml(formatDateJP(ev.date))} / ${escapeHtml(ev.status || "public")}${isAdminUser(user) && ev.createdByName ? ` / ${escapeHtml(ev.createdByName)}` : ""}</span>
     </button>
-  `).join("") : `<div class="empty__text">編集できるイベントがありません。</div>`;
+  `).join("") : `<div class="empty__text">条件に合う編集可能なイベントがありません。</div>`;
 
   $$(".event-admin-item", list).forEach(btn => {
     btn.addEventListener("click", () => startEditEvent(btn.dataset.evid));
@@ -3302,12 +3368,22 @@ function bind(){
 
   on("#btnEventListTab", "click", () => {
     state.eventAdminTab = "list";
-    renderCalendar();
+    renderEventAdminPanel();
   });
   on("#btnEventNewTab", "click", () => {
     state.eventAdminTab = "editor";
     clearEventForm();
-    renderCalendar();
+    renderEventAdminPanel();
+  });
+  on("#eventAdminRange", "change", (e) => {
+    state.eventAdminFilterMode = e.target.value === "all" ? "all" : "month";
+    ensureEventAdminFilterDefaults();
+    renderEventAdminPanel();
+  });
+  on("#eventAdminMonth", "change", (e) => {
+    state.eventAdminYearMonth = e.target.value || getCurrentYearMonthValue();
+    state.eventAdminFilterMode = "month";
+    renderEventAdminPanel();
   });
   on("#btnEventPublish", "click", (e) => {
     e.preventDefault();
@@ -3909,7 +3985,7 @@ document.addEventListener("visibilitychange", () => {
 async function init() {
   if ("serviceWorker" in navigator) {
     try {
-      const registration = await navigator.serviceWorker.register("./sw.js?v=event-editor-demo-2", {
+      const registration = await navigator.serviceWorker.register("./sw.js?v=event-editor-demo-3", {
         scope: "./"
       });
 

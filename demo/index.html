@@ -8,7 +8,7 @@
   <link rel="icon" href="./favicon.png" type="image/png">
   <link rel="apple-touch-icon" href="./favicon.png">
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=event-editor-demo-2" />
+  <link rel="stylesheet" href="./styles.css?v=event-editor-demo-3" />
 </head>
 <body>
   <div class="auth" id="authGate">
@@ -173,6 +173,20 @@
       </div>
 
       <div id="eventListPanel">
+        <div class="event-admin-filter">
+          <label class="event-admin-filter__field">
+            <span>表示期間</span>
+            <select class="input" id="eventAdminRange">
+              <option value="month">年月指定</option>
+              <option value="all">全期間</option>
+            </select>
+          </label>
+          <label class="event-admin-filter__field" id="eventAdminMonthWrap">
+            <span>年月</span>
+            <input class="input" id="eventAdminMonth" type="month">
+          </label>
+          <div class="event-admin-filter__hint" id="eventAdminFilterHint"></div>
+        </div>
         <div class="admin__items" id="eventAdminItems"></div>
       </div>
 
@@ -677,7 +691,7 @@
   });
 </script>
 
-  <script src="./config.js?v=event-editor-demo-2"></script>
-  <script src="./app.js?v=event-editor-demo-2"></script>
+  <script src="./config.js?v=event-editor-demo-3"></script>
+  <script src="./app.js?v=event-editor-demo-3"></script>
 </body>
 </html>
