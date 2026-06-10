@@ -4,7 +4,7 @@ window.APP_CONFIG = {
   PUSH_VAPID_PUBLIC_KEY: "BDd9lRlf2g7rK-42hfBs55vULr-hZ00sCYLHXHoxERrUKksDR_pFH8AFbJR4kibWG-BJkaOKp8RZKZJzVNbQSPk",
   PUSH_WEBHOOK_URL: "https://community-news-pwa.vercel.app/api/push/send",
   PUSH_SEND_API_URL: "https://community-news-pwa.vercel.app/api/push/send",
-  MODE: "demo",
+  MODE: "prod",
   READ_ONLY: false,
   DATA_SOURCE: "api"
 };
