@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="ja">
 <head>
   <meta charset="utf-8" />
@@ -8,7 +8,7 @@
   <link rel="icon" href="./favicon.png" type="image/png">
   <link rel="apple-touch-icon" href="./favicon.png">
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=push-prod-gacha-top-2" />
+  <link rel="stylesheet" href="./styles.css?v=push-prod-related-articles-1" />
 </head>
 <body>
   <div class="auth" id="authGate">
@@ -308,6 +308,10 @@
                 <textarea class="textarea" id="pBody" rows="8" placeholder="本文を入力"></textarea>
               </label>
 
+              <div class="editor-tools">
+                <button class="btn btn--ghost" id="btnInsertPastPost" type="button">過去記事を挿入する</button>
+              </div>
+
               <label class="field">
   <div class="field__label">画像追加</div>
   <input class="input" id="pImageFiles" type="file" accept="image/*" multiple>
@@ -386,6 +390,10 @@
                 <div class="field__label">本文（改行で段落）</div>
                 <textarea class="textarea" id="eBody" rows="8" placeholder="本文を入力"></textarea>
               </label>
+
+              <div class="editor-tools">
+                <button class="btn btn--ghost" id="btnEditInsertPastPost" type="button">過去記事を挿入する</button>
+              </div>
 
               <label class="field">
                 <div class="field__label">画像追加</div>
@@ -474,6 +482,7 @@
       <div class="drawer__panel" role="dialog" aria-modal="true" aria-label="Article detail">
         <div class="drawer__top">
           <div class="drawer__meta">
+            <button class="drawer-backbtn" id="btnArticleBack" type="button" hidden>← 前の記事</button>
             <span class="badge" id="drawerBadge"><span class="badge__dot"></span><span id="drawerBadgeText">Info</span></span>
             <span class="drawer__date" id="drawerDate">-</span>
           </div>
@@ -588,6 +597,26 @@
   </div>
 </div>
 
+<!-- Past Article Picker Modal -->
+<div class="eventmodal" id="articlePickerModal" aria-hidden="true">
+  <div class="eventmodal__scrim" id="articlePickerScrim"></div>
+
+  <div class="eventmodal__panel" role="dialog" aria-modal="true" aria-label="Past article picker">
+    <div class="eventmodal__head">
+      <div class="eventmodal__title">過去記事を挿入</div>
+      <button class="iconbtn" id="articlePickerClose" aria-label="Close" type="button">×</button>
+    </div>
+    <div class="eventmodal__body">
+      <label class="field">
+        <div class="field__label">タイトル検索</div>
+        <input class="input article-picker__search" id="articlePickerSearch" type="text" placeholder="過去記事のタイトルで検索">
+      </label>
+      <div class="article-picker__list" id="articlePickerList"></div>
+      <div class="hint">選択すると本文のカーソル位置に関連記事カード用のリンクが挿入されます。</div>
+    </div>
+  </div>
+</div>
+
   <div id="gachaConnectOverlay" class="gacha-connect-overlay" aria-hidden="true">
   <div class="gacha-connect-card">
     <div class="gacha-connect-orbit">
@@ -623,11 +652,17 @@
       btn.textContent = "語り場ガチャへ";
     }
 
+    var topBtn = document.getElementById("topGachaBtn");
+    if (topBtn) {
+      topBtn.disabled = false;
+      topBtn.innerHTML = '<span class="gacha-linkbtn__icon" aria-hidden="true">🎁</span><span class="gacha-linkbtn__text">ガチャ</span>';
+    }
+
     document.body.style.overflow = "";
   });
 </script>
 
-  <script src="./config.js?v=push-prod-gacha-top-2"></script>
-  <script src="./app.js?v=push-prod-gacha-top-2"></script>
+  <script src="./config.js?v=push-prod-related-articles-1"></script>
+  <script src="./app.js?v=push-prod-related-articles-1"></script>
 </body>
 </html>
