@@ -1542,6 +1542,9 @@ function openDrawer(articleId, opts = {}){
   state.drawerOpen = true;
   state.activeArticleId = a.id;
 
+  const saveBtn = $("#btnSave");
+  if (saveBtn) saveBtn.hidden = false;
+
   $("#drawer").classList.add("drawer--open");
   $("#drawer").setAttribute("aria-hidden", "false");
   document.body.classList.add("no-scroll");
@@ -1619,7 +1622,79 @@ function closeDrawer(){
   $("#drawer").classList.remove("drawer--open");
   $("#drawer").setAttribute("aria-hidden","true");
   document.body.classList.remove("no-scroll");
+
+  const saveBtn = $("#btnSave");
+  if (saveBtn) saveBtn.hidden = false;
+
   renderArticleBackButton();
+}
+
+function openPreviewDrawer(article){
+  const a = normalizePost(article);
+
+  state.drawerOpen = true;
+  state.activeArticleId = a.id;
+  state.articleHistoryStack = [];
+
+  const drawer = $("#drawer");
+  if (!drawer) return;
+
+  drawer.classList.add("drawer--open");
+  drawer.setAttribute("aria-hidden", "false");
+  document.body.classList.add("no-scroll");
+
+  const badge = $("#drawerBadge");
+  if (badge) badge.setAttribute("data-tone", a.tone || "accent");
+
+  const badgeText = $("#drawerBadgeText");
+  if (badgeText) badgeText.textContent = "プレビュー";
+
+  const date = $("#drawerDate");
+  if (date) date.textContent = formatDateJP(a.date);
+
+  const title = $("#aTitle");
+  if (title) title.textContent = a.title || "";
+
+  const meta = $("#aMeta");
+  const tags = a.tags || [];
+  if (meta) {
+    meta.innerHTML = tags.map(t => `<span class="pill">${escapeHtml(t)}</span>`).join("");
+    meta.style.display = tags.length ? "" : "none";
+  }
+
+  const sum = $("#aSummaryList");
+  if (sum) sum.innerHTML = (a.summary || []).map(x => `<li>${escapeHtml(x)}</li>`).join("");
+
+  const summaryBox = $("#aSummary");
+  if (summaryBox) summaryBox.style.display = (a.summary && a.summary.length) ? "block" : "none";
+
+  const body = $("#aBody");
+  if (body) {
+    const hasMarkers = bodyHasMarkers(a);
+    body.innerHTML =
+      mediaHtml(a, hasMarkers) +
+      (hasMarkers
+        ? renderBodyWithInlineMedia(a)
+        : (a.body || []).map(p => `<p>${escapeHtml(p)}</p>`).join(""));
+    bindRelatedArticleCards(body);
+  }
+
+  const cta = $("#cta");
+  if (a.cta && a.cta.url) {
+    if (cta) cta.style.display = "flex";
+    const ctaText = $("#ctaText");
+    if (ctaText) ctaText.textContent = a.cta.text || "リンク";
+    const ctaBtn = $("#ctaBtn");
+    if (ctaBtn) ctaBtn.href = a.cta.url;
+  } else if (cta) {
+    cta.style.display = "none";
+  }
+
+  const saveBtn = $("#btnSave");
+  if (saveBtn) saveBtn.hidden = true;
+
+  const backBtn = $("#btnArticleBack");
+  if (backBtn) backBtn.hidden = true;
 }
 
 function renderSaveBtn(){
@@ -2730,6 +2805,19 @@ function collectEditForm(){
   return a;
 }
 
+function buildPreviewArticleFromForm(mode){
+  const raw = mode === "edit" ? collectEditForm() : collectForm();
+
+  return normalizePost({
+    ...raw,
+    id: "preview_" + Date.now(),
+    date: raw.date || todayYMD(),
+    status: "public",
+    totalViews: 0,
+    uniqueViewCount: 0
+  });
+}
+
 async function saveEditor(status, opts = {}){
   const rawTitle = (("#pTitle" && $("#pTitle")) ? $("#pTitle").value : "").trim();
   if(!rawTitle){
@@ -3465,6 +3553,20 @@ function bind(){
     renderAdmin();
   });
 
+  ensurePreviewButtons();
+
+  on("#btnPreviewPost", "click", (e) => {
+    e.preventDefault();
+    const article = buildPreviewArticleFromForm("new");
+    openPreviewDrawer(article);
+  });
+
+  on("#btnPreviewEditPost", "click", (e) => {
+    e.preventDefault();
+    const article = buildPreviewArticleFromForm("edit");
+    openPreviewDrawer(article);
+  });
+
   on("#btnPublishPost", "click", (e) => {
     e.preventDefault();
     saveEditor("public");
@@ -3927,6 +4029,28 @@ function bind(){
   on("#notifyDismiss", "click", () => {
     hideNotifyBanner();
   });
+}
+
+function ensurePreviewButtons(){
+  const postActions = document.querySelector("#postForm .admin-actions");
+  if (postActions && !document.getElementById("btnPreviewPost")) {
+    const btn = document.createElement("button");
+    btn.className = "btn btn--ghost";
+    btn.id = "btnPreviewPost";
+    btn.type = "button";
+    btn.textContent = "プレビュー";
+    postActions.before(btn);
+  }
+
+  const editActions = document.querySelector("#editForm .admin-actions");
+  if (editActions && !document.getElementById("btnPreviewEditPost")) {
+    const btn = document.createElement("button");
+    btn.className = "btn btn--ghost";
+    btn.id = "btnPreviewEditPost";
+    btn.type = "button";
+    btn.textContent = "プレビュー";
+    editActions.before(btn);
+  }
 }
 
 function showGachaConnectOverlay() {
