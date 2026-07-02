@@ -23,11 +23,13 @@ function doGet(e) {
 
     if (action === "listPosts") {
       requireAuth(token);
+      publishDueScheduledPosts();
       return outputJson({ ok: true, posts: getPosts(false) });
     }
 
     if (action === "listAllPosts") {
       requireAdmin(token);
+      publishDueScheduledPosts();
       return outputJson({ ok: true, posts: getPosts(true) });
     }
 
@@ -302,6 +304,8 @@ if (action === "listPushSubscriptionsForServer") {
       "imageUrls",
       "video",
       "status",
+      "publishedAt",
+      "scheduledAt",
       "updatedAt",
       "totalViews",
       "uniqueViewCount",
@@ -330,6 +334,8 @@ if (action === "listPushSubscriptionsForServer") {
     "imageUrls",
     "video",
     "status",
+    "publishedAt",
+    "scheduledAt",
     "updatedAt",
     "totalViews",
     "uniqueViewCount",
@@ -881,7 +887,8 @@ if (action === "listPushSubscriptionsForServer") {
   const headers = values[0];
   const rows = values.slice(1);
   const posts = rows.map(row => normalizePostRow(rowToObj(headers, row), { includeMetrics: includeAll }));
-  return includeAll ? posts : posts.filter(post => post.status === "public");
+  const visiblePosts = includeAll ? posts : posts.filter(post => post.status === "public");
+  return visiblePosts.sort(comparePostsByPublishedAtDesc);
   }
 
   function getEvents(includeAll) {
@@ -918,12 +925,14 @@ function savePost(post) {
   }
 
   const existingRowIndex = findRowIndexById(values, normalized.id, idCol);
-
+  const isNewPost = existingRowIndex < 0;
+  const now = new Date();
+  const nowIso = formatIsoDateTime(now);
   let previousStatus = "";
-  let isNewPost = existingRowIndex < 0;
+  let existing = null;
 
-  if (existingRowIndex < 0) {
-    if (!normalized.date) normalized.date = formatDateYMD(new Date());
+  if (isNewPost) {
+    if (!normalized.date) normalized.date = formatDateYMD(now);
     if (normalized.totalViews === undefined || normalized.totalViews === null || normalized.totalViews === "") {
       normalized.totalViews = 0;
     }
@@ -934,10 +943,10 @@ function savePost(post) {
       normalized.viewerUserIdsJson = "[]";
     }
   } else {
-    const existing = rowToObj(headers, values[existingRowIndex]);
+    existing = rowToObj(headers, values[existingRowIndex]);
     previousStatus = normalizeStatus(existing.status, "public");
 
-    if (!normalized.date) normalized.date = String(existing.date || "");
+    if (!normalized.date) normalized.date = normalizeDateCell(existing.date);
 
     if (normalized.totalViews === undefined || normalized.totalViews === null || normalized.totalViews === "") {
       normalized.totalViews = parseMetricCell(existing.totalViews);
@@ -950,6 +959,34 @@ function savePost(post) {
     if (!normalized.viewerUserIdsJson) {
       normalized.viewerUserIdsJson = String(existing.viewerUserIdsJson || "[]");
     }
+  }
+
+  const currentStatus = normalizeStatus(normalized.status, "public");
+  normalized.status = currentStatus;
+
+  if (currentStatus === "scheduled") {
+    const scheduledDate = parseDateTimeValue(normalized.scheduledAt);
+    if (!scheduledDate || scheduledDate.getTime() <= now.getTime()) {
+      throw fail("scheduledAt must be a future date and time", "VALIDATION_ERROR");
+    }
+    normalized.scheduledAt = formatIsoDateTime(scheduledDate);
+    normalized.publishedAt = existing ? normalizeDateTimeCell(existing.publishedAt) : "";
+    normalized.date = formatDateYMD(scheduledDate);
+  } else if (currentStatus === "public") {
+    normalized.scheduledAt = "";
+    if (isNewPost || previousStatus !== "public") {
+      normalized.publishedAt = nowIso;
+      normalized.date = formatDateYMD(now);
+    } else {
+      normalized.publishedAt = normalizeDateTimeCell(existing && existing.publishedAt)
+        || buildLegacyPublishedAt(existing && existing.date, existing && existing.updatedAt)
+        || nowIso;
+      normalized.date = normalizeDateCell(existing && existing.date) || normalized.date || formatDateYMD(now);
+    }
+  } else {
+    normalized.scheduledAt = "";
+    normalized.publishedAt = existing ? normalizeDateTimeCell(existing.publishedAt) : "";
+    if (!normalized.date) normalized.date = formatDateYMD(now);
   }
 
   applyPostMetricColumnFormats(sheet);
@@ -969,13 +1006,11 @@ function savePost(post) {
 
   const savedPost = normalizePostRow(normalized, { includeMetrics: true });
 
-  // 新規公開、または下書き/非公開から公開になった時だけPush通知
   if (shouldSendPostPushNotification(isNewPost, previousStatus, savedPost)) {
     try {
       const pushPayload = buildPostPushPayload(savedPost);
       sendPushNotificationToAllFromGAS(pushPayload);
     } catch (err) {
-      // Push送信に失敗しても、記事保存自体は成功扱いにする
       console.warn("Push notification failed:", err && err.message ? err.message : err);
     }
   }
@@ -1177,7 +1212,9 @@ function normalizePostRow(row, options) {
     imageUrls: splitField(row.imageUrls || row.images),
     video: row.video || "",
     status: status,
-    updatedAt: row.updatedAt || ""
+    publishedAt: normalizeDateTimeCell(row.publishedAt),
+    scheduledAt: normalizeDateTimeCell(row.scheduledAt),
+    updatedAt: normalizeDateTimeCell(row.updatedAt)
   };
   if (opts.includeMetrics) {
     normalized.totalViews = parseMetricCell(row.totalViews);
@@ -1226,6 +1263,8 @@ function normalizeIncomingPost(post) {
     imageUrls: Array.isArray(post.imageUrls) ? post.imageUrls : (Array.isArray(post.images) ? post.images : []),
     video: String(post.video || "").trim(),
     status: status,
+    publishedAt: String(post.publishedAt || "").trim(),
+    scheduledAt: String(post.scheduledAt || "").trim(),
     updatedAt: formatDateTime(new Date()),
     totalViews: totalViews,
     uniqueViewCount: uniqueViewCount,
@@ -1307,6 +1346,7 @@ function normalizeStatus(raw, fallback) {
   if (s === "public" || s === "published" || s === "公開") return "public";
   if (s === "draft" || s === "下書き") return "draft";
   if (s === "private" || s === "非公開") return "private";
+  if (s === "scheduled" || s === "予約投稿") return "scheduled";
   return fallback || "public";
 }
 
@@ -2761,6 +2801,177 @@ function ensureGachaResultsMigratedAtColumn(sheet) {
 
   sheet.insertColumnAfter(lastCol);
   sheet.getRange(1, lastCol + 1).setValue("migratedAt");
+}
+
+function normalizeDateCell(value) {
+  if (value === null || value === undefined || value === "") return "";
+  if (Object.prototype.toString.call(value) === "[object Date]" && !isNaN(value.getTime())) {
+    return formatDateYMD(value);
+  }
+  return String(value).trim();
+}
+
+function normalizeDateTimeCell(value) {
+  if (value === null || value === undefined || value === "") return "";
+  if (Object.prototype.toString.call(value) === "[object Date]" && !isNaN(value.getTime())) {
+    return formatIsoDateTime(value);
+  }
+  return String(value).trim();
+}
+
+function formatIsoDateTime(date) {
+  const d = date instanceof Date ? date : new Date(date);
+  if (isNaN(d.getTime())) return "";
+  return Utilities.formatDate(d, Session.getScriptTimeZone(), "yyyy-MM-dd'T'HH:mm:ssXXX");
+}
+
+function parseDateTimeValue(value) {
+  if (value === null || value === undefined || value === "") return null;
+  if (Object.prototype.toString.call(value) === "[object Date]" && !isNaN(value.getTime())) {
+    return new Date(value.getTime());
+  }
+  const text = String(value).trim();
+  if (!text) return null;
+  const parsed = new Date(text);
+  return isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function buildLegacyPublishedAt(dateValue, updatedAtValue) {
+  const dateText = normalizeDateCell(dateValue);
+  if (dateText) {
+    const parsedDate = parseDateTimeValue(dateText + "T00:00:00");
+    if (parsedDate) return formatIsoDateTime(parsedDate);
+  }
+
+  const updated = parseDateTimeValue(updatedAtValue);
+  return updated ? formatIsoDateTime(updated) : "";
+}
+
+function getPostSortMillis(post) {
+  const row = post || {};
+  const candidates = [
+    normalizeStatus(row.status, "public") === "scheduled" ? row.scheduledAt : "",
+    row.publishedAt,
+    row.date,
+    row.updatedAt
+  ];
+  for (let i = 0; i < candidates.length; i++) {
+    const parsed = parseDateTimeValue(candidates[i]);
+    if (parsed) return parsed.getTime();
+  }
+  return 0;
+}
+
+function comparePostsByPublishedAtDesc(a, b) {
+  const diff = getPostSortMillis(b) - getPostSortMillis(a);
+  if (diff !== 0) return diff;
+  return String(b && b.id || "").localeCompare(String(a && a.id || ""));
+}
+
+function publishDueScheduledPosts() {
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) return { ok: false, published: 0, skipped: true };
+
+  const publishedPosts = [];
+  try {
+    const sheet = getSheet();
+    const values = sheet.getDataRange().getValues();
+    if (values.length < 2) return { ok: true, published: 0 };
+
+    const headers = values[0];
+    const statusCol = headers.indexOf("status");
+    const scheduledAtCol = headers.indexOf("scheduledAt");
+    const publishedAtCol = headers.indexOf("publishedAt");
+    const dateCol = headers.indexOf("date");
+    const updatedAtCol = headers.indexOf("updatedAt");
+    if ([statusCol, scheduledAtCol, publishedAtCol, dateCol, updatedAtCol].some(i => i < 0)) {
+      throw fail("Scheduled post columns not found", "SERVER_ERROR");
+    }
+
+    const now = new Date();
+    const nowText = formatDateTime(now);
+    const changedRows = [];
+
+    for (let i = 1; i < values.length; i++) {
+      const row = values[i];
+      if (normalizeStatus(row[statusCol], "public") !== "scheduled") continue;
+      const scheduledDate = parseDateTimeValue(row[scheduledAtCol]);
+      if (!scheduledDate || scheduledDate.getTime() > now.getTime()) continue;
+
+      row[statusCol] = "public";
+      row[publishedAtCol] = formatIsoDateTime(scheduledDate);
+      row[dateCol] = formatDateYMD(scheduledDate);
+      row[scheduledAtCol] = "";
+      row[updatedAtCol] = nowText;
+      changedRows.push({ rowNumber: i + 1, values: row.slice() });
+      publishedPosts.push(normalizePostRow(rowToObj(headers, row), { includeMetrics: true }));
+    }
+
+    changedRows.forEach(item => {
+      sheet.getRange(item.rowNumber, 1, 1, headers.length).setValues([item.values]);
+    });
+  } finally {
+    lock.releaseLock();
+  }
+
+  publishedPosts.forEach(post => {
+    try {
+      sendPushNotificationToAllFromGAS(buildPostPushPayload(post));
+    } catch (err) {
+      console.warn("Scheduled post push failed:", err && err.message ? err.message : err);
+    }
+  });
+
+  return { ok: true, published: publishedPosts.length };
+}
+
+function setupScheduledPostTrigger() {
+  ScriptApp.getProjectTriggers()
+    .filter(trigger => trigger.getHandlerFunction() === "publishDueScheduledPosts")
+    .forEach(trigger => ScriptApp.deleteTrigger(trigger));
+
+  ScriptApp.newTrigger("publishDueScheduledPosts")
+    .timeBased()
+    .everyMinutes(1)
+    .create();
+
+  return { ok: true, message: "予約投稿の1分間隔トリガーを設定しました。" };
+}
+
+function migrateExistingPostPublishedAt() {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const sheet = getSheet();
+    const values = sheet.getDataRange().getValues();
+    if (values.length < 2) return { ok: true, updated: 0 };
+
+    const headers = values[0];
+    const statusCol = headers.indexOf("status");
+    const dateCol = headers.indexOf("date");
+    const updatedAtCol = headers.indexOf("updatedAt");
+    const publishedAtCol = headers.indexOf("publishedAt");
+    if ([statusCol, dateCol, updatedAtCol, publishedAtCol].some(i => i < 0)) {
+      throw fail("Post publication columns not found", "SERVER_ERROR");
+    }
+
+    let updated = 0;
+    for (let i = 1; i < values.length; i++) {
+      const row = values[i];
+      if (normalizeStatus(row[statusCol], "public") !== "public") continue;
+      if (normalizeDateTimeCell(row[publishedAtCol])) continue;
+
+      const base = buildLegacyPublishedAt(row[dateCol], row[updatedAtCol]);
+      if (!base) continue;
+      row[publishedAtCol] = base;
+      sheet.getRange(i + 1, publishedAtCol + 1).setValue(base);
+      updated += 1;
+    }
+
+    return { ok: true, updated: updated };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function shouldSendPostPushNotification(isNewPost, previousStatus, post) {

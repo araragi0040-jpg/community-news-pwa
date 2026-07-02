@@ -229,6 +229,90 @@ function ymd(d){
 }
 function todayYMD(){ return ymd(new Date()); }
 
+function parseDateTimeMillis(value){
+  if (!value) return 0;
+  if (value instanceof Date && !isNaN(value.getTime())) return value.getTime();
+  const text = String(value).trim();
+  if (!text) return 0;
+  const direct = Date.parse(text);
+  if (Number.isFinite(direct)) return direct;
+  const normalized = parseDate(text);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+    const fallback = Date.parse(`${normalized}T00:00:00`);
+    return Number.isFinite(fallback) ? fallback : 0;
+  }
+  return 0;
+}
+
+function getPostSortTimestamp(post){
+  const a = post || {};
+  const candidates = [
+    normalizeStatusValue(a.status, "public") === "scheduled" ? a.scheduledAt : "",
+    a.publishedAt,
+    a.date,
+    a.updatedAt
+  ];
+  for (const value of candidates) {
+    const timestamp = parseDateTimeMillis(value);
+    if (timestamp) return timestamp;
+  }
+  return 0;
+}
+
+function comparePostsByPublication(a, b, order = "desc"){
+  const diff = getPostSortTimestamp(a) - getPostSortTimestamp(b);
+  if (diff !== 0) return order === "asc" ? diff : -diff;
+  const aid = String(a?.id || "");
+  const bid = String(b?.id || "");
+  return order === "asc" ? aid.localeCompare(bid) : bid.localeCompare(aid);
+}
+
+function toDateTimeLocalValue(value){
+  const timestamp = parseDateTimeMillis(value);
+  if (!timestamp) return "";
+  const d = new Date(timestamp);
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function dateTimeLocalToIso(value){
+  const text = String(value || "").trim();
+  if (!text) return "";
+  const d = new Date(text);
+  return isNaN(d.getTime()) ? "" : d.toISOString();
+}
+
+function formatDateTimeJP(value){
+  const timestamp = parseDateTimeMillis(value);
+  if (!timestamp) return "";
+  const d = new Date(timestamp);
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function getPostStatusLabel(status){
+  const normalized = normalizeStatusValue(status, "public");
+  if (normalized === "draft") return "下書き";
+  if (normalized === "private") return "非公開";
+  if (normalized === "scheduled") return "予約投稿";
+  return "公開";
+}
+
+function formatPostStatusView(post){
+  const a = post || {};
+  const status = normalizeStatusValue(a.status, "public");
+  if (status === "scheduled") {
+    const scheduledText = formatDateTimeJP(a.scheduledAt);
+    return scheduledText ? `予約投稿（${scheduledText} 公開予定）` : "予約投稿";
+  }
+  return getPostStatusLabel(status);
+}
+
+function isFutureScheduledAt(value){
+  const timestamp = parseDateTimeMillis(value);
+  return Boolean(timestamp && timestamp > Date.now());
+}
+
 function toneColor(tone){
   const css = getComputedStyle(document.documentElement);
   const map = {
@@ -261,6 +345,7 @@ function normalizeStatusValue(value, fallback = "public"){
   if (s === "public" || s === "published" || s === "公開") return "public";
   if (s === "draft" || s === "下書き") return "draft";
   if (s === "private" || s === "非公開") return "private";
+  if (s === "scheduled" || s === "予約投稿") return "scheduled";
   return fallback;
 }
 
@@ -280,6 +365,9 @@ function normalizePost(input){
   a.media.images = Array.isArray(a.media.images) ? a.media.images : [];
   a.media.video = a.media.video || "";
   a.status = normalizeStatusValue(a.status, "public");
+  a.publishedAt = a.publishedAt || "";
+  a.scheduledAt = a.scheduledAt || "";
+  a.updatedAt = a.updatedAt || "";
   const totalViews = Number(a.totalViews || 0);
   const uniqueViewCount = Number(a.uniqueViewCount || 0);
   a.totalViews = Number.isFinite(totalViews) && totalViews >= 0 ? Math.floor(totalViews) : 0;
@@ -307,6 +395,9 @@ function mapApiPost(post){
       video: post.video || ""
     },
     status: post.status || "public",
+    publishedAt: post.publishedAt || "",
+    scheduledAt: post.scheduledAt || "",
+    updatedAt: post.updatedAt || "",
     totalViews: post.totalViews || 0,
     uniqueViewCount: post.uniqueViewCount || 0
   });
@@ -528,7 +619,8 @@ async function savePostToApi(post) {
       ctaUrl: post.cta?.url || "",
       imageUrls: post.media?.images || [],
       video: post.media?.video || "",
-      status: post.status || "public"
+      status: post.status || "public",
+      scheduledAt: post.scheduledAt || ""
     }
   });
   return data.post;
@@ -739,7 +831,8 @@ function normalizePostContentParts(post){
     ctaText: normalized.cta?.text || "",
     ctaUrl: normalized.cta?.url || "",
     images: Array.isArray(normalized.media?.images) ? normalized.media.images : [],
-    video: normalized.media?.video || ""
+    video: normalized.media?.video || "",
+    scheduledAt: normalized.scheduledAt || ""
   };
 }
 
@@ -777,6 +870,7 @@ function getPostSaveToastMessage(status){
   const s = normalizeStatusValue(status, "public");
   if (s === "draft") return "下書き保存しました";
   if (s === "private") return "非公開で保存しました";
+  if (s === "scheduled") return "予約投稿を設定しました";
   return "投稿しました";
 }
 
@@ -1019,13 +1113,7 @@ function filteredArticles(){
         (a.badge||"").toLowerCase().includes(q)
       );
     })
-    .sort((a,b) => {
-      const av = parseDate(a.date);
-      const bv = parseDate(b.date);
-      return state.sortOrder === "asc"
-        ? (av > bv ? 1 : -1)
-        : (av < bv ? 1 : -1);
-    });
+    .sort((a, b) => comparePostsByPublication(a, b, state.sortOrder));
 }
 
 function renderCard(a){
@@ -1375,7 +1463,7 @@ function getPastArticleCandidates(){
   const excludeId = state.articleInsertTargetId === "eBody" ? state.editingId : state.newEditorDraftId;
   return allArticles()
     .filter(post => post.id && post.id !== excludeId)
-    .sort((a, b) => (parseDate(a.date) < parseDate(b.date) ? 1 : -1));
+    .sort((a, b) => comparePostsByPublication(a, b));
 }
 
 function ensureArticlePickerModal(){
@@ -1712,7 +1800,7 @@ function renderSaved(){
   const list = saved
     .map(id => allArticles().find(a => a.id === id))
     .filter(Boolean)
-    .sort((a,b)=> (parseDate(a.date) < parseDate(b.date) ? 1 : -1));
+    .sort((a, b) => comparePostsByPublication(a, b));
 
   const cards = $("#savedCards");
   const empty = $("#savedEmpty");
@@ -2571,7 +2659,7 @@ function renderCalendar(){
 }
 // ===== Admin: list / editor =====
 function adminArticles(){
-  return cloudPosts.slice().sort((a,b)=> (a.date < b.date ? 1 : -1));
+  return cloudPosts.slice().sort((a, b) => comparePostsByPublication(a, b));
 }
 
 function renderAdmin(){
@@ -2629,7 +2717,7 @@ function renderAdmin(){
           <div class="aitem__title">${escapeHtml(a.title)}</div>
           <div class="aitem__date">${formatDateJP(a.date)}</div>
         </div>
-        <div class="aitem__sub">#${escapeHtml(channelLabel(a.channel))} / ${escapeHtml(a.badge || "")} / ${escapeHtml(a.status || "public")}</div>
+        <div class="aitem__sub">#${escapeHtml(channelLabel(a.channel))} / ${escapeHtml(a.badge || "")} / ${escapeHtml(formatPostStatusView(a))}</div>
         <div class="aitem__stats">
           <span class="aitem__stat">総閲覧数 ${Number(a.totalViews || 0)}</span>
           <span class="aitem__stat">閲覧ユーザー数 ${Number(a.uniqueViewCount || 0)}</span>
@@ -2662,6 +2750,7 @@ function clearEditor(){
   $("#pCtaUrl").value = "";
   $("#pImages").value = "";
   $("#pVideo").value = "";
+  $("#pScheduledAt").value = "";
   renderImagePicker("pImages", "pImagePicker", "pBody");
   renderVidInsertButton("pVideo", "pBody", "pVidInsert");
   const statusView = $("#pStatusView");
@@ -2680,6 +2769,7 @@ function clearEditForm(){
   $("#eCtaUrl").value = "";
   $("#eImages").value = "";
   $("#eVideo").value = "";
+  $("#eScheduledAt").value = "";
   renderImagePicker("eImages", "eImagePicker", "eBody");
   renderVidInsertButton("eVideo", "eBody", "eVidInsert");
   const statusView = $("#eStatusView");
@@ -2702,38 +2792,45 @@ function startEdit(id){
   $("#eCtaUrl").value = a.cta?.url || "";
   $("#eImages").value = (a.media?.images || []).join("\n");
   $("#eVideo").value = a.media?.video || "";
+  $("#eScheduledAt").value = toDateTimeLocalValue(a.scheduledAt);
   renderImagePicker("eImages", "eImagePicker", "eBody");
   renderVidInsertButton("eVideo", "eBody", "eVidInsert");
   const statusView = $("#eStatusView");
-  if (statusView) statusView.textContent = a.status || "public";
+  if (statusView) statusView.textContent = formatPostStatusView(a);
   state.editEditorLastSavedSignature = buildPostContentSignature(a);
   syncEditButtons();
 }
 
 function syncAdminButtons(){
   const btnPublish = $("#btnPublishPost");
+  const btnSchedule = $("#btnSchedulePost");
   const btnDraft = $("#btnDraftPost");
   const btnPrivate = $("#btnPrivatePost");
   const titleInput = $("#pTitle");
+  const scheduledInput = $("#pScheduledAt");
 
-  if(!btnPublish || !btnDraft || !btnPrivate) return;
+  if(!btnPublish || !btnSchedule || !btnDraft || !btnPrivate) return;
 
   const canSave = ((titleInput?.value || "").trim().length > 0);
   btnPublish.disabled = !canSave;
+  btnSchedule.disabled = !(canSave && isFutureScheduledAt(scheduledInput?.value || ""));
   btnDraft.disabled = !canSave;
   btnPrivate.disabled = !canSave;
 }
 
 function syncEditButtons(){
   const btnPublish = $("#btnEditPublishPost");
+  const btnSchedule = $("#btnEditSchedulePost");
   const btnDraft = $("#btnEditDraftPost");
   const btnPrivate = $("#btnEditPrivatePost");
   const titleInput = $("#eTitle");
+  const scheduledInput = $("#eScheduledAt");
 
-  if(!btnPublish || !btnDraft || !btnPrivate) return;
+  if(!btnPublish || !btnSchedule || !btnDraft || !btnPrivate) return;
 
   const canSave = ((titleInput?.value || "").trim().length > 0);
   btnPublish.disabled = !canSave;
+  btnSchedule.disabled = !(canSave && isFutureScheduledAt(scheduledInput?.value || ""));
   btnDraft.disabled = !canSave;
   btnPrivate.disabled = !canSave;
 }
@@ -2764,7 +2861,8 @@ function collectForm(){
     summary: [],
     body,
     cta: ctaUrl ? { text: ctaText, url: ctaUrl } : null,
-    media: { images, video }
+    media: { images, video },
+    scheduledAt: dateTimeLocalToIso($("#pScheduledAt")?.value || "")
   });
 
   a.title = title;
@@ -2798,7 +2896,10 @@ function collectEditForm(){
     summary: [],
     body,
     cta: ctaUrl ? { text: ctaText, url: ctaUrl } : null,
-    media: { images, video }
+    media: { images, video },
+    publishedAt: current?.publishedAt || "",
+    scheduledAt: dateTimeLocalToIso($("#eScheduledAt")?.value || ""),
+    updatedAt: current?.updatedAt || ""
   });
 
   a.title = title;
@@ -2838,9 +2939,14 @@ async function saveEditor(status, opts = {}){
   }
 
   a.status = status || "public";
+  if (a.status === "scheduled" && !isFutureScheduledAt(a.scheduledAt)) {
+    if (!opts.silentError) alert("現在より後の公開予定日時を指定してください。");
+    return null;
+  }
 
   const statusBtnMap = {
     public: "#btnPublishPost",
+    scheduled: "#btnSchedulePost",
     draft: "#btnDraftPost",
     private: "#btnPrivatePost"
   };
@@ -2866,7 +2972,7 @@ async function saveEditor(status, opts = {}){
       state.newEditorDraftId = normalized.id || state.newEditorDraftId;
       state.newEditorLastSavedSignature = buildPostContentSignature(normalized);
       const statusView = $("#pStatusView");
-      if (statusView) statusView.textContent = normalized.status || a.status;
+      if (statusView) statusView.textContent = formatPostStatusView(normalized);
       syncAdminButtons();
     }
 
@@ -2925,9 +3031,14 @@ async function saveEditForm(status, opts = {}){
   }
 
   a.status = status || "public";
+  if (a.status === "scheduled" && !isFutureScheduledAt(a.scheduledAt)) {
+    if (!opts.silentError) alert("現在より後の公開予定日時を指定してください。");
+    return null;
+  }
 
   const statusBtnMap = {
     public: "#btnEditPublishPost",
+    scheduled: "#btnEditSchedulePost",
     draft: "#btnEditDraftPost",
     private: "#btnEditPrivatePost"
   };
@@ -2956,7 +3067,7 @@ async function saveEditForm(status, opts = {}){
     } else {
       state.editEditorLastSavedSignature = buildPostContentSignature(normalized);
       const statusView = $("#eStatusView");
-      if (statusView) statusView.textContent = normalized.status || a.status;
+      if (statusView) statusView.textContent = formatPostStatusView(normalized);
       syncEditButtons();
     }
 
@@ -3013,16 +3124,19 @@ function updateLatestPostKey(posts){
     return;
   }
   const sorted = posts
+    .filter(post => normalizeStatusValue(post.status, "public") === "public")
     .slice()
-    .sort((a, b) => (parseDate(a.date) < parseDate(b.date) ? 1 : -1));
+    .sort((a, b) => comparePostsByPublication(a, b));
 
   const articleTop = sorted.find(post => post.channel !== "ops") || null;
   if (articleTop) {
-    latestPostKey = `${articleTop.id}:${parseDate(articleTop.date)}`;
+    const publishedTimestamp = getPostSortTimestamp(articleTop);
+    latestPostKey = `${articleTop.id}:${publishedTimestamp}`;
     latestPostSnapshot = {
       id: articleTop.id || "",
       title: articleTop.title || "",
       date: parseDate(articleTop.date),
+      publishedAt: articleTop.publishedAt || "",
       channel: articleTop.channel || "article"
     };
   } else {
@@ -3032,11 +3146,13 @@ function updateLatestPostKey(posts){
 
   const opsTop = sorted.find(post => post.channel === "ops") || null;
   if (opsTop) {
-    latestOpsPostKey = `${opsTop.id}:${parseDate(opsTop.date)}`;
+    const publishedTimestamp = getPostSortTimestamp(opsTop);
+    latestOpsPostKey = `${opsTop.id}:${publishedTimestamp}`;
     latestOpsPostSnapshot = {
       id: opsTop.id || "",
       title: opsTop.title || "",
       date: parseDate(opsTop.date),
+      publishedAt: opsTop.publishedAt || "",
       channel: "ops"
     };
   } else {
@@ -3571,6 +3687,10 @@ function bind(){
     e.preventDefault();
     saveEditor("public");
   });
+  on("#btnSchedulePost", "click", (e) => {
+    e.preventDefault();
+    saveEditor("scheduled");
+  });
   on("#btnDraftPost", "click", (e) => {
     e.preventDefault();
     saveEditor("draft");
@@ -3582,6 +3702,10 @@ function bind(){
   on("#btnEditPublishPost", "click", (e) => {
     e.preventDefault();
     saveEditForm("public");
+  });
+  on("#btnEditSchedulePost", "click", (e) => {
+    e.preventDefault();
+    saveEditForm("scheduled");
   });
   on("#btnEditDraftPost", "click", (e) => {
     e.preventDefault();
@@ -3600,13 +3724,13 @@ function bind(){
     openArticlePicker("eBody");
   });
 
-  ["pTitle","pChannel","pTags","pBody","pCtaText","pCtaUrl"].forEach(id=>{
+  ["pTitle","pChannel","pTags","pBody","pCtaText","pCtaUrl","pScheduledAt"].forEach(id=>{
     const el = document.getElementById(id);
     if(!el) return;
     el.addEventListener("input", syncAdminButtons);
     el.addEventListener("change", syncAdminButtons);
   });
-  ["eTitle","eChannel","eTags","eBody","eCtaText","eCtaUrl"].forEach(id=>{
+  ["eTitle","eChannel","eTags","eBody","eCtaText","eCtaUrl","eScheduledAt"].forEach(id=>{
     const el = document.getElementById(id);
     if(!el) return;
     el.addEventListener("input", syncEditButtons);
@@ -4109,7 +4233,7 @@ document.addEventListener("visibilitychange", () => {
 async function init() {
   if ("serviceWorker" in navigator) {
     try {
-      const registration = await navigator.serviceWorker.register("./sw.js?v=event-editor-demo-3", {
+      const registration = await navigator.serviceWorker.register("./sw.js?v=scheduled-post-prod-1", {
         scope: "./"
       });
 

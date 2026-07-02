@@ -8,7 +8,7 @@
   <link rel="icon" href="./favicon.png" type="image/png">
   <link rel="apple-touch-icon" href="./favicon.png">
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./styles.css?v=event-editor-prod-1" />
+  <link rel="stylesheet" href="./styles.css?v=scheduled-post-prod-1" />
 </head>
 <body>
   <div class="auth" id="authGate">
@@ -370,11 +370,17 @@
                 </label>
               </div>
 
+              <label class="field">
+                <div class="field__label">公開予定日時（予約投稿時のみ）</div>
+                <input class="input" id="pScheduledAt" type="datetime-local" />
+              </label>
+
               <div class="hint">
                 現在の状態: <span id="pStatusView">未設定（投稿すると状態が反映されます）</span>
               </div>
               <div class="admin-actions">
                 <button class="btn" id="btnPublishPost" type="button" disabled>投稿</button>
+                <button class="btn" id="btnSchedulePost" type="button" disabled>予約投稿</button>
                 <button class="btn" id="btnDraftPost" type="button" disabled>下書き</button>
                 <button class="btn" id="btnPrivatePost" type="button" disabled>非公開</button>
               </div>
@@ -453,11 +459,17 @@
                 </label>
               </div>
 
+              <label class="field">
+                <div class="field__label">公開予定日時（予約投稿時のみ）</div>
+                <input class="input" id="eScheduledAt" type="datetime-local" />
+              </label>
+
               <div class="hint">
                 現在の状態: <span id="eStatusView">未設定</span>
               </div>
               <div class="admin-actions">
                 <button class="btn" id="btnEditPublishPost" type="button" disabled>投稿</button>
+                <button class="btn" id="btnEditSchedulePost" type="button" disabled>予約投稿</button>
                 <button class="btn" id="btnEditDraftPost" type="button" disabled>下書き</button>
                 <button class="btn" id="btnEditPrivatePost" type="button" disabled>非公開</button>
               </div>
@@ -691,7 +703,7 @@
   });
 </script>
 
-  <script src="./config.js?v=event-editor-prod-1"></script>
-  <script src="./app.js?v=event-editor-prod-1"></script>
+  <script src="./config.js?v=scheduled-post-prod-1"></script>
+  <script src="./app.js?v=scheduled-post-prod-1"></script>
 </body>
 </html>
