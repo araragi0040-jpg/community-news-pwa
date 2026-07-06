@@ -836,8 +836,15 @@ function normalizePostContentParts(post){
   };
 }
 
+function normalizeDateTimeForSignature(value){
+  const timestamp = parseDateTimeMillis(value);
+  return timestamp ? new Date(timestamp).toISOString() : "";
+}
+
 function buildPostContentSignature(post){
-  return JSON.stringify(normalizePostContentParts(post));
+  const parts = normalizePostContentParts(post);
+  parts.scheduledAt = normalizeDateTimeForSignature(parts.scheduledAt);
+  return JSON.stringify(parts);
 }
 
 function hasMeaningfulPostContent(post){
@@ -2966,7 +2973,9 @@ async function saveEditor(status, opts = {}){
     if (cidx >= 0) cloudPosts[cidx] = normalized;
     else cloudPosts.unshift(normalized);
 
-    if (normalizeStatusValue(normalized.status || a.status, "public") === "public") {
+    const finalStatus = normalizeStatusValue(normalized.status || a.status, "public");
+
+    if (finalStatus === "public" || finalStatus === "scheduled") {
       clearEditor();
     } else {
       state.newEditorDraftId = normalized.id || state.newEditorDraftId;
@@ -3375,11 +3384,9 @@ async function refreshFromCloud(opts = {}){
     setFeedLoading(false);
     if (!opts.skipNotify && prevKey && prevKey !== latestPostKey && latestPostSnapshot) {
       showNotifyBanner(latestPostSnapshot.title || "", latestPostSnapshot.channel || "article");
-      showNewPostSystemNotification(latestPostSnapshot);
     }
     if (!opts.skipNotify && prevOpsKey && prevOpsKey !== latestOpsPostKey && latestOpsPostSnapshot) {
       showNotifyBanner(latestOpsPostSnapshot.title || "", "ops");
-      showNewPostSystemNotification(latestOpsPostSnapshot);
     }
   } catch (err) {
     if (isAuthError(err)) {
