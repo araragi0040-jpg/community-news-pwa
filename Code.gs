@@ -23,13 +23,11 @@ function doGet(e) {
 
     if (action === "listPosts") {
       requireAuth(token);
-      publishDueScheduledPosts();
       return outputJson({ ok: true, posts: getPosts(false) });
     }
 
     if (action === "listAllPosts") {
       requireAdmin(token);
-      publishDueScheduledPosts();
       return outputJson({ ok: true, posts: getPosts(true) });
     }
 
@@ -289,6 +287,12 @@ if (action === "listPushSubscriptionsForServer") {
 
   function getSheet() {
   return ensurePostsSheet();
+  }
+
+  function getPostsSheetForRead() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
+  if (!sheet) throw fail("posts sheet not found", "SERVER_ERROR");
+  return sheet;
   }
 
   function ensurePostsSheet() {
@@ -888,7 +892,7 @@ if (action === "listPushSubscriptionsForServer") {
   }
 
   function getPosts(includeAll) {
-  const sheet = getSheet();
+  const sheet = getPostsSheetForRead();
   const values = sheet.getDataRange().getValues();
   if (values.length < 2) return [];
 

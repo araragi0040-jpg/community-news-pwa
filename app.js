@@ -3110,12 +3110,16 @@ async function saveEditForm(status, opts = {}){
   }
 }
 
-function renderAll(){
+function renderPostViews(){
   renderChips();
   renderFeed();
   renderSaved();
-  renderContact();
   renderAdmin();
+}
+
+function renderAll(){
+  renderPostViews();
+  renderContact();
   if ($(`.page[data-page="schedule"]`)?.classList.contains("page--active")) {
     renderCalendar();
   }
@@ -3322,27 +3326,59 @@ function showNewPostSystemNotification(post) {
   setTimeout(() => notification.close(), 12000);
 }
 
+async function refreshPostsOnly(opts = {}){
+  const user = getCurrentUser();
+  const isAdmin = isAdminUser(user);
+  let posts = [];
+
+  try {
+    posts = isAdmin ? await fetchAllPostsFromApi() : await fetchPostsFromApi();
+  } catch (postErr) {
+    console.warn("Posts fetch failed. Falling back to public posts/cache:", postErr);
+    try {
+      posts = await fetchPostsFromApi();
+    } catch (_publicPostErr) {
+      posts = loadCachedPosts();
+      if (!posts.length) throw postErr;
+    }
+  }
+
+  const prevKey = latestPostKey;
+  const prevOpsKey = latestOpsPostKey;
+
+  cloudPosts = Array.isArray(posts) ? posts : [];
+  saveCachedPosts(cloudPosts);
+  updateLatestPostKey(cloudPosts);
+
+  if (opts.render !== false) {
+    renderPostViews();
+  }
+  setFeedLoading(false);
+
+  if (!opts.skipNotify && prevKey && prevKey !== latestPostKey && latestPostSnapshot) {
+    showNotifyBanner(latestPostSnapshot.title || "", latestPostSnapshot.channel || "article");
+  }
+  if (!opts.skipNotify && prevOpsKey && prevOpsKey !== latestOpsPostKey && latestOpsPostSnapshot) {
+    showNotifyBanner(latestOpsPostSnapshot.title || "", "ops");
+  }
+
+  return cloudPosts;
+}
+
 async function refreshFromCloud(opts = {}){
   try {
     const user = getCurrentUser();
     const isAdmin = isAdminUser(user);
     const isEventManager = canManageEvents(user);
 
-    let posts = [];
+    // 記事はイベント取得を待たず、取得できた時点で先に画面へ反映する。
+    await refreshPostsOnly({
+      render: true,
+      skipNotify: !!opts.skipNotify
+    });
+
     let events = [];
     let editableList = [];
-
-    try {
-      posts = isAdmin ? await fetchAllPostsFromApi() : await fetchPostsFromApi();
-    } catch (postErr) {
-      console.warn("Posts fetch failed. Falling back to public posts/cache:", postErr);
-      try {
-        posts = await fetchPostsFromApi();
-      } catch (_publicPostErr) {
-        posts = loadCachedPosts();
-        if (!posts.length) throw postErr;
-      }
-    }
 
     try {
       // カレンダー表示用は、権限に関係なく公開イベントを取得する。
@@ -3372,22 +3408,13 @@ async function refreshFromCloud(opts = {}){
       editableList = [];
     }
 
-    const prevKey = latestPostKey;
-    const prevOpsKey = latestOpsPostKey;
-    cloudPosts = Array.isArray(posts) ? posts : [];
     cloudEvents = Array.isArray(events) ? events : [];
     editableEvents = Array.isArray(editableList) ? editableList : [];
-    saveCachedPosts(cloudPosts);
     saveCachedEvents(cloudEvents);
-    updateLatestPostKey(cloudPosts);
+
+    // 通常更新時のみ、イベントを含む全画面を再描画。
+    // silent更新でも記事側は refreshPostsOnly() で既に最新化されている。
     if (!opts.silent) renderAll();
-    setFeedLoading(false);
-    if (!opts.skipNotify && prevKey && prevKey !== latestPostKey && latestPostSnapshot) {
-      showNotifyBanner(latestPostSnapshot.title || "", latestPostSnapshot.channel || "article");
-    }
-    if (!opts.skipNotify && prevOpsKey && prevOpsKey !== latestOpsPostKey && latestOpsPostSnapshot) {
-      showNotifyBanner(latestOpsPostSnapshot.title || "", "ops");
-    }
   } catch (err) {
     if (isAuthError(err)) {
       handleAuthFailure(err.message || "セッションが無効です。再ログインしてください。");
@@ -3424,9 +3451,9 @@ function setupInstallButton(){
 
 function setupPostWatcher(){
   setInterval(() => {
-    if (!getCurrentUser()) return;
-    refreshFromCloud({ silent: true, skipNotify: false, showError: false }).catch(() => {});
-  }, 60000);
+    if (!getCurrentUser() || !getAuthToken()) return;
+    refreshPostsOnly({ render: true, skipNotify: false }).catch(() => {});
+  }, 30000);
 }
 
 // ===== Bindings =====
@@ -4219,9 +4246,22 @@ function forceCloseGachaConnectOverlay() {
   document.body.style.overflow = "";
 }
 
+let lastPostResumeRefreshAt = 0;
+
+function refreshPostsOnResume(){
+  if (!getCurrentUser() || !getAuthToken()) return;
+  const now = Date.now();
+  if (now - lastPostResumeRefreshAt < 1500) return;
+  lastPostResumeRefreshAt = now;
+  refreshPostsOnly({ render: true, skipNotify: true }).catch(err => {
+    console.warn("Post refresh on resume failed:", err);
+  });
+}
+
 // ブラウザバックで復元された時
 window.addEventListener("pageshow", () => {
   forceCloseGachaConnectOverlay();
+  refreshPostsOnResume();
 });
 
 // ページが離脱・保存される直前
@@ -4229,18 +4269,23 @@ window.addEventListener("pagehide", () => {
   forceCloseGachaConnectOverlay();
 });
 
-// タブ復帰時にも念のため解除
+// タブ復帰時にも解除し、記事だけ即時更新
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden) {
     forceCloseGachaConnectOverlay();
+    refreshPostsOnResume();
   }
+});
+
+window.addEventListener("focus", () => {
+  refreshPostsOnResume();
 });
 
 // ===== Init =====
 async function init() {
   if ("serviceWorker" in navigator) {
     try {
-      const registration = await navigator.serviceWorker.register("./sw.js?v=scheduled-post-prod-1", {
+      const registration = await navigator.serviceWorker.register("./sw.js?v=article-refresh-prod-1", {
         scope: "./"
       });
 
