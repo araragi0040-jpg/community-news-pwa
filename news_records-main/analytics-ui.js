@@ -22,6 +22,22 @@
     const parts = new Intl.DateTimeFormat("en-CA", { timeZone:"Asia/Tokyo", year:"numeric", month:"2-digit", day:"2-digit" }).formatToParts(new Date());
     return ["year","month","day"].map(k => parts.find(p => p.type === k).value).join("-");
   }
+  function sortArticles(articles, sort) {
+    return articles.slice().sort((a, b) => {
+      const left = a[sort.key], right = b[sort.key];
+      // Missing legacy totals or publication dates always follow known values.
+      const missingLeft = left == null || left === "";
+      const missingRight = right == null || right === "";
+      if (missingLeft !== missingRight) return missingLeft ? 1 : -1;
+      const comparison = missingLeft ? 0 : typeof left === "string"
+        ? left.localeCompare(right, "ja") : left - right;
+      return comparison * sort.direction || a.title.localeCompare(b.title, "ja");
+    });
+  }
+  function articleCsvRows(report, articles) {
+    return [["期間開始","期間終了","記事ID","アップ日","記事タイトル","累計閲覧回数","累計閲覧人数","期間内閲覧回数","期間内閲覧人数"],
+      ...articles.map(row => [report.requestedStart || report.start,report.requestedEnd || report.end,row.id,row.publishedDate || "",row.title,row.totalViews,row.uniqueViewCount,row.views,row.readers])];
+  }
   function chart(series, keys, isRate = false) {
     if (!series.length) return '<div class="chart-empty">この期間に計測データはありません。</div>';
     if (!keys.length) return '<div class="chart-empty">表示したい指標を選択してください。</div>';
@@ -73,7 +89,7 @@
     };
     return "\uFEFF" + rows.map(row => row.map(cell).join(",")).join("\r\n");
   }
-  const api = { metrics, escape, number, dayOffset, todayJST, chart, csv };
+  const api = { metrics, escape, number, dayOffset, todayJST, sortArticles, articleCsvRows, chart, csv };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.AnalyticsUI = api;
 })(globalThis);

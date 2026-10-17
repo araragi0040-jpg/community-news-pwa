@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#f7f4ef">
   <title>語り場ニュース｜利用状況の分析</title>
   <link rel="icon" href="../favicon.png">
-  <link rel="stylesheet" href="./styles.css?v=1">
+  <link rel="stylesheet" href="./styles.css?v=article-totals-2">
 </head>
 <body>
   <main class="app" id="dashboard" hidden>
@@ -39,7 +39,7 @@
 
     <section class="panel chart-panel"><div class="section-head"><div><div class="eyebrow muted">PARTICIPATION</div><h2>日次利用率の推移</h2></div><span class="subtle">利用人数 ÷ その日の利用可能な会員数</span></div><div class="chart rate-chart" id="rateChart"></div><p class="chart-note">週別・月別では、期間内の日次利用率の平均を表示します。会員数の記録がない日は利用率を算出しません。</p></section>
 
-    <section class="panel"><div class="section-head"><div><div class="eyebrow muted">ARTICLES</div><h2>記事別ランキング <span class="count" id="articleCount"></span></h2></div><button class="btn btn-outline" id="articleCsv" disabled>記事別CSV</button></div><p class="table-note">選択期間中に読まれた数を集計します。記事・タグの絞り込みは閲覧指標に適用され、利用人数・利用率には影響しません。</p><div class="table-wrap"><table><thead><tr><th scope="col">順位</th><th scope="col"><button data-sort="title">記事タイトル ↕</button></th><th scope="col" class="num"><button data-sort="views">閲覧回数 ▼</button></th><th scope="col" class="num"><button data-sort="readers">閲覧人数 ↕</button></th></tr></thead><tbody id="articleBody"></tbody></table></div></section>
+    <section class="panel"><div class="section-head"><div><div class="eyebrow muted">ARTICLES</div><h2>記事別ランキング <span class="count" id="articleCount"></span></h2></div><button class="btn btn-outline" id="articleCsv" disabled>記事別CSV</button></div><p class="table-note">累計は日次計測開始前を含む、現在のpostsのカウントです。期間指定は「期間内」の列と上のグラフに適用されます。アップ日は公開日、未設定なら記事の日付を表示します。</p><p class="table-note">記事・タグで対象記事を絞り込めます。期間内の閲覧は閲覧時点のタグで集計します。累計が取得できない削除済み記事は「—」です。過去に公開した非公開記事も含みます。</p><div class="table-wrap"><table class="article-table"><thead><tr><th scope="col">順位</th><th scope="col"><button data-sort="publishedDate">アップ日 ↕</button></th><th scope="col"><button data-sort="title">記事タイトル ↕</button></th><th scope="col" class="num cumulative"><button data-sort="totalViews">累計閲覧回数 ▼</button></th><th scope="col" class="num cumulative"><button data-sort="uniqueViewCount">累計閲覧人数 ↕</button></th><th scope="col" class="num"><button data-sort="views">期間内閲覧回数 ↕</button></th><th scope="col" class="num"><button data-sort="readers">期間内閲覧人数 ↕</button></th></tr></thead><tbody id="articleBody"></tbody></table></div></section>
 
     <details class="panel daily-panel"><summary>日別データを確認する</summary><div class="section-head"><p class="subtle">計測開始後のデータを表示します。今日の値は途中経過です。</p><button class="btn btn-outline" id="dailyCsv" disabled>日別CSV</button></div><div class="table-wrap"><table><thead><tr><th scope="col">日付</th><th scope="col" class="num">利用人数</th><th scope="col" class="num">利用可能会員数</th><th scope="col" class="num">利用率</th><th scope="col" class="num">閲覧回数</th><th scope="col" class="num">閲覧人数</th><th scope="col" class="num">登録会員数</th></tr></thead><tbody id="dailyBody"></tbody></table></div></details>
     <footer><p id="trackingNote"></p><p>運営メンバーも集計対象です。個人別の履歴は表示しません。オフラインでの利用は記録しません。</p><p>記事のタグは閲覧時点の情報で集計します。履歴は自動削除しません。</p></footer>
@@ -47,7 +47,7 @@
 
   <div class="login-overlay" id="loginOverlay"><form class="login-card" id="loginForm"><span class="badge">本番 / 管理者専用</span><h1>利用状況の分析</h1><p>本番ニュースの管理者アカウントでログインしてください。</p><label>メールアドレス<input type="email" id="email" autocomplete="username" required></label><label>パスワード<input type="password" id="password" autocomplete="current-password" required></label><button class="btn btn-main" id="loginBtn">ログインして表示</button><p id="loginMsg" role="alert"></p><a href="../">ニュースアプリへ戻る ↗</a></form></div>
   <script src="../config.js?v=analytics-prod-1"></script>
-  <script src="./analytics-ui.js?v=1"></script>
-  <script src="./app.js?v=1"></script>
+  <script src="./analytics-ui.js?v=article-totals-2"></script>
+  <script src="./app.js?v=article-totals-2"></script>
 </body>
 </html>

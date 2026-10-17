@@ -5,7 +5,7 @@
   const tokenKey = "katariba_news_analytics_prod_token_v1";
   let report = null;
   let requestSerial = 0;
-  let sort = { key:"views", direction:-1 };
+  let sort = { key:"totalViews", direction:-1 };
   const token = () => sessionStorage.getItem(tokenKey) || "";
   const apiUrl = () => {
     if (window.APP_CONFIG?.MODE !== "prod" || !window.APP_CONFIG?.GAS_API_URL) {
@@ -62,17 +62,14 @@
     $("#rateChart").innerHTML = U.chart(report?.series || [], ["rate"], true);
   }
   function articleRows() {
-    return (report?.articles || []).slice().sort((a,b) => {
-      const comparison = sort.key === "title" ? a.title.localeCompare(b.title,"ja") : a[sort.key]-b[sort.key];
-      return comparison * sort.direction || a.title.localeCompare(b.title,"ja");
-    });
+    return U.sortArticles(report?.articles || [], sort);
   }
   function renderArticles() {
     const rows = articleRows();
-    $("#articleBody").innerHTML = rows.length ? rows.map((row,i) => `<tr><td>${U.number(i+1)}</td><td class="title-cell">${U.escape(row.title || "（タイトルなし）")}</td><td class="num">${U.number(row.views)}</td><td class="num">${U.number(row.readers)}</td></tr>`).join("") : '<tr><td colspan="4" class="empty">この条件に該当する記事はありません。</td></tr>';
+    $("#articleBody").innerHTML = rows.length ? rows.map((row,i) => `<tr><td>${U.number(i+1)}</td><td class="publication-date">${U.escape(row.publishedDate ? row.publishedDate.replace(/-/g,"/") : "—")}</td><td class="title-cell">${U.escape(row.title || "（タイトルなし）")}</td><td class="num cumulative">${U.number(row.totalViews)}</td><td class="num cumulative">${U.number(row.uniqueViewCount)}</td><td class="num">${U.number(row.views)}</td><td class="num">${U.number(row.readers)}</td></tr>`).join("") : '<tr><td colspan="7" class="empty">この条件に該当する記事はありません。</td></tr>';
     $("#articleCount").textContent = `${U.number(rows.length)}記事`;
     document.querySelectorAll("[data-sort]").forEach(button => {
-      const labels = { title:"記事タイトル", views:"閲覧回数", readers:"閲覧人数" };
+      const labels = { publishedDate:"アップ日", title:"記事タイトル", totalViews:"累計閲覧回数", uniqueViewCount:"累計閲覧人数", views:"期間内閲覧回数", readers:"期間内閲覧人数" };
       const active = button.dataset.sort === sort.key;
       button.textContent = labels[button.dataset.sort] + " " + (active ? sort.direction === 1 ? "▲" : "▼" : "↕");
       button.closest("th").setAttribute("aria-sort", active ? sort.direction === 1 ? "ascending" : "descending" : "none");
@@ -99,7 +96,7 @@
       : "人数は各週・各月の中で重複を除いています。登録会員数は各期間の最後に記録された値です。週は月曜日始まりです。";
     $("#trackingNote").textContent = `計測開始：${report.startedOn} ／ 日本時間（JST） ／ 登録会員数は現在値（テスト用を除く）。利用率の分母は日別の利用可能会員数です。`;
     $("#dailyCsv").disabled = !report.daily.length;
-    $("#articleCsv").disabled = !report.daily.length;
+    $("#articleCsv").disabled = !report.articles.length;
     const range = report.daily.length ? `${report.start} 〜 ${report.end}` : "指定期間に計測データはありません。";
     status(`${range} ／ ${report.daily.length}日分。${report.daily.length ? "今日は途中経過です。" : ""}${report.missingMemberDays ? ` 会員数が未記録の${report.missingMemberDays}日分は利用率を表示していません。` : ""}`);
   }
@@ -116,6 +113,9 @@
     try {
       const data = await responseJson(await fetch(`${apiUrl()}?${params}`, {cache:"no-store"}));
       if (serial !== requestSerial) return;
+      if (data.report.articleMetricsVersion !== 2) {
+        throw new Error("累計閲覧数・アップ日を取得するには、本番用Code.gsを更新してGASを再デプロイしてください。");
+      }
       report = data.report;
       render();
     } catch (err) {
@@ -187,7 +187,7 @@
   });
   $("#articleCsv").addEventListener("click", () => {
     if (!report) return;
-    download(`news-articles-${report.start}-${report.end}.csv`, [["期間開始","期間終了","記事ID","記事タイトル","閲覧回数","閲覧人数"], ...articleRows().map(r => [report.start,report.end,r.id,r.title,r.views,r.readers])]);
+    download(`news-articles-${report.requestedStart || report.start}-${report.requestedEnd || report.end}.csv`, U.articleCsvRows(report, articleRows()));
   });
   rangeFromPeriod();
   if (token()) { showDashboard(); refresh(); }
