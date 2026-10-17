@@ -15,6 +15,38 @@ const LS_KEY_EVENTS_CACHE = "community_news_events_cache_v1";
 const LS_KEY_DAILY_POINT_DATE_PREFIX = "community_news_daily_point_date_v1:";
 const ITEMS_PER_PAGE = 10;
 
+// Visits are acknowledged online only. No offline queue or synthetic backfill.
+let analyticsVisitAcknowledged = "";
+let analyticsVisitPending = false;
+let analyticsVisitLastAttempt = 0;
+function analyticsTodayJST() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit", day: "2-digit"
+  }).formatToParts(new Date());
+  const part = type => parts.find(p => p.type === type).value;
+  return `${part("year")}-${part("month")}-${part("day")}`;
+}
+
+async function recordDailyAnalyticsVisit() {
+  const user = getCurrentUser();
+  if (!user?.id || !getAuthToken() || document.hidden || navigator.onLine === false || analyticsVisitPending) return;
+  const key = `${user.id}:${analyticsTodayJST()}`;
+  if (analyticsVisitAcknowledged === key) return;
+  if (Date.now() - analyticsVisitLastAttempt < 30000) return;
+  analyticsVisitLastAttempt = Date.now();
+  analyticsVisitPending = true;
+  try {
+    const result = await callApi("recordDailyVisit");
+    analyticsVisitAcknowledged = `${user.id}:${result.date}`;
+  } finally {
+    analyticsVisitPending = false;
+  }
+}
+
+function touchAnalyticsVisit() {
+  recordDailyAnalyticsVisit().catch(err => console.warn("Visit analytics failed:", err));
+}
+
 function getGachaAppUrl() {
   return String(window.APP_CONFIG?.GACHA_APP_URL || "").trim();
 }
@@ -662,7 +694,8 @@ async function saveContactToApi(contact) {
 }
 
 async function recordPostViewToApi(postId) {
-  const data = await callApi("recordPostView", { id: postId });
+  const eventId = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const data = await callApi("recordPostView", { id: postId, eventId });
   return {
     totalViews: Number(data.totalViews || 0),
     uniqueViewCount: Number(data.uniqueViewCount || 0)
@@ -797,6 +830,7 @@ function saveCurrentUser(user) {
 }
 
 async function awardDailyVisitPointIfNeeded() {
+  touchAnalyticsVisit();
   const user = getCurrentUser();
   const token = getAuthToken();
   if (!user || !token || !user.id) return;
@@ -1695,7 +1729,7 @@ function openDrawer(articleId, opts = {}){
   }
   renderSaveBtn();
 
-  if (getCurrentUser()) {
+  if (getCurrentUser() && navigator.onLine !== false) {
     recordPostViewToApi(a.id)
       .then(stats => {
         applyPostViewStatsLocally(a.id, stats);
@@ -4233,14 +4267,22 @@ window.addEventListener("pagehide", () => {
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden) {
     forceCloseGachaConnectOverlay();
+    touchAnalyticsVisit();
   }
 });
+
+window.addEventListener("online", touchAnalyticsVisit);
+window.addEventListener("focus", touchAnalyticsVisit);
+document.addEventListener("pointerdown", touchAnalyticsVisit, { passive: true });
+document.addEventListener("keydown", touchAnalyticsVisit);
+// Also catches midnight while the app remains visible.
+setInterval(touchAnalyticsVisit, 60000);
 
 // ===== Init =====
 async function init() {
   if ("serviceWorker" in navigator) {
     try {
-      const registration = await navigator.serviceWorker.register("./sw.js?v=scheduled-post-prod-1", {
+      const registration = await navigator.serviceWorker.register("./sw.js?v=analytics-demo-1", {
         scope: "./"
       });
 

@@ -1,9 +1,9 @@
-const CACHE_NAME = "community-news-demo-scheduled-post-1";
+const CACHE_NAME = "community-news-demo-analytics-1";
 const ASSETS = [
   "./",
   "./index.html?v=scheduled-post-demo-1",
   "./styles.css?v=scheduled-post-demo-1",
-  "./app.js?v=scheduled-post-demo-1",
+  "./app.js?v=analytics-demo-1",
   "./manifest.webmanifest",
   "./favicon.png",
   "./logo.png"
@@ -20,7 +20,7 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => k.startsWith("community-news-demo-") && k !== CACHE_NAME).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });

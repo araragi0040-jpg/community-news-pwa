@@ -12,6 +12,18 @@ const RESET_REQ_LIMIT = 3;
 const RESET_REQ_WINDOW_SECONDS = 60 * 60;
 const CONTACT_INTERVAL_SECONDS = 5 * 60;
 
+// Demo analytics: append-only visits/views; daily membership snapshots are upserted.
+const ANALYTICS = {
+  TZ: "Asia/Tokyo",
+  START_PROP: "NEWS_ANALYTICS_STARTED_ON",
+  VISITS: "AnalyticsVisits",
+  VIEWS: "AnalyticsViews",
+  MEMBERS: "AnalyticsMembers",
+  VISIT_HEADERS: ["date", "userKey"],
+  VIEW_HEADERS: ["eventId", "occurredAt", "date", "userKey", "postId", "title", "tagsJson"],
+  MEMBER_HEADERS: ["date", "eligibleMembers", "registeredMembers", "capturedAt"],
+};
+
 function doGet(e) {
   try {
     const action = (e && e.parameter && e.parameter.action) || "listPosts";
@@ -29,6 +41,11 @@ function doGet(e) {
     if (action === "listAllPosts") {
       requireAdmin(token);
       return outputJson({ ok: true, posts: getPosts(true) });
+    }
+
+    if (action === "analyticsReport") {
+      requireAdmin(token);
+      return outputJson({ ok: true, report: getAnalyticsReport(e.parameter || {}) });
     }
 
     if (action === "listEvents") {
@@ -65,12 +82,18 @@ function doPost(e) {
 
     if (action === "recordPostView") {
       const user = requireAuth(token);
-      const stats = recordPostView(body.id || "", user.id || "");
+      const stats = recordPostView(body.id || "", user, body.eventId || "");
       return outputJson({
         ok: true,
         totalViews: Number(stats.totalViews || 0),
         uniqueViewCount: Number(stats.uniqueViewCount || 0)
       });
+    }
+
+    if (action === "recordDailyVisit") {
+      const user = requireAuth(token);
+      recordAnalyticsVisit(user);
+      return outputJson({ ok: true, date: analyticsToday_() });
     }
 
     if (action === "deletePost") {
@@ -208,6 +231,8 @@ if (action === "listPushSubscriptionsForServer") {
 
     if (action === "register") {
       const result = registerUser(body.user || {});
+      // Analytics must not turn a completed registration into a failed response.
+      try { snapshotAnalyticsMembers(); } catch (err) { console.error(err); }
       return outputJson({ ok: true, user: result });
     }
 
@@ -357,8 +382,9 @@ if (action === "listPushSubscriptionsForServer") {
   const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
   required.forEach(col => {
     if (headers.indexOf(col) === -1) {
-      sheet.insertColumnAfter(sheet.getLastColumn());
-      sheet.getRange(1, sheet.getLastColumn()).setValue(col);
+      const nextColumn = sheet.getLastColumn() + 1;
+      sheet.insertColumnAfter(nextColumn - 1);
+      sheet.getRange(1, nextColumn).setValue(col);
       headers.push(col);
     }
   });
@@ -533,12 +559,13 @@ if (action === "listPushSubscriptionsForServer") {
   }
 
   function ensureUsersColumns(sheet) {
-  const required = ["id", "email", "password", "name", "role", "status", "updatedAt", "salt", "resetToken", "resetExpiry", "nickname", "iconUrl", "hobby", "interests", "points", "lastPointDate"];
+  const required = ["id", "email", "password", "name", "role", "status", "updatedAt", "salt", "resetToken", "resetExpiry", "nickname", "iconUrl", "hobby", "interests", "points", "lastPointDate", "analyticsExcluded"];
   const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
   required.forEach(col => {
     if (headers.indexOf(col) === -1) {
-      sheet.insertColumnAfter(sheet.getLastColumn());
-      sheet.getRange(1, sheet.getLastColumn()).setValue(col);
+      const nextColumn = sheet.getLastColumn() + 1;
+      sheet.insertColumnAfter(nextColumn - 1);
+      sheet.getRange(1, nextColumn).setValue(col);
       headers.push(col);
     }
   });
@@ -1082,12 +1109,15 @@ function saveEvent(event, actingUser) {
   return normalizeEventRow(normalized);
 }
 
-function recordPostView(postId, userId) {
+function recordPostView(postId, user, eventId) {
   const id = String(postId || "").trim();
-  const viewerId = String(userId || "").trim();
+  const viewerId = String(user && user.id || "").trim();
   if (!id) throw fail("id is required", "BAD_REQUEST");
   if (!viewerId) throw fail("userId is required", "BAD_REQUEST");
 
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
   const sheet = getSheet();
   const values = sheet.getDataRange().getValues();
   if (values.length < 2) throw fail("Post not found", "BAD_REQUEST");
@@ -1105,11 +1135,28 @@ function recordPostView(postId, userId) {
   if (rowIndex < 0) throw fail("Post not found", "BAD_REQUEST");
 
   const row = values[rowIndex];
+  const post = rowToObj(headers, row);
+  // Only published article details count. Editor previews never call this API.
+  if (normalizeStatus(post.status, "public") !== "public") throw fail("Post is not public", "FORBIDDEN");
+  const requestId = String(eventId || Utilities.getUuid()).slice(0, 150);
+  const eventsSheet = ensureAnalyticsSheet_(ANALYTICS.VIEWS, ANALYTICS.VIEW_HEADERS);
+  const eventRows = eventsSheet.getDataRange().getValues();
+  const duplicate = eventRows.slice(1).some(r => String(r[0]) === requestId);
+  if (duplicate) {
+    return { totalViews: parseMetricCell(row[totalViewsCol]), uniqueViewCount: parseMetricCell(row[uniqueViewCountCol]) };
+  }
   const totalViews = parseMetricCell(row[totalViewsCol]) + 1;
   const viewerIds = parseViewerUserIds(row[viewerUserIdsJsonCol]);
   if (viewerIds.indexOf(viewerId) === -1) viewerIds.push(viewerId);
   const uniqueViewCount = viewerIds.length;
 
+  if (!analyticsExcluded_(user)) {
+    const now = new Date();
+    const day = analyticsToday_();
+    const key = analyticsUserKey_(viewerId);
+    recordAnalyticsVisitLocked_(user, day);
+    eventsSheet.appendRow([requestId, now.toISOString(), day, key, id, String(post.title || ""), JSON.stringify(analyticsTags_(post.tags))]);
+  }
   sheet.getRange(rowIndex + 1, totalViewsCol + 1).setNumberFormat("0").setValue(totalViews);
   sheet.getRange(rowIndex + 1, uniqueViewCountCol + 1).setNumberFormat("0").setValue(uniqueViewCount);
   sheet.getRange(rowIndex + 1, viewerUserIdsJsonCol + 1).setNumberFormat("@").setValue(JSON.stringify(viewerIds));
@@ -1118,6 +1165,9 @@ function recordPostView(postId, userId) {
     totalViews: totalViews,
     uniqueViewCount: uniqueViewCount
   };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function parseViewerUserIds(value) {
@@ -1505,6 +1555,7 @@ function findUserById(userId) {
         iconUrl: obj.iconUrl || "",
         hobby: obj.hobby || "",
         interests: obj.interests || "",
+        analyticsExcluded: obj.analyticsExcluded || "",
         points: Number(obj.points || 0)
       };
     }
@@ -4273,4 +4324,233 @@ function validateExchangeAllocation_(master, points, requested) {
   });
   if (total !== cost) throw fail('交換ptの合計が一致しません。', 'INVALID_POINT_ALLOCATION');
   return allocation;
+}
+
+// Run once in the DEMO Apps Script project, then redeploy its web app.
+function setupNewsAnalytics() {
+  snapshotAnalyticsMembers();
+  ensureAnalyticsSheet_(ANALYTICS.VISITS, ANALYTICS.VISIT_HEADERS);
+  ensureAnalyticsSheet_(ANALYTICS.VIEWS, ANALYTICS.VIEW_HEADERS);
+  const exists = ScriptApp.getProjectTriggers().some(t => t.getHandlerFunction() === "snapshotAnalyticsMembers");
+  if (!exists) {
+    ScriptApp.newTrigger("snapshotAnalyticsMembers").timeBased()
+      .atHour(23).nearMinute(30).everyDays(1).inTimezone(ANALYTICS.TZ).create();
+  }
+  return { startedOn: PropertiesService.getScriptProperties().getProperty(ANALYTICS.START_PROP), timezone: ANALYTICS.TZ };
+}
+
+function analyticsToday_() {
+  return Utilities.formatDate(new Date(), ANALYTICS.TZ, "yyyy-MM-dd");
+}
+
+function ensureAnalyticsSheet_(name, headers) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(name);
+  if (!sheet) sheet = ss.insertSheet(name);
+  if (!sheet.getLastRow()) {
+    // Store ISO dates as text regardless of spreadsheet locale/timezone.
+    sheet.getRange(1, 1, sheet.getMaxRows(), headers.length).setNumberFormat("@");
+    sheet.appendRow(headers);
+    sheet.setFrozenRows(1);
+  }
+  const props = PropertiesService.getScriptProperties();
+  if (!props.getProperty(ANALYTICS.START_PROP)) props.setProperty(ANALYTICS.START_PROP, analyticsToday_());
+  return sheet;
+}
+
+function analyticsRows_(name, headers) {
+  return ensureAnalyticsSheet_(name, headers).getDataRange().getValues().slice(1);
+}
+
+function analyticsExcluded_(user) {
+  return /^(true|1|yes)$/i.test(String(user && user.analyticsExcluded || "").trim());
+}
+
+function analyticsUserKey_(id) {
+  return Utilities.base64EncodeWebSafe(Utilities.computeHmacSha256Signature("analytics:" + id, getAuthSecret())).replace(/=+$/, "");
+}
+
+function analyticsDateCell_(value) {
+  return value instanceof Date ? Utilities.formatDate(value, ANALYTICS.TZ, "yyyy-MM-dd") : String(value || "").slice(0, 10);
+}
+
+function analyticsTags_(value) {
+  if (Array.isArray(value)) return value.map(String).map(t => t.trim()).filter(Boolean);
+  const raw = String(value || "").trim();
+  try { const parsed = JSON.parse(raw); if (Array.isArray(parsed)) return analyticsTags_(parsed); } catch (_) {}
+  return raw.split(/[,、\n]/).map(t => t.trim()).filter(Boolean);
+}
+
+function analyticsMemberCounts_() {
+  const values = getUsersSheet().getDataRange().getValues();
+  const headers = values[0];
+  const seen = new Set();
+  let eligible = 0;
+  values.slice(1).forEach(row => {
+    const user = rowToObj(headers, row);
+    const id = String(user.id || "");
+    if (!id || seen.has(id) || analyticsExcluded_(user)) return;
+    seen.add(id);
+    if (String(user.status || "").toLowerCase() === "active") eligible++;
+  });
+  return { eligible: eligible, registered: seen.size };
+}
+
+function snapshotAnalyticsMembersLocked_(day) {
+  const sheet = ensureAnalyticsSheet_(ANALYTICS.MEMBERS, ANALYTICS.MEMBER_HEADERS);
+  const counts = analyticsMemberCounts_();
+  const rows = sheet.getDataRange().getValues();
+  const index = rows.findIndex((row, i) => i > 0 && analyticsDateCell_(row[0]) === day);
+  const data = [day, counts.eligible, counts.registered, new Date().toISOString()];
+  if (index < 0) sheet.appendRow(data);
+  else sheet.getRange(index + 1, 1, 1, data.length).setValues([data]);
+  return counts;
+}
+
+function snapshotAnalyticsMembers() {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try { return snapshotAnalyticsMembersLocked_(analyticsToday_()); }
+  finally { lock.releaseLock(); }
+}
+
+function recordAnalyticsVisitLocked_(user, day) {
+  snapshotAnalyticsMembersLocked_(day);
+  if (analyticsExcluded_(user)) return;
+  const sheet = ensureAnalyticsSheet_(ANALYTICS.VISITS, ANALYTICS.VISIT_HEADERS);
+  const key = analyticsUserKey_(user.id);
+  const found = sheet.getDataRange().getValues().slice(1)
+    .some(row => analyticsDateCell_(row[0]) === day && String(row[1]) === key);
+  if (!found) sheet.appendRow([day, key]);
+}
+
+function recordAnalyticsVisit(user) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try { recordAnalyticsVisitLocked_(user, analyticsToday_()); }
+  finally { lock.releaseLock(); }
+}
+
+function analyticsValidDate_(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value || ""))) return false;
+  const date = new Date(value + "T00:00:00Z");
+  return !isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
+function analyticsNextDay_(value, offset) {
+  const date = new Date(value + "T00:00:00Z");
+  date.setUTCDate(date.getUTCDate() + offset);
+  return date.toISOString().slice(0, 10);
+}
+
+function analyticsBucket_(day, granularity) {
+  if (granularity === "month") return day.slice(0, 7);
+  if (granularity === "week") {
+    const weekday = new Date(day + "T00:00:00Z").getUTCDay();
+    return analyticsNextDay_(day, -(weekday + 6) % 7);
+  }
+  return day;
+}
+
+function getAnalyticsReport(params) {
+  const today = analyticsToday_();
+  const requestedStart = String(params.start || analyticsNextDay_(today, -27));
+  const requestedEnd = String(params.end || today);
+  if (!analyticsValidDate_(requestedStart) || !analyticsValidDate_(requestedEnd) || requestedStart > requestedEnd) {
+    throw fail("日付の指定を確認してください。", "BAD_REQUEST");
+  }
+  const granularity = String(params.granularity || "day");
+  if (["day", "week", "month"].indexOf(granularity) < 0) throw fail("集計単位が不正です。", "BAD_REQUEST");
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  let visits, views, members, counts;
+  try {
+    counts = snapshotAnalyticsMembersLocked_(today);
+    visits = analyticsRows_(ANALYTICS.VISITS, ANALYTICS.VISIT_HEADERS);
+    views = analyticsRows_(ANALYTICS.VIEWS, ANALYTICS.VIEW_HEADERS);
+    members = analyticsRows_(ANALYTICS.MEMBERS, ANALYTICS.MEMBER_HEADERS);
+  } finally { lock.releaseLock(); }
+  const startedOn = PropertiesService.getScriptProperties().getProperty(ANALYTICS.START_PROP);
+  const start = requestedStart < startedOn ? startedOn : requestedStart;
+  const end = requestedEnd > today ? today : requestedEnd;
+  const postFilter = String(params.postId || "");
+  const tagFilter = String(params.tag || "");
+  const catalog = new Map();
+  const tagOptions = new Set();
+  const postsSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
+  if (postsSheet && postsSheet.getLastRow() > 1) {
+    const rows = postsSheet.getDataRange().getValues();
+    rows.slice(1).forEach(row => {
+      const post = rowToObj(rows[0], row);
+      if (normalizeStatus(post.status, "public") !== "public") return;
+      const tags = analyticsTags_(post.tags);
+      tags.forEach(t => tagOptions.add(t));
+      catalog.set(String(post.id), { id: String(post.id), title: String(post.title || ""), tags: tags });
+    });
+  }
+  views.forEach(row => {
+    const tags = analyticsTags_(row[6]);
+    tags.forEach(t => tagOptions.add(t));
+    if (!catalog.has(String(row[4]))) catalog.set(String(row[4]), { id: String(row[4]), title: String(row[5] || "（削除済み記事）"), tags: tags });
+  });
+  const days = new Map();
+  for (let day = start; day <= end; day = analyticsNextDay_(day, 1)) {
+    days.set(day, { date: day, users: new Set(), readers: new Set(), views: 0, eligibleMembers: null, registeredMembers: null });
+  }
+  members.forEach(row => {
+    const day = days.get(analyticsDateCell_(row[0]));
+    if (day) { day.eligibleMembers = Number(row[1]); day.registeredMembers = Number(row[2]); }
+  });
+  const allUsers = new Set();
+  const allReaders = new Set();
+  visits.forEach(row => {
+    const day = days.get(analyticsDateCell_(row[0]));
+    if (day) { day.users.add(String(row[1])); allUsers.add(String(row[1])); }
+  });
+  const ranking = new Map();
+  catalog.forEach(post => {
+    if ((!postFilter || post.id === postFilter) && (!tagFilter || post.tags.indexOf(tagFilter) >= 0)) {
+      ranking.set(post.id, { id: post.id, title: post.title, views: 0, readers: new Set() });
+    }
+  });
+  views.forEach(row => {
+    const day = days.get(analyticsDateCell_(row[2]));
+    const id = String(row[4]);
+    if (!day || (postFilter && id !== postFilter) || (tagFilter && analyticsTags_(row[6]).indexOf(tagFilter) < 0)) return;
+    const user = String(row[3]);
+    day.views++;
+    day.readers.add(user);
+    allReaders.add(user);
+    // A historical tag can differ from the article's current tags.
+    if (!ranking.has(id)) ranking.set(id, { id: id, title: (catalog.get(id) || {}).title || String(row[5]), views: 0, readers: new Set() });
+    ranking.get(id).views++;
+    ranking.get(id).readers.add(user);
+  });
+  const buckets = new Map();
+  let totalViews = 0, rateSum = 0, rateDays = 0;
+  const daily = Array.from(days.values()).map(day => {
+    const rate = day.eligibleMembers > 0 ? day.users.size / day.eligibleMembers * 100 : null;
+    totalViews += day.views;
+    if (rate !== null) { rateSum += rate; rateDays++; }
+    const key = analyticsBucket_(day.date, granularity);
+    if (!buckets.has(key)) buckets.set(key, { date: key, start: day.date, end: day.date, users: new Set(), readers: new Set(), views: 0, rateSum: 0, rateDays: 0, registeredMembers: null });
+    const bucket = buckets.get(key);
+    bucket.end = day.date;
+    day.users.forEach(id => bucket.users.add(id));
+    day.readers.forEach(id => bucket.readers.add(id));
+    bucket.views += day.views;
+    if (rate !== null) { bucket.rateSum += rate; bucket.rateDays++; }
+    if (day.registeredMembers !== null) bucket.registeredMembers = day.registeredMembers;
+    return { date: day.date, users: day.users.size, views: day.views, readers: day.readers.size, eligibleMembers: day.eligibleMembers, registeredMembers: day.registeredMembers, rate: rate };
+  });
+  return {
+    timezone: ANALYTICS.TZ, startedOn: startedOn, today: today, start: start, end: end, granularity: granularity,
+    generatedAt: new Date().toISOString(),
+    summary: { users: allUsers.size, views: totalViews, readers: allReaders.size, averageDailyRate: rateDays ? rateSum / rateDays : null, registeredMembers: counts.registered, eligibleMembers: counts.eligible, goal: 100 },
+    daily: daily,
+    series: Array.from(buckets.values()).map(b => ({ date: b.date, start: b.start, end: b.end, users: b.users.size, readers: b.readers.size, views: b.views, rate: b.rateDays ? b.rateSum / b.rateDays : null, registeredMembers: b.registeredMembers })),
+    articles: Array.from(ranking.values()).map(p => ({ id: p.id, title: p.title, views: p.views, readers: p.readers.size })).sort((a, b) => b.views - a.views || b.readers - a.readers || a.title.localeCompare(b.title, "ja")),
+    filters: { posts: Array.from(catalog.values()).map(p => ({ id: p.id, title: p.title })), tags: Array.from(tagOptions).sort() },
+    missingMemberDays: daily.filter(d => d.eligibleMembers === null).length,
+  };
 }
