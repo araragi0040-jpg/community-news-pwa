@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#f7f4ef">
+  <title>語り場ニュース｜利用状況の分析</title>
+  <link rel="icon" href="../favicon.png">
+  <link rel="stylesheet" href="./styles.css?v=1">
+</head>
+<body>
+  <main class="app" id="dashboard" hidden>
+    <header class="hero">
+      <div class="hero-top"><a class="brand" href="../"><img src="../logo.png" alt="" width="34" height="34">語り場ニュース <span class="badge">本番</span></a><div class="actions"><span id="updatedAt">未取得</span><button class="btn btn-light" id="refreshBtn">更新する</button><button class="btn btn-ghost" id="logoutBtn">ログアウト</button></div></div>
+      <div class="hero-body"><div><div class="eyebrow">みんなに届く、その積み重ねを。</div><h1>利用状況の分析</h1><p>訪れた人数と、記事が読まれた回数を振り返ります。</p></div><div class="goal"><div class="goal-label">登録会員数 <span>目標 100人</span></div><div class="goal-value"><strong id="memberCount">—</strong><span> / 100人</span><b id="goalRate">—</b></div><progress id="goalProgress" max="100" value="0" aria-label="会員100人への達成率"></progress></div></div>
+    </header>
+
+    <form class="panel filters" id="filterForm">
+      <label>表示期間<select id="period"><option value="7">直近7日</option><option value="28" selected>直近28日</option><option value="90">直近90日</option><option value="all">全期間</option><option value="custom">任意期間</option></select></label>
+      <label>開始日<input type="date" id="startDate" required></label><span class="range-separator">〜</span><label>終了日<input type="date" id="endDate" required></label>
+      <label>集計単位<select id="granularity"><option value="day">日別</option><option value="week">週別</option><option value="month">月別</option></select></label>
+      <label class="post-filter">記事<select id="postFilter"><option value="">すべての記事</option></select></label>
+      <label>タグ<select id="tagFilter"><option value="">すべてのタグ</option></select></label>
+      <button class="btn btn-main" type="submit">適用</button>
+    </form>
+    <div class="notice" id="status" role="status" aria-live="polite">データを取得しています…</div>
+
+    <section class="stats" aria-label="選択期間の集計">
+      <article class="stat"><div class="stat-label">利用人数</div><div class="stat-value"><strong id="usersValue">—</strong><span>人</span></div><p>期間内に利用した会員・重複なし</p></article>
+      <article class="stat"><div class="stat-label">平均日次利用率</div><div class="stat-value"><strong id="rateValue">—</strong><span>%</span></div><p>日別の利用率を平均</p></article>
+      <article class="stat"><div class="stat-label">記事閲覧回数</div><div class="stat-value"><strong id="viewsValue">—</strong><span>回</span></div><p>同じ会員の再閲覧を含む</p></article>
+      <article class="stat"><div class="stat-label">記事閲覧人数</div><div class="stat-value"><strong id="readersValue">—</strong><span>人</span></div><p>期間内に記事を開いた会員・重複なし</p></article>
+    </section>
+
+    <section class="panel chart-panel">
+      <div class="section-head"><div><div class="eyebrow muted">ACTIVITY</div><h2>利用と閲覧の推移</h2></div><div class="legend" id="metricControls"><label style="--series:#4f7655"><input type="checkbox" value="users" checked>利用人数</label><label style="--series:#ce7748"><input type="checkbox" value="views" checked>記事閲覧回数</label><label style="--series:#5d86b0"><input type="checkbox" value="readers">記事閲覧人数</label><label style="--series:#93805b"><input type="checkbox" value="registeredMembers">登録会員数</label></div></div>
+      <div class="chart" id="activityChart"></div><p class="chart-note" id="activityNote"></p>
+    </section>
+
+    <section class="panel chart-panel"><div class="section-head"><div><div class="eyebrow muted">PARTICIPATION</div><h2>日次利用率の推移</h2></div><span class="subtle">利用人数 ÷ その日の利用可能な会員数</span></div><div class="chart rate-chart" id="rateChart"></div><p class="chart-note">週別・月別では、期間内の日次利用率の平均を表示します。会員数の記録がない日は利用率を算出しません。</p></section>
+
+    <section class="panel"><div class="section-head"><div><div class="eyebrow muted">ARTICLES</div><h2>記事別ランキング <span class="count" id="articleCount"></span></h2></div><button class="btn btn-outline" id="articleCsv" disabled>記事別CSV</button></div><p class="table-note">選択期間中に読まれた数を集計します。記事・タグの絞り込みは閲覧指標に適用され、利用人数・利用率には影響しません。</p><div class="table-wrap"><table><thead><tr><th scope="col">順位</th><th scope="col"><button data-sort="title">記事タイトル ↕</button></th><th scope="col" class="num"><button data-sort="views">閲覧回数 ▼</button></th><th scope="col" class="num"><button data-sort="readers">閲覧人数 ↕</button></th></tr></thead><tbody id="articleBody"></tbody></table></div></section>
+
+    <details class="panel daily-panel"><summary>日別データを確認する</summary><div class="section-head"><p class="subtle">計測開始後のデータを表示します。今日の値は途中経過です。</p><button class="btn btn-outline" id="dailyCsv" disabled>日別CSV</button></div><div class="table-wrap"><table><thead><tr><th scope="col">日付</th><th scope="col" class="num">利用人数</th><th scope="col" class="num">利用可能会員数</th><th scope="col" class="num">利用率</th><th scope="col" class="num">閲覧回数</th><th scope="col" class="num">閲覧人数</th><th scope="col" class="num">登録会員数</th></tr></thead><tbody id="dailyBody"></tbody></table></div></details>
+    <footer><p id="trackingNote"></p><p>運営メンバーも集計対象です。個人別の履歴は表示しません。オフラインでの利用は記録しません。</p><p>記事のタグは閲覧時点の情報で集計します。履歴は自動削除しません。</p></footer>
+  </main>
+
+  <div class="login-overlay" id="loginOverlay"><form class="login-card" id="loginForm"><span class="badge">本番 / 管理者専用</span><h1>利用状況の分析</h1><p>本番ニュースの管理者アカウントでログインしてください。</p><label>メールアドレス<input type="email" id="email" autocomplete="username" required></label><label>パスワード<input type="password" id="password" autocomplete="current-password" required></label><button class="btn btn-main" id="loginBtn">ログインして表示</button><p id="loginMsg" role="alert"></p><a href="../">ニュースアプリへ戻る ↗</a></form></div>
+  <script src="../config.js?v=analytics-prod-1"></script>
+  <script src="./analytics-ui.js?v=1"></script>
+  <script src="./app.js?v=1"></script>
+</body>
+</html>

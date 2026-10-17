@@ -1,0 +1,112 @@
+# 本番環境への利用状況分析の反映
+
+本番ニュースに、demoで確認した利用状況分析を追加します。本番の「記事を先に読み込む」「画面復帰時に記事を即時更新する」処理は維持しています。
+
+## 公開先とファイル
+
+- ニュース：`https://araragi0040-jpg.github.io/community-news-pwa/`
+- 分析画面：`https://araragi0040-jpg.github.io/community-news-pwa/news_records-main/`
+- 設定：プロジェクト直下の既存 `config.js`（`MODE: "prod"`）を使用します。
+
+```text
+community-news-pwa/
+  index.html                 ニュース管理画面から分析へのリンク
+  app.js                     オンラインでの利用・記事閲覧の記録
+  sw.js                      本番アプリのキャッシュ更新
+  Code.gs                    本番用GASに貼り付けるソース
+  config.js                  既存の本番設定を維持
+  news_records-main/
+    index.html
+    styles.css
+    analytics-ui.js
+    app.js
+  demo/                      demo環境はそのまま維持
+```
+
+分析用のログイン情報はdemoと別のセッションキーに保存します。分析画面は `MODE` が `prod` であることを確認してから本番用APIに接続します。
+
+## 反映順序
+
+### 1. 本番GASを更新
+
+本番用スプレッドシートに紐づくApps Scriptで、既存のコードをバックアップしたうえで、ルートの `Code.gs` 全文に更新・保存します。`demo/Code.gs` やレポート管理用GASへの貼り付けではありません。
+
+本番用GASの編集画面：`https://script.google.com/u/0/home/projects/1sjYeqZbaw-K-p-vu0q_pQXkrLPrgqZvB-hb8XGjiDHYsTsP61UQlGG3y/edit`
+
+対象の既存ウェブアプリURLは `config.js` の次の値です。
+
+```text
+https://script.google.com/macros/s/AKfycbzyL-rkQTcM_GijeBRHFZT3vfsv58xkQIZFAI6PPPC8IFQ50OB62DJrriiWjOLMyZAE/exec
+```
+
+本番のスクリプトプロパティ `AUTH_SECRET`、通知関連設定、ガチャ関連設定は既存の値を維持します。demoからプロパティをコピーしないでください。本番用 `Code.gs` は、更新前のニュースアプリからの閲覧記録リクエストも受け付けます。
+
+### 2. トリガー権限と初回設定
+
+`appsscript.json` に `oauthScopes` がある場合は、既存の項目を残して以下のスコープが含まれることを確認します。足りなければ追加・保存します。
+
+```json
+"https://www.googleapis.com/auth/script.scriptapp"
+```
+
+`setupNewsAnalytics` を実行し、Googleの追加権限確認が出た場合はトリガー管理に必要な権限を許可します。`ScriptApp.getProjectTriggers` の権限不足エラーが出た場合は、スコープを確認して保存・エディタ再読み込み後に再実行してください。
+
+次の3シートが本番スプレッドシートに追加されます。
+
+- `AnalyticsVisits`：会員ごと・日ごとの利用記録
+- `AnalyticsViews`：記事本文を開いた履歴
+- `AnalyticsMembers`：日ごとの利用可能会員数・登録会員数
+
+`snapshotAnalyticsMembers` の日次トリガーが1件登録されます。日本時間23時30分頃に実行され、利用がない日の会員数も保存します。既存の予約投稿トリガーはそのまま残します。設定関数は同じアカウントで再実行してもトリガーを重複作成しません。
+
+既存の `posts`、`users`、ポイント、ガチャ、通知設定を削除・初期化する処理はありません。`users` に分析からテスト会員を除外するための `analyticsExcluded` 列が追加されます。通常は空欄のままで使い、テスト専用会員だけ `TRUE` にできます。
+
+### 3. 既存の本番GASデプロイを更新
+
+「デプロイを管理」で、本番URLに対応する既存デプロイを新しいバージョンへ更新します。URL・実行者・アクセス範囲は既存設定を維持します。新しい別URLのデプロイを作る必要はありません。
+
+### 4. Web側を反映
+
+GASの反映後、GitHub Pagesの配信元に次の7ファイルを反映します。
+
+```text
+index.html
+app.js
+sw.js
+news_records-main/index.html
+news_records-main/styles.css
+news_records-main/analytics-ui.js
+news_records-main/app.js
+```
+
+`config.js`、`styles.css`、Push APIは今回の更新対象ではありません。既存の本番接続設定を維持します。分析画面の4ファイルは `news_records-main` フォルダ内に置き、ルート直下にばらして置かないでください。
+
+GitHub Pagesのデプロイ完了後、ニュースを再読み込みします。管理画面の「利用状況を分析 ↗」で本番分析画面を開き、本番管理者アカウントでログインします。古い画面が残る場合は Ctrl+Shift+R で更新してください。
+
+## 確認する動作
+
+1. 本番の既存会員で通常どおりログイン・記事一覧表示・画面復帰時の記事更新ができること。
+2. その会員が同じ日に複数回使っても利用人数は1人であること。
+3. 同じ記事を2回開くと閲覧回数は2回、閲覧人数は1人として集計されること。
+4. 管理者も集計に含まれ、一般会員は分析APIを利用できないこと。
+5. 記事やタグで絞り込むと閲覧指標だけが変わり、全体の利用人数・利用率は変わらないこと。
+6. 日・週・月のグラフ、記事ランキング、日別表、CSV、会員100人目標が表示されること。
+7. 翌日に `AnalyticsMembers` の日次記録が追加され、既存の予約投稿・通知・ガチャ処理にも影響がないこと。
+
+## 記録の扱い
+
+本番での計測開始日から履歴を保存します。demoの架空データや履歴を本番には移しません。過去の累計閲覧数は維持しますが、過去の日別グラフへ振り分けはしません。会員数は本番の会員から取得し、運営メンバーも含めます。登録会員数の目標は100人です。
+
+日付は日本時間です。個人の氏名や閲覧者一覧は分析画面に表示しません。期間・週・月の人数はそれぞれの期間内で重複を除きます。オフライン時の記録や、後日の過去分送信はしません。履歴の自動削除はありません。会員数が未記録の日は利用率を推測せず `—` とします。
+
+## ローカル検証とバックアップ
+
+```powershell
+node tests/run-analytics.cjs
+```
+
+demoと本番の両方のソースに対し、同じ集計・権限・日付・クライアント挙動のテストを実行します。Googleの実データは変更しません。
+
+変更前のローカル本番ファイルは `releases/analytics-prod-before-2026-10-18.zip` に保存しています。これはコードのバックアップで、スプレッドシートやGASのスクリプトプロパティのバックアップではありません。
+
+Web側を戻す場合は、変更前の `index.html`・`app.js`・`sw.js` を復元し、Service Workerのキャッシュ名と参照バージョンを新しい値にして配信します。GAS側を戻す場合は更新前バージョンへデプロイを戻します。分析履歴を残したまま日次記録を止めたい場合は、`snapshotAnalyticsMembers` のトリガーだけを削除します。既存の予約投稿トリガーは削除しないでください。
