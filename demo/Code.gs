@@ -20,7 +20,7 @@ const ANALYTICS = {
   VIEWS: "AnalyticsViews",
   MEMBERS: "AnalyticsMembers",
   VISIT_HEADERS: ["date", "userKey"],
-  VIEW_HEADERS: ["eventId", "occurredAt", "date", "userKey", "postId", "title", "tagsJson"],
+  VIEW_HEADERS: ["eventId", "occurredAt", "date", "userKey", "postId", "title", "tagsJson", "publishedDate"],
   MEMBER_HEADERS: ["date", "eligibleMembers", "registeredMembers", "capturedAt"],
 };
 
@@ -1147,15 +1147,18 @@ function recordPostView(postId, user, eventId) {
   }
   const totalViews = parseMetricCell(row[totalViewsCol]) + 1;
   const viewerIds = parseViewerUserIds(row[viewerUserIdsJsonCol]);
-  if (viewerIds.indexOf(viewerId) === -1) viewerIds.push(viewerId);
-  const uniqueViewCount = viewerIds.length;
+  const existingUniqueCount = Math.max(parseMetricCell(row[uniqueViewCountCol]), viewerIds.length);
+  const isNewViewer = viewerIds.indexOf(viewerId) === -1;
+  if (isNewViewer) viewerIds.push(viewerId);
+  // Keep the legacy unique counter even if the old viewer list is incomplete.
+  const uniqueViewCount = existingUniqueCount + (isNewViewer ? 1 : 0);
 
   if (!analyticsExcluded_(user)) {
     const now = new Date();
     const day = analyticsToday_();
     const key = analyticsUserKey_(viewerId);
     recordAnalyticsVisitLocked_(user, day);
-    eventsSheet.appendRow([requestId, now.toISOString(), day, key, id, String(post.title || ""), JSON.stringify(analyticsTags_(post.tags))]);
+    eventsSheet.appendRow([requestId, now.toISOString(), day, key, id, String(post.title || ""), JSON.stringify(analyticsTags_(post.tags)), analyticsPublishedDate_(post)]);
   }
   sheet.getRange(rowIndex + 1, totalViewsCol + 1).setNumberFormat("0").setValue(totalViews);
   sheet.getRange(rowIndex + 1, uniqueViewCountCol + 1).setNumberFormat("0").setValue(uniqueViewCount);
@@ -2303,31 +2306,32 @@ function processGachaDrawResults_(ticket, results, requestId, actionName, series
     const stored = getStoredActionResponse_(session.userId, actionName, requestId);
     if (stored) return stored;
 
-    const rows = getGachaInventoryRowsByUserId(session.userId);
+    // Reuse one master/inventory snapshot for the entire draw, including 10-pulls.
+    const masterList = getGachaFigureMaster_();
+    const masterById = {};
+    masterList.forEach(figure => { masterById[String(figure.figureId)] = figure; });
+    const selected = list.map(result => {
+      const figure = masterById[String(result && (result.figureId || result.id) || '').trim()];
+      if (!figure || !figure.isActive || !figure.isDrawTarget || figure.isEx || figure.seriesId !== String(seriesId || 'S1')) {
+        throw fail('選択した弾の抽選対象ではありません。', 'INVALID_GACHA_FIGURE');
+      }
+      return figure;
+    });
+    const sheet = ensureGachaInventorySheet();
+    const values = sheet.getDataRange().getValues();
+    const headers = values[0];
+    const rows = values.slice(1).map(row => rowToObj(headers, row))
+      .filter(row => String(row.userId || '') === String(session.userId));
     const workingInventory = buildGachaInventory(rows);
     const pointAdditions = {};
     const drawResults = [];
 
-    // Validate the whole batch before writing any inventory.
-    list.forEach(result => {
-      const figure = getGachaFigureById_(result && (result.figureId || result.id));
-      if (!figure || !figure.isActive || !figure.isDrawTarget || figure.isEx || figure.seriesId !== String(seriesId || 'S1')) {
-        throw fail('選択した弾の抽選対象ではありません。', 'INVALID_GACHA_FIGURE');
-      }
-    });
-    list.forEach((result, resultIndex) => {
-      const figureId = String(result && (result.figureId || result.id) || "").trim();
-      const master = getGachaFigureById_(figureId);
-      if (!master || !master.isActive || master.isEx || !master.isDrawTarget) {
-        throw fail("抽選対象ではないフィギュアが含まれています。", "INVALID_GACHA_FIGURE");
-      }
-
+    selected.forEach((master, resultIndex) => {
       const currentQuantity = Math.max(0, Math.floor(Number(workingInventory[master.figureId] || 0)));
       const isNew = currentQuantity <= 0;
       const duplicatePoint = isNew ? 0 : Math.max(0, Number(DUPLICATE_POINT_BY_RARITY[master.rarity] || 0));
       if (duplicatePoint > 0) pointAdditions[master.seriesId] = Number(pointAdditions[master.seriesId] || 0) + duplicatePoint;
 
-      upsertGachaInventory(session.userId, ticket, normalizeGachaResult({ figureId: master.figureId }), 1);
       workingInventory[master.figureId] = currentQuantity + 1;
       drawResults.push({
         resultIndex: resultIndex,
@@ -2338,14 +2342,83 @@ function processGachaDrawResults_(ticket, results, requestId, actionName, series
       });
     });
 
+    const updatedRows = saveGachaInventoryBatch_(sheet, values, session.userId, ticket, selected);
     addExchangePoints_(session.userId, pointAdditions);
-    const response = getGachaCollection(ticket);
+    const response = getGachaCollection(ticket, { session: session, rows: updatedRows, master: masterList });
     response.drawResults = drawResults;
     storeActionResponse_(session.userId, actionName, requestId, response);
     return response;
   } finally {
     lock.releaseLock();
   }
+}
+
+function saveGachaInventoryBatch_(sheet, values, userId, ticket, selected) {
+  const headers = values[0];
+  const userCol = headers.indexOf('userId');
+  const figureCol = headers.indexOf('figureId');
+  const quantityCol = headers.indexOf('quantity');
+  if (userCol < 0 || figureCol < 0 || quantityCol < 0) {
+    throw fail('GachaInventory required columns not found', 'SERVER_ERROR');
+  }
+  const uid = String(userId);
+  const now = formatDateTime(new Date());
+  const originalLength = values.length;
+  const indices = {};
+  const changed = new Set();
+  // Preserve custom formula columns when a touched row is written as one range.
+  const formulas = sheet.getDataRange().getFormulas();
+  values.slice(1).forEach((row, index) => {
+    if (String(row[userCol] || '') === uid && indices[String(row[figureCol])] === undefined) {
+      indices[String(row[figureCol])] = index + 1;
+    }
+  });
+  selected.forEach(master => {
+    const id = String(master.figureId);
+    let index = indices[id];
+    const isNewRow = index === undefined;
+    if (isNewRow) {
+      index = values.length;
+      indices[id] = index;
+      values.push(headers.map(() => ''));
+    }
+    const row = values[index];
+    const updates = {
+      userId: uid, ticket: String(ticket || ''), figureId: master.figureId,
+      figureNo: master.displayNo, figureName: master.figureName, rarity: master.rarity,
+      concept: master.concept, image: master.image,
+      quantity: Math.max(0, Math.floor(Number(row[quantityCol] || 0))) + 1,
+      lastDrawnAt: now, updatedAt: now
+    };
+    if (isNewRow) {
+      updates.id = 'gi_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 9);
+      updates.firstDrawnAt = now;
+    }
+    Object.keys(updates).forEach(key => {
+      const col = headers.indexOf(key);
+      if (col >= 0) row[col] = updates[key] !== undefined ? updates[key] : '';
+    });
+    changed.add(index);
+  });
+  const rowsToWrite = Array.from(changed).sort((a, b) => a - b);
+  const maxRows = sheet.getMaxRows();
+  if (values.length > maxRows) sheet.insertRowsAfter(maxRows, values.length - maxRows);
+  const updatedColumns = new Set(['userId', 'ticket', 'figureId', 'figureNo', 'figureName', 'rarity', 'concept', 'image', 'quantity', 'lastDrawnAt', 'updatedAt']);
+  // Write adjacent changed rows together; never rewrite another user's rows.
+  for (let offset = 0; offset < rowsToWrite.length;) {
+    const first = rowsToWrite[offset];
+    let end = offset + 1;
+    while (end < rowsToWrite.length && rowsToWrite[end] === rowsToWrite[end - 1] + 1) end++;
+    const batch = rowsToWrite.slice(offset, end).map(index => values[index].map((value, col) => {
+      if (index < originalLength && !updatedColumns.has(headers[col]) && formulas[index] && formulas[index][col]) {
+        return formulas[index][col];
+      }
+      return value;
+    }));
+    sheet.getRange(first + 1, 1, batch.length, headers.length).setValues(batch);
+    offset = end;
+  }
+  return values.slice(1).map(row => rowToObj(headers, row)).filter(row => String(row.userId || '') === uid);
 }
 
 function saveGachaResults(ticket, results, requestId, seriesId) {
@@ -2935,11 +3008,11 @@ function getGachaTotalSpins(rows, userId) {
   const exchangeCount = userId ? countUserExchanges_(userId) : 0;
   return Math.max(0, totalQuantity - exchangeCount);
 }
-function getGachaCollection(ticket) {
-  const session = requireValidGachaSession(ticket);
-  const rows = getGachaInventoryRowsByUserId(session.userId);
+function getGachaCollection(ticket, prepared) {
+  const session = prepared ? prepared.session : requireValidGachaSession(ticket);
+  const rows = prepared ? prepared.rows : getGachaInventoryRowsByUserId(session.userId);
   const inventory = buildGachaInventory(rows);
-  const master = getGachaFigureMaster_();
+  const master = prepared ? prepared.master : getGachaFigureMaster_();
 
   return {
     ok: true,
@@ -4352,6 +4425,12 @@ function ensureAnalyticsSheet_(name, headers) {
     sheet.getRange(1, 1, sheet.getMaxRows(), headers.length).setNumberFormat("@");
     sheet.appendRow(headers);
     sheet.setFrozenRows(1);
+  } else {
+    // Append new schema fields without rewriting any existing history rows.
+    const existingHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    headers.forEach((header, index) => {
+      if (index >= existingHeaders.length) sheet.getRange(1, index + 1).setNumberFormat("@").setValue(header);
+    });
   }
   const props = PropertiesService.getScriptProperties();
   if (!props.getProperty(ANALYTICS.START_PROP)) props.setProperty(ANALYTICS.START_PROP, analyticsToday_());
@@ -4437,6 +4516,27 @@ function analyticsValidDate_(value) {
   return !isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
 
+function analyticsPublishedDate_(post) {
+  for (const value of [post.publishedAt, post.date]) {
+    if (value === null || value === undefined || value === "") continue;
+    if (Object.prototype.toString.call(value) === "[object Date]" && !isNaN(value.getTime())) {
+      return Utilities.formatDate(value, ANALYTICS.TZ, "yyyy-MM-dd");
+    }
+    const text = String(value).trim();
+    // Offset-bearing timestamps are normalized to Japan time before taking the date.
+    if (/[T ]\d{2}:\d{2}.*(?:Z|[+-]\d{2}:?\d{2})$/i.test(text)) {
+      const date = new Date(text);
+      if (!isNaN(date.getTime())) return Utilities.formatDate(date, ANALYTICS.TZ, "yyyy-MM-dd");
+    }
+    const match = /^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:$|[T ])/.exec(text);
+    if (match) {
+      const date = match[1] + "-" + match[2].padStart(2, "0") + "-" + match[3].padStart(2, "0");
+      if (analyticsValidDate_(date)) return date;
+    }
+  }
+  return "";
+}
+
 function analyticsNextDay_(value, offset) {
   const date = new Date(value + "T00:00:00Z");
   date.setUTCDate(date.getUTCDate() + offset);
@@ -4463,12 +4563,14 @@ function getAnalyticsReport(params) {
   if (["day", "week", "month"].indexOf(granularity) < 0) throw fail("集計単位が不正です。", "BAD_REQUEST");
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
-  let visits, views, members, counts;
+  let visits, views, members, counts, postRows = [];
   try {
     counts = snapshotAnalyticsMembersLocked_(today);
     visits = analyticsRows_(ANALYTICS.VISITS, ANALYTICS.VISIT_HEADERS);
     views = analyticsRows_(ANALYTICS.VIEWS, ANALYTICS.VIEW_HEADERS);
     members = analyticsRows_(ANALYTICS.MEMBERS, ANALYTICS.MEMBER_HEADERS);
+    const postsSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
+    if (postsSheet && postsSheet.getLastRow() > 1) postRows = postsSheet.getDataRange().getValues();
   } finally { lock.releaseLock(); }
   const startedOn = PropertiesService.getScriptProperties().getProperty(ANALYTICS.START_PROP);
   const start = requestedStart < startedOn ? startedOn : requestedStart;
@@ -4477,21 +4579,25 @@ function getAnalyticsReport(params) {
   const tagFilter = String(params.tag || "");
   const catalog = new Map();
   const tagOptions = new Set();
-  const postsSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAME);
-  if (postsSheet && postsSheet.getLastRow() > 1) {
-    const rows = postsSheet.getDataRange().getValues();
-    rows.slice(1).forEach(row => {
-      const post = rowToObj(rows[0], row);
-      if (normalizeStatus(post.status, "public") !== "public") return;
+  if (postRows.length > 1) {
+    postRows.slice(1).forEach(row => {
+      const post = rowToObj(postRows[0], row);
+      if (!post.id) return;
+      const totalViews = parseMetricCell(post.totalViews);
+      const uniqueViewCount = parseMetricCell(post.uniqueViewCount);
+      // Include previously published/private articles with legacy counts as well.
+      if (normalizeStatus(post.status, "public") !== "public" && !totalViews && !uniqueViewCount && !post.publishedAt) return;
       const tags = analyticsTags_(post.tags);
       tags.forEach(t => tagOptions.add(t));
-      catalog.set(String(post.id), { id: String(post.id), title: String(post.title || ""), tags: tags });
+      catalog.set(String(post.id), { id: String(post.id), title: String(post.title || ""), tags: tags, publishedDate: analyticsPublishedDate_(post), totalViews: totalViews, uniqueViewCount: uniqueViewCount });
     });
   }
   views.forEach(row => {
     const tags = analyticsTags_(row[6]);
     tags.forEach(t => tagOptions.add(t));
-    if (!catalog.has(String(row[4]))) catalog.set(String(row[4]), { id: String(row[4]), title: String(row[5] || "（削除済み記事）"), tags: tags });
+    const id = String(row[4]);
+    if (!catalog.has(id)) catalog.set(id, { id: id, title: String(row[5] || "（削除済み記事）"), tags: tags, publishedDate: analyticsPublishedDate_({ date: row[7] }), totalViews: null, uniqueViewCount: null });
+    else if (!catalog.get(id).publishedDate && row[7]) catalog.get(id).publishedDate = analyticsPublishedDate_({ date: row[7] });
   });
   const days = new Map();
   for (let day = start; day <= end; day = analyticsNextDay_(day, 1)) {
@@ -4510,7 +4616,7 @@ function getAnalyticsReport(params) {
   const ranking = new Map();
   catalog.forEach(post => {
     if ((!postFilter || post.id === postFilter) && (!tagFilter || post.tags.indexOf(tagFilter) >= 0)) {
-      ranking.set(post.id, { id: post.id, title: post.title, views: 0, readers: new Set() });
+      ranking.set(post.id, { id: post.id, title: post.title, publishedDate: post.publishedDate, totalViews: post.totalViews, uniqueViewCount: post.uniqueViewCount, views: 0, readers: new Set() });
     }
   });
   views.forEach(row => {
@@ -4522,7 +4628,10 @@ function getAnalyticsReport(params) {
     day.readers.add(user);
     allReaders.add(user);
     // A historical tag can differ from the article's current tags.
-    if (!ranking.has(id)) ranking.set(id, { id: id, title: (catalog.get(id) || {}).title || String(row[5]), views: 0, readers: new Set() });
+    if (!ranking.has(id)) {
+      const post = catalog.get(id);
+      ranking.set(id, { id: id, title: post.title, publishedDate: post.publishedDate, totalViews: post.totalViews, uniqueViewCount: post.uniqueViewCount, views: 0, readers: new Set() });
+    }
     ranking.get(id).views++;
     ranking.get(id).readers.add(user);
   });
@@ -4544,12 +4653,13 @@ function getAnalyticsReport(params) {
     return { date: day.date, users: day.users.size, views: day.views, readers: day.readers.size, eligibleMembers: day.eligibleMembers, registeredMembers: day.registeredMembers, rate: rate };
   });
   return {
-    timezone: ANALYTICS.TZ, startedOn: startedOn, today: today, start: start, end: end, granularity: granularity,
+    timezone: ANALYTICS.TZ, startedOn: startedOn, today: today, start: start, end: end, requestedStart: requestedStart, requestedEnd: requestedEnd, granularity: granularity,
     generatedAt: new Date().toISOString(),
+    articleMetricsVersion: 2,
     summary: { users: allUsers.size, views: totalViews, readers: allReaders.size, averageDailyRate: rateDays ? rateSum / rateDays : null, registeredMembers: counts.registered, eligibleMembers: counts.eligible, goal: 100 },
     daily: daily,
     series: Array.from(buckets.values()).map(b => ({ date: b.date, start: b.start, end: b.end, users: b.users.size, readers: b.readers.size, views: b.views, rate: b.rateDays ? b.rateSum / b.rateDays : null, registeredMembers: b.registeredMembers })),
-    articles: Array.from(ranking.values()).map(p => ({ id: p.id, title: p.title, views: p.views, readers: p.readers.size })).sort((a, b) => b.views - a.views || b.readers - a.readers || a.title.localeCompare(b.title, "ja")),
+    articles: Array.from(ranking.values()).map(p => ({ id: p.id, title: p.title, publishedDate: p.publishedDate, totalViews: p.totalViews, uniqueViewCount: p.uniqueViewCount, views: p.views, readers: p.readers.size })).sort((a, b) => (b.totalViews == null ? -1 : b.totalViews) - (a.totalViews == null ? -1 : a.totalViews) || b.views - a.views || a.title.localeCompare(b.title, "ja")),
     filters: { posts: Array.from(catalog.values()).map(p => ({ id: p.id, title: p.title })), tags: Array.from(tagOptions).sort() },
     missingMemberDays: daily.filter(d => d.eligibleMembers === null).length,
   };
