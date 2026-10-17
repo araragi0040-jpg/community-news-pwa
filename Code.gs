@@ -2306,31 +2306,32 @@ function processGachaDrawResults_(ticket, results, requestId, actionName, series
     const stored = getStoredActionResponse_(session.userId, actionName, requestId);
     if (stored) return stored;
 
-    const rows = getGachaInventoryRowsByUserId(session.userId);
+    // Reuse one master/inventory snapshot for the entire draw, including 10-pulls.
+    const masterList = getGachaFigureMaster_();
+    const masterById = {};
+    masterList.forEach(figure => { masterById[String(figure.figureId)] = figure; });
+    const selected = list.map(result => {
+      const figure = masterById[String(result && (result.figureId || result.id) || '').trim()];
+      if (!figure || !figure.isActive || !figure.isDrawTarget || figure.isEx || figure.seriesId !== String(seriesId || 'S1')) {
+        throw fail('選択した弾の抽選対象ではありません。', 'INVALID_GACHA_FIGURE');
+      }
+      return figure;
+    });
+    const sheet = ensureGachaInventorySheet();
+    const values = sheet.getDataRange().getValues();
+    const headers = values[0];
+    const rows = values.slice(1).map(row => rowToObj(headers, row))
+      .filter(row => String(row.userId || '') === String(session.userId));
     const workingInventory = buildGachaInventory(rows);
     const pointAdditions = {};
     const drawResults = [];
 
-    // Validate the whole batch before writing any inventory.
-    list.forEach(result => {
-      const figure = getGachaFigureById_(result && (result.figureId || result.id));
-      if (!figure || !figure.isActive || !figure.isDrawTarget || figure.isEx || figure.seriesId !== String(seriesId || 'S1')) {
-        throw fail('選択した弾の抽選対象ではありません。', 'INVALID_GACHA_FIGURE');
-      }
-    });
-    list.forEach((result, resultIndex) => {
-      const figureId = String(result && (result.figureId || result.id) || "").trim();
-      const master = getGachaFigureById_(figureId);
-      if (!master || !master.isActive || master.isEx || !master.isDrawTarget) {
-        throw fail("抽選対象ではないフィギュアが含まれています。", "INVALID_GACHA_FIGURE");
-      }
-
+    selected.forEach((master, resultIndex) => {
       const currentQuantity = Math.max(0, Math.floor(Number(workingInventory[master.figureId] || 0)));
       const isNew = currentQuantity <= 0;
       const duplicatePoint = isNew ? 0 : Math.max(0, Number(DUPLICATE_POINT_BY_RARITY[master.rarity] || 0));
       if (duplicatePoint > 0) pointAdditions[master.seriesId] = Number(pointAdditions[master.seriesId] || 0) + duplicatePoint;
 
-      upsertGachaInventory(session.userId, ticket, normalizeGachaResult({ figureId: master.figureId }), 1);
       workingInventory[master.figureId] = currentQuantity + 1;
       drawResults.push({
         resultIndex: resultIndex,
@@ -2341,14 +2342,83 @@ function processGachaDrawResults_(ticket, results, requestId, actionName, series
       });
     });
 
+    const updatedRows = saveGachaInventoryBatch_(sheet, values, session.userId, ticket, selected);
     addExchangePoints_(session.userId, pointAdditions);
-    const response = getGachaCollection(ticket);
+    const response = getGachaCollection(ticket, { session: session, rows: updatedRows, master: masterList });
     response.drawResults = drawResults;
     storeActionResponse_(session.userId, actionName, requestId, response);
     return response;
   } finally {
     lock.releaseLock();
   }
+}
+
+function saveGachaInventoryBatch_(sheet, values, userId, ticket, selected) {
+  const headers = values[0];
+  const userCol = headers.indexOf('userId');
+  const figureCol = headers.indexOf('figureId');
+  const quantityCol = headers.indexOf('quantity');
+  if (userCol < 0 || figureCol < 0 || quantityCol < 0) {
+    throw fail('GachaInventory required columns not found', 'SERVER_ERROR');
+  }
+  const uid = String(userId);
+  const now = formatDateTime(new Date());
+  const originalLength = values.length;
+  const indices = {};
+  const changed = new Set();
+  // Preserve custom formula columns when a touched row is written as one range.
+  const formulas = sheet.getDataRange().getFormulas();
+  values.slice(1).forEach((row, index) => {
+    if (String(row[userCol] || '') === uid && indices[String(row[figureCol])] === undefined) {
+      indices[String(row[figureCol])] = index + 1;
+    }
+  });
+  selected.forEach(master => {
+    const id = String(master.figureId);
+    let index = indices[id];
+    const isNewRow = index === undefined;
+    if (isNewRow) {
+      index = values.length;
+      indices[id] = index;
+      values.push(headers.map(() => ''));
+    }
+    const row = values[index];
+    const updates = {
+      userId: uid, ticket: String(ticket || ''), figureId: master.figureId,
+      figureNo: master.displayNo, figureName: master.figureName, rarity: master.rarity,
+      concept: master.concept, image: master.image,
+      quantity: Math.max(0, Math.floor(Number(row[quantityCol] || 0))) + 1,
+      lastDrawnAt: now, updatedAt: now
+    };
+    if (isNewRow) {
+      updates.id = 'gi_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 9);
+      updates.firstDrawnAt = now;
+    }
+    Object.keys(updates).forEach(key => {
+      const col = headers.indexOf(key);
+      if (col >= 0) row[col] = updates[key] !== undefined ? updates[key] : '';
+    });
+    changed.add(index);
+  });
+  const rowsToWrite = Array.from(changed).sort((a, b) => a - b);
+  const maxRows = sheet.getMaxRows();
+  if (values.length > maxRows) sheet.insertRowsAfter(maxRows, values.length - maxRows);
+  const updatedColumns = new Set(['userId', 'ticket', 'figureId', 'figureNo', 'figureName', 'rarity', 'concept', 'image', 'quantity', 'lastDrawnAt', 'updatedAt']);
+  // Write adjacent changed rows together; never rewrite another user's rows.
+  for (let offset = 0; offset < rowsToWrite.length;) {
+    const first = rowsToWrite[offset];
+    let end = offset + 1;
+    while (end < rowsToWrite.length && rowsToWrite[end] === rowsToWrite[end - 1] + 1) end++;
+    const batch = rowsToWrite.slice(offset, end).map(index => values[index].map((value, col) => {
+      if (index < originalLength && !updatedColumns.has(headers[col]) && formulas[index] && formulas[index][col]) {
+        return formulas[index][col];
+      }
+      return value;
+    }));
+    sheet.getRange(first + 1, 1, batch.length, headers.length).setValues(batch);
+    offset = end;
+  }
+  return values.slice(1).map(row => rowToObj(headers, row)).filter(row => String(row.userId || '') === uid);
 }
 
 function saveGachaResults(ticket, results, requestId, seriesId) {
@@ -2938,11 +3008,11 @@ function getGachaTotalSpins(rows, userId) {
   const exchangeCount = userId ? countUserExchanges_(userId) : 0;
   return Math.max(0, totalQuantity - exchangeCount);
 }
-function getGachaCollection(ticket) {
-  const session = requireValidGachaSession(ticket);
-  const rows = getGachaInventoryRowsByUserId(session.userId);
+function getGachaCollection(ticket, prepared) {
+  const session = prepared ? prepared.session : requireValidGachaSession(ticket);
+  const rows = prepared ? prepared.rows : getGachaInventoryRowsByUserId(session.userId);
   const inventory = buildGachaInventory(rows);
-  const master = getGachaFigureMaster_();
+  const master = prepared ? prepared.master : getGachaFigureMaster_();
 
   return {
     ok: true,
