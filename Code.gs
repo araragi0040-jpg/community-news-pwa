@@ -152,11 +152,11 @@ if (action === "getGachaCollection") {
 }
 
 if (action === "saveGachaResult") {
-  return outputJson(saveGachaResult(body.ticket || "", body.result || body.figure || {}, body.requestId || ""));
+  return outputJson(saveGachaResult(body.ticket || "", body.result || body.figure || {}, body.requestId || "", body.seriesId || "S1"));
 }
 
 if (action === "saveGachaResults") {
-  return outputJson(saveGachaResults(body.ticket || "", body.results || [], body.requestId || ""));
+  return outputJson(saveGachaResults(body.ticket || "", body.results || [], body.requestId || "", body.seriesId || "S1"));
 }
 
 if (action === "importLocalGachaInventory") {
@@ -168,7 +168,7 @@ if (action === "getExchangeStatus") {
 }
 
 if (action === "exchangeFigure" || action === "exchangeExFigure") {
-  return outputJson(exchangeGachaFigure(body.ticket || "", body.figureId || "", body.requestId || ""));
+  return outputJson(exchangeGachaFigure(body.ticket || "", body.figureId || "", body.requestId || "", body.pointAllocation));
 }
 
 if (action === "savePushSubscription") {
@@ -2241,7 +2241,7 @@ function refundGachaPoints(ticket, count) {
     lock.releaseLock();
   }
 }
-function processGachaDrawResults_(ticket, results, requestId, actionName) {
+function processGachaDrawResults_(ticket, results, requestId, actionName, seriesId) {
   const session = requireValidGachaSession(ticket);
   const list = Array.isArray(results) ? results : [];
   if (!list.length) return getGachaCollection(ticket);
@@ -2257,6 +2257,13 @@ function processGachaDrawResults_(ticket, results, requestId, actionName) {
     const pointAdditions = {};
     const drawResults = [];
 
+    // Validate the whole batch before writing any inventory.
+    list.forEach(result => {
+      const figure = getGachaFigureById_(result && (result.figureId || result.id));
+      if (!figure || !figure.isActive || !figure.isDrawTarget || figure.isEx || figure.seriesId !== String(seriesId || 'S1')) {
+        throw fail('選択した弾の抽選対象ではありません。', 'INVALID_GACHA_FIGURE');
+      }
+    });
     list.forEach((result, resultIndex) => {
       const figureId = String(result && (result.figureId || result.id) || "").trim();
       const master = getGachaFigureById_(figureId);
@@ -2290,8 +2297,8 @@ function processGachaDrawResults_(ticket, results, requestId, actionName) {
   }
 }
 
-function saveGachaResults(ticket, results, requestId) {
-  return processGachaDrawResults_(ticket, results, requestId, "saveGachaResults");
+function saveGachaResults(ticket, results, requestId, seriesId) {
+  return processGachaDrawResults_(ticket, results, requestId, "saveGachaResults", seriesId);
 }
 
 function findGachaSessionByTicket(ticket) {
@@ -2375,46 +2382,68 @@ const DUPLICATE_POINT_BY_RARITY = { N: 1, R: 2, SR: 3 };
 
 function getDefaultGachaFigureMaster_() {
   return [
-    { figureId: "1", seriesId: "S1", displayNo: "No.1", sortOrder: 100, figureName: "東さん", rarity: "N", concept: "語り場共同オーナー", image: "images/東さん_N.png", dropRate: 40, exchangeCost: 10, isEx: false, isDrawTarget: true, isActive: true },
-    { figureId: "2", seriesId: "S1", displayNo: "No.2", sortOrder: 200, figureName: "よっしー", rarity: "N", concept: "語り場共同オーナー", image: "images/よっしー_N.png", dropRate: 40, exchangeCost: 10, isEx: false, isDrawTarget: true, isActive: true },
-    { figureId: "3", seriesId: "S1", displayNo: "No.3", sortOrder: 300, figureName: "じんさん", rarity: "N", concept: "語り場共同オーナー", image: "images/じんさん_N.png", dropRate: 40, exchangeCost: 10, isEx: false, isDrawTarget: true, isActive: true },
-    { figureId: "4", seriesId: "S1", displayNo: "No.4", sortOrder: 400, figureName: "海賊けん", rarity: "N", concept: "語り場共同オーナー", image: "images/ケンさん_N.png", dropRate: 40, exchangeCost: 10, isEx: false, isDrawTarget: true, isActive: true },
-    { figureId: "5", seriesId: "S1", displayNo: "No.5", sortOrder: 500, figureName: "しゅうへい", rarity: "N", concept: "語り場共同オーナー", image: "images/しゅう_N.png", dropRate: 40, exchangeCost: 10, isEx: false, isDrawTarget: true, isActive: true },
-    { figureId: "6", seriesId: "S1", displayNo: "No.6", sortOrder: 600, figureName: "とっとくん", rarity: "N", concept: "語り場共同オーナー", image: "images/とっとくん_N.png", dropRate: 40, exchangeCost: 10, isEx: false, isDrawTarget: true, isActive: true },
-    { figureId: "7", seriesId: "S1", displayNo: "No.7", sortOrder: 700, figureName: "かずま", rarity: "N", concept: "語り場共同オーナー", image: "images/かずま_N.png", dropRate: 40, exchangeCost: 10, isEx: false, isDrawTarget: true, isActive: true },
-    { figureId: "8", seriesId: "S1", displayNo: "No.8", sortOrder: 800, figureName: "たかちゃん", rarity: "N", concept: "語り場共同オーナー", image: "images/たかちゃん_N.png", dropRate: 40, exchangeCost: 10, isEx: false, isDrawTarget: true, isActive: true },
-    { figureId: "9", seriesId: "S1", displayNo: "No.9", sortOrder: 900, figureName: "だいちさん", rarity: "N", concept: "語り場共同オーナー", image: "images/だいちさん_N.png", dropRate: 40, exchangeCost: 10, isEx: false, isDrawTarget: true, isActive: true },
-    { figureId: "10", seriesId: "S1", displayNo: "No.10", sortOrder: 1000, figureName: "ゆかちゃん", rarity: "N", concept: "語り場共同オーナー", image: "images/ゆかちゃん_N.png", dropRate: 40, exchangeCost: 10, isEx: false, isDrawTarget: true, isActive: true },
-    { figureId: "11", seriesId: "S1", displayNo: "No.11", sortOrder: 1100, figureName: "おかっち", rarity: "N", concept: "語り場共同オーナー", image: "images/おかっち_N.png", dropRate: 40, exchangeCost: 10, isEx: false, isDrawTarget: true, isActive: true },
-    { figureId: "12", seriesId: "S1", displayNo: "No.12", sortOrder: 1200, figureName: "だいちゃん", rarity: "N", concept: "語り場共同オーナー", image: "images/だいちゃん_N.png", dropRate: 40, exchangeCost: 10, isEx: false, isDrawTarget: true, isActive: true },
-    { figureId: "13", seriesId: "S1", displayNo: "No.13", sortOrder: 1300, figureName: "ぐっちょん", rarity: "N", concept: "語り場共同オーナー", image: "images/ぐっちょん_N.png", dropRate: 40, exchangeCost: 10, isEx: false, isDrawTarget: true, isActive: true },
-    { figureId: "14", seriesId: "S1", displayNo: "No.14", sortOrder: 1400, figureName: "東さん", rarity: "R", concept: "ガンプラ製作中", image: "images/東さん_ガンプラ.png", dropRate: 18, exchangeCost: 20, isEx: false, isDrawTarget: true, isActive: true },
-    { figureId: "15", seriesId: "S1", displayNo: "No.15", sortOrder: 1500, figureName: "よっしー", rarity: "R", concept: "LIFE STORY撮影", image: "images/よっしー_LS撮影.png", dropRate: 18, exchangeCost: 20, isEx: false, isDrawTarget: true, isActive: true },
-    { figureId: "16", seriesId: "S1", displayNo: "No.16", sortOrder: 1600, figureName: "じんさん", rarity: "R", concept: "ボードゲーム", image: "images/じんさん_ボドゲ.png", dropRate: 18, exchangeCost: 20, isEx: false, isDrawTarget: true, isActive: true },
-    { figureId: "17", seriesId: "S1", displayNo: "No.17", sortOrder: 1700, figureName: "海賊けん", rarity: "R", concept: "講演", image: "images/ケンさん_講演.png", dropRate: 18, exchangeCost: 20, isEx: false, isDrawTarget: true, isActive: true },
-    { figureId: "18", seriesId: "S1", displayNo: "No.18", sortOrder: 1800, figureName: "しゅうへい", rarity: "R", concept: "乾杯", image: "images/しゅう_乾杯.png", dropRate: 18, exchangeCost: 20, isEx: false, isDrawTarget: true, isActive: true },
-    { figureId: "19", seriesId: "S1", displayNo: "No.19", sortOrder: 1900, figureName: "とっとくん", rarity: "R", concept: "ハウスクリーニング", image: "images/とっとくん_ハウスクリーニング.png", dropRate: 18, exchangeCost: 20, isEx: false, isDrawTarget: true, isActive: true },
-    { figureId: "20", seriesId: "S1", displayNo: "No.20", sortOrder: 2000, figureName: "かずま", rarity: "R", concept: "内臓整体", image: "images/かずま_内臓整体.png", dropRate: 18, exchangeCost: 20, isEx: false, isDrawTarget: true, isActive: true },
-    { figureId: "32", seriesId: "S1", displayNo: "No.21", sortOrder: 2100, figureName: "たかちゃん", rarity: "R", concept: "焼酎呑み", image: "images/たかちゃん_赤兎馬.png", dropRate: 18, exchangeCost: 20, isEx: false, isDrawTarget: true, isActive: true },
-    { figureId: "21", seriesId: "S1", displayNo: "No.22", sortOrder: 2200, figureName: "だいちさん", rarity: "R", concept: "算命学", image: "images/だいちさん_占い中.png", dropRate: 18, exchangeCost: 20, isEx: false, isDrawTarget: true, isActive: true },
-    { figureId: "22", seriesId: "S1", displayNo: "No.23", sortOrder: 2300, figureName: "ゆかちゃん", rarity: "R", concept: "西洋占星術", image: "images/ゆかちゃん_占い中.png", dropRate: 18, exchangeCost: 20, isEx: false, isDrawTarget: true, isActive: true },
-    { figureId: "23", seriesId: "S1", displayNo: "No.24", sortOrder: 2400, figureName: "おかっち", rarity: "R", concept: "よもぎ蒸し", image: "images/おかっち_よもぎ蒸し.png", dropRate: 18, exchangeCost: 20, isEx: false, isDrawTarget: true, isActive: true },
-    { figureId: "37", seriesId: "S1", displayNo: "No.25", sortOrder: 2500, figureName: "だいちゃん", rarity: "R", concept: "オンライン講座", image: "images/だいちゃん_オンライン講座.png", dropRate: 18, exchangeCost: 20, isEx: false, isDrawTarget: true, isActive: true },
-    { figureId: "24", seriesId: "S1", displayNo: "No.26", sortOrder: 2600, figureName: "ぐっちょん", rarity: "R", concept: "お仕事中", image: "images/ぐっちょん_会計.png", dropRate: 18, exchangeCost: 20, isEx: false, isDrawTarget: true, isActive: true },
-    { figureId: "25", seriesId: "S1", displayNo: "No.27", sortOrder: 2700, figureName: "東さん", rarity: "SR", concept: "編集長", image: "images/東さん_編集長.png", dropRate: 10, exchangeCost: 30, isEx: false, isDrawTarget: true, isActive: true },
-    { figureId: "26", seriesId: "S1", displayNo: "No.28", sortOrder: 2800, figureName: "よっしー", rarity: "SR", concept: "書籍出版", image: "images/よっしー_書籍出版.png", dropRate: 10, exchangeCost: 30, isEx: false, isDrawTarget: true, isActive: true },
-    { figureId: "27", seriesId: "S1", displayNo: "No.29", sortOrder: 2900, figureName: "じんさん", rarity: "SR", concept: "木工職人", image: "images/じんさん_木工.png", dropRate: 10, exchangeCost: 30, isEx: false, isDrawTarget: true, isActive: true },
-    { figureId: "28", seriesId: "S1", displayNo: "No.30", sortOrder: 3000, figureName: "海賊けん", rarity: "SR", concept: "ベース演奏", image: "images/ケンさん_ベース演奏.png", dropRate: 10, exchangeCost: 30, isEx: false, isDrawTarget: true, isActive: true },
-    { figureId: "29", seriesId: "S1", displayNo: "No.31", sortOrder: 3100, figureName: "しゅうへい", rarity: "SR", concept: "LIFE ARTS LIVE", image: "images/しゅう_MC.png", dropRate: 10, exchangeCost: 30, isEx: false, isDrawTarget: true, isActive: true },
-    { figureId: "30", seriesId: "S1", displayNo: "No.32", sortOrder: 3200, figureName: "とっとくん", rarity: "SR", concept: "デザイナー", image: "images/とっとくん_デザイナー.png", dropRate: 10, exchangeCost: 30, isEx: false, isDrawTarget: true, isActive: true },
-    { figureId: "33", seriesId: "S1", displayNo: "No.33", sortOrder: 3300, figureName: "たかちゃん", rarity: "SR", concept: "オンライン講座", image: "images/たかちゃん_オンライン講座.png", dropRate: 10, exchangeCost: 30, isEx: false, isDrawTarget: true, isActive: true },
-    { figureId: "38", seriesId: "S1", displayNo: "No.34", sortOrder: 3400, figureName: "だいちさん", rarity: "SR", concept: "シェアハウスの日常", image: "images/だいちさん_シェアハウス日常.png", dropRate: 10, exchangeCost: 30, isEx: false, isDrawTarget: true, isActive: true },
-    { figureId: "34", seriesId: "S1", displayNo: "No.35", sortOrder: 3500, figureName: "ゆかちゃん", rarity: "SR", concept: "あべちゃんメイク", image: "images/ゆか_あべちゃんメイク.png", dropRate: 10, exchangeCost: 30, isEx: false, isDrawTarget: true, isActive: true },
-    { figureId: "35", seriesId: "S1", displayNo: "No.36", sortOrder: 3600, figureName: "おかっち", rarity: "SR", concept: "パンプアップ", image: "images/おかっち_ジム.png", dropRate: 10, exchangeCost: 30, isEx: false, isDrawTarget: true, isActive: true },
-    { figureId: "39", seriesId: "S1", displayNo: "No.37", sortOrder: 3700, figureName: "だいちゃん", rarity: "SR", concept: "ライブ配信", image: "images/だいちゃん_ライブ配信.png", dropRate: 10, exchangeCost: 30, isEx: false, isDrawTarget: true, isActive: true },
-    { figureId: "36", seriesId: "S1", displayNo: "No.38", sortOrder: 3800, figureName: "ぐっちょん", rarity: "SR", concept: "本収集", image: "images/ぐっちょん_本収集.png", dropRate: 10, exchangeCost: 30, isEx: false, isDrawTarget: true, isActive: true },
-    { figureId: "31", seriesId: "S1", displayNo: "No.39", sortOrder: 3900, figureName: "かずま", rarity: "SR", concept: "研究", image: "images/かずま_研究.png", dropRate: 10, exchangeCost: 30, isEx: false, isDrawTarget: true, isActive: true },
-    { figureId: "40", seriesId: "S1", displayNo: "EX", sortOrder: 9999, figureName: "第1弾EX", rarity: "EX", concept: "ポイント交換限定", image: "images/第1弾_EX.png", dropRate: 0, exchangeCost: 50, isEx: true, isDrawTarget: false, isActive: true }
+    { figureId: "1", seriesId: "S1", displayNo: "No.1", sortOrder: 100, figureName: "東さん", rarity: "N", concept: "語り場共同オーナー", image: "images/第1弾/東さん_N.png", dropRate: 40, exchangeCost: 10, isEx: false, isDrawTarget: true, isActive: true },
+    { figureId: "2", seriesId: "S1", displayNo: "No.2", sortOrder: 200, figureName: "よっしー", rarity: "N", concept: "語り場共同オーナー", image: "images/第1弾/よっしー_N.png", dropRate: 40, exchangeCost: 10, isEx: false, isDrawTarget: true, isActive: true },
+    { figureId: "3", seriesId: "S1", displayNo: "No.3", sortOrder: 300, figureName: "じんさん", rarity: "N", concept: "語り場共同オーナー", image: "images/第1弾/じんさん_N.png", dropRate: 40, exchangeCost: 10, isEx: false, isDrawTarget: true, isActive: true },
+    { figureId: "4", seriesId: "S1", displayNo: "No.4", sortOrder: 400, figureName: "海賊けん", rarity: "N", concept: "語り場共同オーナー", image: "images/第1弾/ケンさん_N.png", dropRate: 40, exchangeCost: 10, isEx: false, isDrawTarget: true, isActive: true },
+    { figureId: "5", seriesId: "S1", displayNo: "No.5", sortOrder: 500, figureName: "しゅうへい", rarity: "N", concept: "語り場共同オーナー", image: "images/第1弾/しゅう_N.png", dropRate: 40, exchangeCost: 10, isEx: false, isDrawTarget: true, isActive: true },
+    { figureId: "6", seriesId: "S1", displayNo: "No.6", sortOrder: 600, figureName: "とっとくん", rarity: "N", concept: "語り場共同オーナー", image: "images/第1弾/とっとくん_N.png", dropRate: 40, exchangeCost: 10, isEx: false, isDrawTarget: true, isActive: true },
+    { figureId: "7", seriesId: "S1", displayNo: "No.7", sortOrder: 700, figureName: "かずま", rarity: "N", concept: "語り場共同オーナー", image: "images/第1弾/かずま_N.png", dropRate: 40, exchangeCost: 10, isEx: false, isDrawTarget: true, isActive: true },
+    { figureId: "8", seriesId: "S1", displayNo: "No.8", sortOrder: 800, figureName: "たかちゃん", rarity: "N", concept: "語り場共同オーナー", image: "images/第1弾/たかちゃん_N.png", dropRate: 40, exchangeCost: 10, isEx: false, isDrawTarget: true, isActive: true },
+    { figureId: "9", seriesId: "S1", displayNo: "No.9", sortOrder: 900, figureName: "だいちさん", rarity: "N", concept: "語り場共同オーナー", image: "images/第1弾/だいちさん_N.png", dropRate: 40, exchangeCost: 10, isEx: false, isDrawTarget: true, isActive: true },
+    { figureId: "10", seriesId: "S1", displayNo: "No.10", sortOrder: 1000, figureName: "ゆかちゃん", rarity: "N", concept: "語り場共同オーナー", image: "images/第1弾/ゆかちゃん_N.png", dropRate: 40, exchangeCost: 10, isEx: false, isDrawTarget: true, isActive: true },
+    { figureId: "11", seriesId: "S1", displayNo: "No.11", sortOrder: 1100, figureName: "おかっち", rarity: "N", concept: "語り場共同オーナー", image: "images/第1弾/おかっち_N.png", dropRate: 40, exchangeCost: 10, isEx: false, isDrawTarget: true, isActive: true },
+    { figureId: "12", seriesId: "S1", displayNo: "No.12", sortOrder: 1200, figureName: "だいちゃん", rarity: "N", concept: "語り場共同オーナー", image: "images/第1弾/だいちゃん_N.png", dropRate: 40, exchangeCost: 10, isEx: false, isDrawTarget: true, isActive: true },
+    { figureId: "13", seriesId: "S1", displayNo: "No.13", sortOrder: 1300, figureName: "ぐっちょん", rarity: "N", concept: "語り場共同オーナー", image: "images/第1弾/ぐっちょん_N.png", dropRate: 40, exchangeCost: 10, isEx: false, isDrawTarget: true, isActive: true },
+    { figureId: "14", seriesId: "S1", displayNo: "No.14", sortOrder: 1400, figureName: "東さん", rarity: "R", concept: "ガンプラ製作中", image: "images/第1弾/東さん_ガンプラ.png", dropRate: 18, exchangeCost: 20, isEx: false, isDrawTarget: true, isActive: true },
+    { figureId: "15", seriesId: "S1", displayNo: "No.15", sortOrder: 1500, figureName: "よっしー", rarity: "R", concept: "LIFE STORY撮影", image: "images/第1弾/よっしー_LS撮影.png", dropRate: 18, exchangeCost: 20, isEx: false, isDrawTarget: true, isActive: true },
+    { figureId: "16", seriesId: "S1", displayNo: "No.16", sortOrder: 1600, figureName: "じんさん", rarity: "R", concept: "ボードゲーム", image: "images/第1弾/じんさん_ボドゲ.png", dropRate: 18, exchangeCost: 20, isEx: false, isDrawTarget: true, isActive: true },
+    { figureId: "17", seriesId: "S1", displayNo: "No.17", sortOrder: 1700, figureName: "海賊けん", rarity: "R", concept: "講演", image: "images/第1弾/ケンさん_講演.png", dropRate: 18, exchangeCost: 20, isEx: false, isDrawTarget: true, isActive: true },
+    { figureId: "18", seriesId: "S1", displayNo: "No.18", sortOrder: 1800, figureName: "しゅうへい", rarity: "R", concept: "乾杯", image: "images/第1弾/しゅう_乾杯.png", dropRate: 18, exchangeCost: 20, isEx: false, isDrawTarget: true, isActive: true },
+    { figureId: "19", seriesId: "S1", displayNo: "No.19", sortOrder: 1900, figureName: "とっとくん", rarity: "R", concept: "ハウスクリーニング", image: "images/第1弾/とっとくん_ハウスクリーニング.png", dropRate: 18, exchangeCost: 20, isEx: false, isDrawTarget: true, isActive: true },
+    { figureId: "20", seriesId: "S1", displayNo: "No.20", sortOrder: 2000, figureName: "かずま", rarity: "R", concept: "内臓整体", image: "images/第1弾/かずま_内臓整体.png", dropRate: 18, exchangeCost: 20, isEx: false, isDrawTarget: true, isActive: true },
+    { figureId: "32", seriesId: "S1", displayNo: "No.21", sortOrder: 2100, figureName: "たかちゃん", rarity: "R", concept: "焼酎呑み", image: "images/第1弾/たかちゃん_赤兎馬.png", dropRate: 18, exchangeCost: 20, isEx: false, isDrawTarget: true, isActive: true },
+    { figureId: "21", seriesId: "S1", displayNo: "No.22", sortOrder: 2200, figureName: "だいちさん", rarity: "R", concept: "算命学", image: "images/第1弾/だいちさん_占い中.png", dropRate: 18, exchangeCost: 20, isEx: false, isDrawTarget: true, isActive: true },
+    { figureId: "22", seriesId: "S1", displayNo: "No.23", sortOrder: 2300, figureName: "ゆかちゃん", rarity: "R", concept: "西洋占星術", image: "images/第1弾/ゆかちゃん_占い中.png", dropRate: 18, exchangeCost: 20, isEx: false, isDrawTarget: true, isActive: true },
+    { figureId: "23", seriesId: "S1", displayNo: "No.24", sortOrder: 2400, figureName: "おかっち", rarity: "R", concept: "よもぎ蒸し", image: "images/第1弾/おかっち_よもぎ蒸し.png", dropRate: 18, exchangeCost: 20, isEx: false, isDrawTarget: true, isActive: true },
+    { figureId: "37", seriesId: "S1", displayNo: "No.25", sortOrder: 2500, figureName: "だいちゃん", rarity: "R", concept: "オンライン講座", image: "images/第1弾/だいちゃん_オンライン講座.png", dropRate: 18, exchangeCost: 20, isEx: false, isDrawTarget: true, isActive: true },
+    { figureId: "24", seriesId: "S1", displayNo: "No.26", sortOrder: 2600, figureName: "ぐっちょん", rarity: "R", concept: "お仕事中", image: "images/第1弾/ぐっちょん_会計.png", dropRate: 18, exchangeCost: 20, isEx: false, isDrawTarget: true, isActive: true },
+    { figureId: "25", seriesId: "S1", displayNo: "No.27", sortOrder: 2700, figureName: "東さん", rarity: "SR", concept: "編集長", image: "images/第1弾/東さん_編集長.png", dropRate: 10, exchangeCost: 30, isEx: false, isDrawTarget: true, isActive: true },
+    { figureId: "26", seriesId: "S1", displayNo: "No.28", sortOrder: 2800, figureName: "よっしー", rarity: "SR", concept: "書籍出版", image: "images/第1弾/よっしー_書籍出版.png", dropRate: 10, exchangeCost: 30, isEx: false, isDrawTarget: true, isActive: true },
+    { figureId: "27", seriesId: "S1", displayNo: "No.29", sortOrder: 2900, figureName: "じんさん", rarity: "SR", concept: "木工職人", image: "images/第1弾/じんさん_木工.png", dropRate: 10, exchangeCost: 30, isEx: false, isDrawTarget: true, isActive: true },
+    { figureId: "28", seriesId: "S1", displayNo: "No.30", sortOrder: 3000, figureName: "海賊けん", rarity: "SR", concept: "ベース演奏", image: "images/第1弾/ケンさん_ベース演奏.png", dropRate: 10, exchangeCost: 30, isEx: false, isDrawTarget: true, isActive: true },
+    { figureId: "29", seriesId: "S1", displayNo: "No.31", sortOrder: 3100, figureName: "しゅうへい", rarity: "SR", concept: "LIFE ARTS LIVE", image: "images/第1弾/しゅう_MC.png", dropRate: 10, exchangeCost: 30, isEx: false, isDrawTarget: true, isActive: true },
+    { figureId: "30", seriesId: "S1", displayNo: "No.32", sortOrder: 3200, figureName: "とっとくん", rarity: "SR", concept: "デザイナー", image: "images/第1弾/とっとくん_デザイナー.png", dropRate: 10, exchangeCost: 30, isEx: false, isDrawTarget: true, isActive: true },
+    { figureId: "33", seriesId: "S1", displayNo: "No.33", sortOrder: 3300, figureName: "たかちゃん", rarity: "SR", concept: "オンライン講座", image: "images/第1弾/たかちゃん_オンライン講座.png", dropRate: 10, exchangeCost: 30, isEx: false, isDrawTarget: true, isActive: true },
+    { figureId: "38", seriesId: "S1", displayNo: "No.34", sortOrder: 3400, figureName: "だいちさん", rarity: "SR", concept: "シェアハウスの日常", image: "images/第1弾/だいちさん_シェアハウス日常.png", dropRate: 10, exchangeCost: 30, isEx: false, isDrawTarget: true, isActive: true },
+    { figureId: "34", seriesId: "S1", displayNo: "No.35", sortOrder: 3500, figureName: "ゆかちゃん", rarity: "SR", concept: "あべちゃんメイク", image: "images/第1弾/ゆか_あべちゃんメイク.png", dropRate: 10, exchangeCost: 30, isEx: false, isDrawTarget: true, isActive: true },
+    { figureId: "35", seriesId: "S1", displayNo: "No.36", sortOrder: 3600, figureName: "おかっち", rarity: "SR", concept: "パンプアップ", image: "images/第1弾/おかっち_ジム.png", dropRate: 10, exchangeCost: 30, isEx: false, isDrawTarget: true, isActive: true },
+    { figureId: "39", seriesId: "S1", displayNo: "No.37", sortOrder: 3700, figureName: "だいちゃん", rarity: "SR", concept: "ライブ配信", image: "images/第1弾/だいちゃん_ライブ配信.png", dropRate: 10, exchangeCost: 30, isEx: false, isDrawTarget: true, isActive: true },
+    { figureId: "36", seriesId: "S1", displayNo: "No.38", sortOrder: 3800, figureName: "ぐっちょん", rarity: "SR", concept: "本収集", image: "images/第1弾/ぐっちょん_本収集.png", dropRate: 10, exchangeCost: 30, isEx: false, isDrawTarget: true, isActive: true },
+    { figureId: "31", seriesId: "S1", displayNo: "No.39", sortOrder: 3900, figureName: "かずま", rarity: "SR", concept: "研究", image: "images/第1弾/かずま_研究.png", dropRate: 10, exchangeCost: 30, isEx: false, isDrawTarget: true, isActive: true },
+    { figureId: "40", seriesId: "S1", displayNo: "EX", sortOrder: 9999, figureName: "第1弾EX", rarity: "EX", concept: "ポイント交換限定", image: "images/第1弾/第1弾_EX.png", dropRate: 0, exchangeCost: 50, isEx: true, isDrawTarget: false, isActive: true },
+    {"figureId": "201", "seriesId": "S2", "displayNo": "No.1", "sortOrder": 100, "figureName": "おかっち", "rarity": "N", "concept": "まちぼうけ", "image": "images/第2弾/まちぼうけ_おかっち_N.png", "dropRate": 40, "exchangeCost": 10, "isEx": false, "isDrawTarget": true, "isActive": true},
+    {"figureId": "202", "seriesId": "S2", "displayNo": "No.2", "sortOrder": 200, "figureName": "かずま", "rarity": "N", "concept": "まちぼうけ", "image": "images/第2弾/まちぼうけ_かずま_N.png", "dropRate": 40, "exchangeCost": 10, "isEx": false, "isDrawTarget": true, "isActive": true},
+    {"figureId": "203", "seriesId": "S2", "displayNo": "No.3", "sortOrder": 300, "figureName": "ぐっちょん", "rarity": "N", "concept": "まちぼうけ", "image": "images/第2弾/まちぼうけ_ぐっちょん_N.png", "dropRate": 40, "exchangeCost": 10, "isEx": false, "isDrawTarget": true, "isActive": true},
+    {"figureId": "204", "seriesId": "S2", "displayNo": "No.4", "sortOrder": 400, "figureName": "けんさん", "rarity": "N", "concept": "まちぼうけ", "image": "images/第2弾/まちぼうけ_けんさん_N.png", "dropRate": 40, "exchangeCost": 10, "isEx": false, "isDrawTarget": true, "isActive": true},
+    {"figureId": "205", "seriesId": "S2", "displayNo": "No.5", "sortOrder": 500, "figureName": "しゅう", "rarity": "N", "concept": "まちぼうけ", "image": "images/第2弾/まちぼうけ_しゅう_N.png", "dropRate": 40, "exchangeCost": 10, "isEx": false, "isDrawTarget": true, "isActive": true},
+    {"figureId": "206", "seriesId": "S2", "displayNo": "No.6", "sortOrder": 600, "figureName": "じんさん", "rarity": "N", "concept": "まちぼうけ", "image": "images/第2弾/まちぼうけ_じんさん_N.png", "dropRate": 40, "exchangeCost": 10, "isEx": false, "isDrawTarget": true, "isActive": true},
+    {"figureId": "207", "seriesId": "S2", "displayNo": "No.7", "sortOrder": 700, "figureName": "たかちゃん", "rarity": "N", "concept": "まちぼうけ", "image": "images/第2弾/まちぼうけ_たかちゃん_N.png", "dropRate": 40, "exchangeCost": 10, "isEx": false, "isDrawTarget": true, "isActive": true},
+    {"figureId": "208", "seriesId": "S2", "displayNo": "No.8", "sortOrder": 800, "figureName": "だいちさん", "rarity": "N", "concept": "まちぼうけ", "image": "images/第2弾/まちぼうけ_だいちさん_N.png", "dropRate": 40, "exchangeCost": 10, "isEx": false, "isDrawTarget": true, "isActive": true},
+    {"figureId": "209", "seriesId": "S2", "displayNo": "No.9", "sortOrder": 900, "figureName": "だいちゃん", "rarity": "N", "concept": "まちぼうけ", "image": "images/第2弾/まちぼうけ_だいちゃん_N.png", "dropRate": 40, "exchangeCost": 10, "isEx": false, "isDrawTarget": true, "isActive": true},
+    {"figureId": "210", "seriesId": "S2", "displayNo": "No.10", "sortOrder": 1000, "figureName": "とっとくん", "rarity": "N", "concept": "まちぼうけ", "image": "images/第2弾/まちぼうけ_とっとくん_N.png", "dropRate": 40, "exchangeCost": 10, "isEx": false, "isDrawTarget": true, "isActive": true},
+    {"figureId": "211", "seriesId": "S2", "displayNo": "No.11", "sortOrder": 1100, "figureName": "ゆかちゃん", "rarity": "N", "concept": "まちぼうけ", "image": "images/第2弾/まちぼうけ_ゆかちゃん_N.png", "dropRate": 40, "exchangeCost": 10, "isEx": false, "isDrawTarget": true, "isActive": true},
+    {"figureId": "212", "seriesId": "S2", "displayNo": "No.12", "sortOrder": 1200, "figureName": "よっしー", "rarity": "N", "concept": "まちぼうけ", "image": "images/第2弾/まちぼうけ_よっしー_N.png", "dropRate": 40, "exchangeCost": 10, "isEx": false, "isDrawTarget": true, "isActive": true},
+    {"figureId": "213", "seriesId": "S2", "displayNo": "No.13", "sortOrder": 1300, "figureName": "東さん", "rarity": "N", "concept": "まちぼうけ", "image": "images/第2弾/まちぼうけ_東さん_N.png", "dropRate": 40, "exchangeCost": 10, "isEx": false, "isDrawTarget": true, "isActive": true},
+    {"figureId": "214", "seriesId": "S2", "displayNo": "No.14", "sortOrder": 1400, "figureName": "おかっち&ぐっちょん", "rarity": "R", "concept": "まちぼうけ", "image": "images/第2弾/まちぼうけ_おかっち&ぐっちょん_R.png", "dropRate": 18, "exchangeCost": 20, "isEx": false, "isDrawTarget": true, "isActive": true},
+    {"figureId": "215", "seriesId": "S2", "displayNo": "No.15", "sortOrder": 1500, "figureName": "かずま&ゆかちゃん", "rarity": "R", "concept": "まちぼうけ", "image": "images/第2弾/まちぼうけ_かずま&ゆかちゃん_R.png", "dropRate": 18, "exchangeCost": 20, "isEx": false, "isDrawTarget": true, "isActive": true},
+    {"figureId": "216", "seriesId": "S2", "displayNo": "No.16", "sortOrder": 1600, "figureName": "じんさん&だいちゃん&東さん", "rarity": "R", "concept": "まちぼうけ", "image": "images/第2弾/まちぼうけ_じんさん&だいちゃん&東さん_R.png", "dropRate": 18, "exchangeCost": 20, "isEx": false, "isDrawTarget": true, "isActive": true},
+    {"figureId": "217", "seriesId": "S2", "displayNo": "No.17", "sortOrder": 1700, "figureName": "たかちゃん&とっとくん", "rarity": "R", "concept": "まちぼうけ", "image": "images/第2弾/まちぼうけ_たかちゃん&とっとくん_R.png", "dropRate": 18, "exchangeCost": 20, "isEx": false, "isDrawTarget": true, "isActive": true},
+    {"figureId": "218", "seriesId": "S2", "displayNo": "No.18", "sortOrder": 1800, "figureName": "だいちさん&しゅう", "rarity": "R", "concept": "まちぼうけ", "image": "images/第2弾/まちぼうけ_だいちさん&しゅう_R.png", "dropRate": 18, "exchangeCost": 20, "isEx": false, "isDrawTarget": true, "isActive": true},
+    {"figureId": "219", "seriesId": "S2", "displayNo": "No.19", "sortOrder": 1900, "figureName": "よっしー&けんさん", "rarity": "R", "concept": "まちぼうけ", "image": "images/第2弾/まちぼうけ_よっしー&けんさん_R.png", "dropRate": 18, "exchangeCost": 20, "isEx": false, "isDrawTarget": true, "isActive": true},
+    {"figureId": "220", "seriesId": "S2", "displayNo": "No.20", "sortOrder": 2000, "figureName": "チーム3", "rarity": "SR", "concept": "みんなどこにいたの？", "image": "images/第2弾/みんなどこにいたの？_チーム3_SR.png", "dropRate": 10, "exchangeCost": 30, "isEx": false, "isDrawTarget": true, "isActive": true},
+    {"figureId": "221", "seriesId": "S2", "displayNo": "No.21", "sortOrder": 2100, "figureName": "チーム2", "rarity": "SR", "concept": "余裕をもって", "image": "images/第2弾/余裕をもって_チーム2_SR.png", "dropRate": 10, "exchangeCost": 30, "isEx": false, "isDrawTarget": true, "isActive": true},
+    {"figureId": "222", "seriesId": "S2", "displayNo": "No.22", "sortOrder": 2200, "figureName": "チーム1", "rarity": "SR", "concept": "優勝打ち上げへ", "image": "images/第2弾/優勝打ち上げへ_チーム1_SR.png", "dropRate": 10, "exchangeCost": 30, "isEx": false, "isDrawTarget": true, "isActive": true}
   ];
 }
 
@@ -2445,6 +2474,53 @@ function ensureGachaFigureMasterSheet_() {
   return sheet;
 }
 
+/**
+ * GASエディタから実行。コード内マスターの未登録行のみ追記する。
+ * 今後の弾も getDefaultGachaFigureMaster_ に追加してからこの関数を再実行する。
+ * figureId が登録済みの行は、名称・確率・画像・独自列を含め変更しない。
+ */
+function syncMissingGachaFiguresToMaster() {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const defaults = getDefaultGachaFigureMaster_();
+    const defaultIds = new Set();
+    defaults.forEach(item => {
+      const id = String(item.figureId || '').trim();
+      if (!id || defaultIds.has(id)) throw new Error('初期マスターのfigureIdが空または重複しています: ' + id);
+      defaultIds.add(id);
+    });
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    let sheet = ss.getSheetByName(GACHA_FIGURE_MASTER_SHEET_NAME);
+    if (!sheet) sheet = ss.insertSheet(GACHA_FIGURE_MASTER_SHEET_NAME);
+    const headers = ensureSheetColumns_(sheet, [
+      'figureId', 'seriesId', 'displayNo', 'sortOrder', 'figureName', 'rarity', 'concept', 'image',
+      'dropRate', 'exchangeCost', 'isEx', 'isDrawTarget', 'isActive'
+    ]);
+    const values = sheet.getDataRange().getValues();
+    const idColumn = headers.indexOf('figureId');
+    const existingIds = new Set(values.slice(1).map(row => String(row[idColumn] == null ? '' : row[idColumn]).trim()));
+    const missing = defaults.filter(item => !existingIds.has(String(item.figureId).trim()));
+    if (missing.length) {
+      const rows = missing.map(item => headers.map(header => item[header] !== undefined ? item[header] : ''));
+      sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, headers.length).setValues(rows);
+    }
+    const addedBySeries = {};
+    missing.forEach(item => { addedBySeries[item.seriesId] = (addedBySeries[item.seriesId] || 0) + 1; });
+    const result = {
+      added: missing.length,
+      skipped: defaults.length - missing.length,
+      addedBySeries: addedBySeries,
+      addedFigureIds: missing.map(item => String(item.figureId))
+    };
+    console.log(JSON.stringify(result));
+    return result;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 function ensureGachaExchangePointsSheet_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sheet = ss.getSheetByName(GACHA_EXCHANGE_POINTS_SHEET_NAME);
@@ -2457,7 +2533,7 @@ function ensureGachaExchangeHistorySheet_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sheet = ss.getSheetByName(GACHA_EXCHANGE_HISTORY_SHEET_NAME);
   if (!sheet) sheet = ss.insertSheet(GACHA_EXCHANGE_HISTORY_SHEET_NAME);
-  ensureSheetColumns_(sheet, ["id", "requestId", "userId", "seriesId", "figureId", "exchangeType", "usedPoints", "exchangedAt"]);
+  ensureSheetColumns_(sheet, ["id", "requestId", "userId", "seriesId", "figureId", "exchangeType", "usedPoints", "exchangedAt", "pointAllocationJson"]);
   return sheet;
 }
 
@@ -2478,6 +2554,13 @@ function toBoolean_(value, fallback) {
   return fallback;
 }
 
+function normalizeLegacyGachaImagePath(image) {
+  const raw = String(image || '').trim();
+  const names = new Set(["おかっち_N.png", "おかっち_よもぎ蒸し.png", "おかっち_ジム.png", "かずま_N.png", "かずま_スピーチ.png", "かずま_内臓整体.png", "かずま_研究.png", "ぐっちょん_N.png", "ぐっちょん_会計.png", "ぐっちょん_本収集.png", "しゅう_MC.png", "しゅう_N.png", "しゅう_乾杯.png", "じんさん_N.png", "じんさん_ボドゲ.png", "じんさん_木工.png", "たかちゃん_N.png", "たかちゃん_オンライン講座.png", "たかちゃん_赤兎馬.png", "だいちさん_N.png", "だいちさん_シェアハウス日常.png", "だいちさん_占い中.png", "だいちゃん_N.png", "だいちゃん_オンライン講座.png", "だいちゃん_ライブ配信.png", "とっとくん_N.png", "とっとくん_デザイナー.png", "とっとくん_ハウスクリーニング.png", "ゆか_あべちゃんメイク.png", "ゆかちゃん_N.png", "ゆかちゃん_占い中.png", "よっしー_LS撮影.png", "よっしー_N.png", "よっしー_書籍出版.png", "ケンさん_N.png", "ケンさん_ベース演奏.png", "ケンさん_講演.png", "東さん_N.png", "東さん_ガンプラ.png", "東さん_編集長.png", "第1弾_EX.png"]);
+  const match = raw.match(/^images\/([^/?#]+)([?#].*)?$/);
+  return match && names.has(match[1]) ? 'images/第1弾/' + match[1] + (match[2] || '') : raw;
+}
+
 function normalizeGachaMasterFigure_(row) {
   const rarity = String(row.rarity || "").trim().toUpperCase();
   return {
@@ -2488,7 +2571,7 @@ function normalizeGachaMasterFigure_(row) {
     figureName: String(row.figureName || row.name || "").trim(),
     rarity: rarity,
     concept: String(row.concept || "").trim(),
-    image: String(row.image || "").trim(),
+    image: normalizeLegacyGachaImagePath(row.image),
     dropRate: Number(row.dropRate || 0),
     exchangeCost: Number(row.exchangeCost || ({ N: 10, R: 20, SR: 30, EX: 50 }[rarity] || 0)),
     isEx: toBoolean_(row.isEx, rarity === "EX"),
@@ -2606,6 +2689,7 @@ function appendExchangeHistory_(entry) {
     figureId: String(entry.figureId || ""),
     exchangeType: String(entry.exchangeType || "NORMAL"),
     usedPoints: Math.max(0, Math.floor(Number(entry.usedPoints || 0))),
+    pointAllocationJson: String(entry.pointAllocationJson || ""),
     exchangedAt: formatDateTime(new Date())
   };
   sheet.appendRow(headers.map(header => rowObj[header] !== undefined ? rowObj[header] : ""));
@@ -2817,8 +2901,8 @@ function getGachaCollection(ticket) {
     results: rows
   };
 }
-function saveGachaResult(ticket, result, requestId) {
-  return processGachaDrawResults_(ticket, [result], requestId, "saveGachaResult");
+function saveGachaResult(ticket, result, requestId, seriesId) {
+  return processGachaDrawResults_(ticket, [result], requestId, "saveGachaResult", seriesId);
 }
 
 function upsertGachaInventory(userId, ticket, normalized, addQuantity) {
@@ -2903,7 +2987,7 @@ function upsertGachaInventory(userId, ticket, normalized, addQuantity) {
 }
 
 
-function exchangeGachaFigure(ticket, figureId, requestId) {
+function exchangeGachaFigure(ticket, figureId, requestId, pointAllocation) {
   const session = requireValidGachaSession(ticket);
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
@@ -2927,11 +3011,11 @@ function exchangeGachaFigure(ticket, figureId, requestId) {
     }
 
     const points = getExchangePointsMapByUserId_(session.userId);
-    const balance = Math.max(0, Math.floor(Number(points[master.seriesId] || 0)));
+    const allocation = validateExchangeAllocation_(master, points, pointAllocation);
     const cost = Math.max(0, Math.floor(Number(master.exchangeCost || 0)));
-    if (balance < cost) throw fail("交換ptが不足しています。", "NOT_ENOUGH_EXCHANGE_POINTS");
-
-    setExchangePointBalance_(session.userId, master.seriesId, balance - cost);
+    Object.keys(allocation).forEach(sid => {
+      if (allocation[sid] > 0) setExchangePointBalance_(session.userId, sid, Number(points[sid] || 0) - allocation[sid]);
+    });
     upsertGachaInventory(session.userId, ticket, normalizeGachaResult({ figureId: master.figureId }), 1);
     appendExchangeHistory_({
       requestId: requestId,
@@ -2939,7 +3023,8 @@ function exchangeGachaFigure(ticket, figureId, requestId) {
       seriesId: master.seriesId,
       figureId: master.figureId,
       exchangeType: master.isEx ? "EX" : "NORMAL",
-      usedPoints: cost
+      usedPoints: cost,
+      pointAllocationJson: JSON.stringify(allocation)
     });
 
     const response = getGachaCollection(ticket);
@@ -4172,4 +4257,20 @@ try {
 </script>
 </body>
 </html>`;
+}
+
+// Normal exchanges spend only their own series balance. EX can combine balances.
+function validateExchangeAllocation_(master, points, requested) {
+  const cost = Math.max(0, Math.floor(Number(master.exchangeCost || 0)));
+  const allocation = !master.isEx || requested == null ? { [master.seriesId]: cost } : requested;
+  if (!allocation || typeof allocation !== 'object' || Array.isArray(allocation)) throw fail('交換ptの配分が不正です。', 'INVALID_POINT_ALLOCATION');
+  let total = 0;
+  Object.keys(allocation).forEach(sid => {
+    const amount = allocation[sid];
+    if (typeof amount !== 'number' || !Number.isSafeInteger(amount) || amount < 0) throw fail('交換ptの配分が不正です。', 'INVALID_POINT_ALLOCATION');
+    if (amount > Number(points[sid] || 0)) throw fail('交換ptが不足しています。', 'NOT_ENOUGH_EXCHANGE_POINTS');
+    total += amount;
+  });
+  if (total !== cost) throw fail('交換ptの合計が一致しません。', 'INVALID_POINT_ALLOCATION');
+  return allocation;
 }
