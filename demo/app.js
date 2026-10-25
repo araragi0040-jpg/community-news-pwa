@@ -396,6 +396,7 @@ function normalizePost(input){
   a.media = a.media || {};
   a.media.images = Array.isArray(a.media.images) ? a.media.images : [];
   a.media.video = a.media.video || "";
+  a.thumbnail = window.NewsThumbnail.normalize(a.thumbnail);
   a.status = normalizeStatusValue(a.status, "public");
   a.publishedAt = a.publishedAt || "";
   a.scheduledAt = a.scheduledAt || "";
@@ -426,6 +427,7 @@ function mapApiPost(post){
       images: post.imageUrls || post.images || [],
       video: post.video || ""
     },
+    thumbnail: post.thumbnail,
     status: post.status || "public",
     publishedAt: post.publishedAt || "",
     scheduledAt: post.scheduledAt || "",
@@ -636,6 +638,12 @@ async function savePostToApi(post) {
     err.code = "VALIDATION_ERROR";
     throw err;
   }
+  // Refuse saves against an older demo backend before any article is written.
+  const capabilityResponse = await fetch(buildApiGetUrl("ping", false), { cache: "no-store" });
+  const capabilities = await parseApiJson(capabilityResponse, "ping");
+  if (!capabilities.ok || capabilities.thumbnailEditing !== 1) {
+    throw new Error("デモ用GASの更新が必要です。サムネイル対応版をデプロイしてから保存してください。");
+  }
   const data = await callApi("savePost", {
     post: {
       id: post.id || "",
@@ -650,6 +658,7 @@ async function savePostToApi(post) {
       ctaText: post.cta?.text || "",
       ctaUrl: post.cta?.url || "",
       imageUrls: post.media?.images || [],
+      thumbnail: window.NewsThumbnail.normalize(post.thumbnail),
       video: post.media?.video || "",
       status: post.status || "public",
       scheduledAt: post.scheduledAt || ""
@@ -865,6 +874,7 @@ function normalizePostContentParts(post){
     ctaText: normalized.cta?.text || "",
     ctaUrl: normalized.cta?.url || "",
     images: Array.isArray(normalized.media?.images) ? normalized.media.images : [],
+    thumbnail: normalized.thumbnail,
     video: normalized.media?.video || "",
     scheduledAt: normalized.scheduledAt || ""
   };
@@ -890,6 +900,7 @@ function hasMeaningfulPostContent(post){
     parts.ctaText.trim() ||
     parts.ctaUrl.trim() ||
     parts.images.length ||
+    parts.thumbnail.url ||
     parts.video.trim()
   );
 }
@@ -1158,9 +1169,10 @@ function filteredArticles(){
 }
 
 function renderCard(a){
-  const thumb = (a.media?.images && a.media.images.length) ? a.media.images[0] : "";
+  const thumb = window.NewsThumbnail.source(a);
+  const thumbnail = window.NewsThumbnail.normalize(a.thumbnail);
   const mediaHtml = thumb
-    ? `<div class="card__media"><img src="${escapeAttr(thumb)}" alt="" loading="lazy"></div>`
+    ? `<div class="card__media${thumbnail.fit === "contain" ? " thumbnail-frame--contain" : ""}"><img src="${escapeAttr(thumb)}" alt="" loading="lazy" style="${window.NewsThumbnail.style(thumbnail)}"></div>`
     : `<div class="card__media card__media--placeholder" aria-hidden="true"></div>`;
   return `
     <article class="card" data-article="${escapeAttr(a.id)}">
@@ -1300,6 +1312,7 @@ function insertAtCursor(textarea, text){
 }
 
 function renderImagePicker(textareaId, pickerId, bodyTextareaId){
+  window.NewsThumbnail.update(textareaId === "pImages" ? "p" : "e");
   const textarea = document.getElementById(textareaId);
   const picker = document.getElementById(pickerId);
   const bodyTextarea = document.getElementById(bodyTextareaId);
@@ -2790,6 +2803,7 @@ function clearEditor(){
   $("#pCtaText").value = "";
   $("#pCtaUrl").value = "";
   $("#pImages").value = "";
+  window.NewsThumbnail.set("p", null);
   $("#pVideo").value = "";
   $("#pScheduledAt").value = "";
   renderImagePicker("pImages", "pImagePicker", "pBody");
@@ -2809,6 +2823,7 @@ function clearEditForm(){
   $("#eCtaText").value = "";
   $("#eCtaUrl").value = "";
   $("#eImages").value = "";
+  window.NewsThumbnail.set("e", null);
   $("#eVideo").value = "";
   $("#eScheduledAt").value = "";
   renderImagePicker("eImages", "eImagePicker", "eBody");
@@ -2832,6 +2847,7 @@ function startEdit(id){
   $("#eCtaText").value = a.cta?.text || "";
   $("#eCtaUrl").value = a.cta?.url || "";
   $("#eImages").value = (a.media?.images || []).join("\n");
+  window.NewsThumbnail.set("e", a.thumbnail);
   $("#eVideo").value = a.media?.video || "";
   $("#eScheduledAt").value = toDateTimeLocalValue(a.scheduledAt);
   renderImagePicker("eImages", "eImagePicker", "eBody");
@@ -2903,6 +2919,7 @@ function collectForm(){
     body,
     cta: ctaUrl ? { text: ctaText, url: ctaUrl } : null,
     media: { images, video },
+    thumbnail: window.NewsThumbnail.get("p"),
     scheduledAt: dateTimeLocalToIso($("#pScheduledAt")?.value || "")
   });
 
@@ -2938,6 +2955,7 @@ function collectEditForm(){
     body,
     cta: ctaUrl ? { text: ctaText, url: ctaUrl } : null,
     media: { images, video },
+    thumbnail: window.NewsThumbnail.get("e"),
     publishedAt: current?.publishedAt || "",
     scheduledAt: dateTimeLocalToIso($("#eScheduledAt")?.value || ""),
     updatedAt: current?.updatedAt || ""
@@ -2961,6 +2979,8 @@ function buildPreviewArticleFromForm(mode){
 }
 
 async function saveEditor(status, opts = {}){
+  try { window.NewsThumbnail.validate("p"); }
+  catch (err) { if (!opts.silentError) alert(err.message); return null; }
   const rawTitle = (("#pTitle" && $("#pTitle")) ? $("#pTitle").value : "").trim();
   if(!rawTitle){
     if (!opts.silentError) alert("タイトルは必須です。");
@@ -3050,6 +3070,8 @@ async function saveEditor(status, opts = {}){
 }
 
 async function saveEditForm(status, opts = {}){
+  try { window.NewsThumbnail.validate("e"); }
+  catch (err) { if (!opts.silentError) alert(err.message); return null; }
   if (!state.editingId) {
     if (!opts.silentError) alert("編集対象の記事が見つかりません。");
     return null;
@@ -4156,6 +4178,19 @@ function bind(){
       renderVidInsertButton("eVideo", "eBody", "eVidInsert");
     });
   }
+  for (const prefix of ["p", "e"]) {
+    window.NewsThumbnail.createEditor(prefix, {
+      topImage: () => ($("#" + prefix + "Images")?.value || "").split("\n").map(s => s.trim()).find(Boolean) || "",
+      title: () => $("#" + prefix + "Title")?.value || "",
+      channel: () => channelLabel($("#" + prefix + "Channel")?.value || "article"),
+      upload: uploadImageToApi,
+      onChange: () => prefix === "p" ? syncAdminButtons() : syncEditButtons()
+    });
+    for (const suffix of ["Title", "Channel"]) {
+      $("#" + prefix + suffix)?.addEventListener("input", () => window.NewsThumbnail.update(prefix));
+      $("#" + prefix + suffix)?.addEventListener("change", () => window.NewsThumbnail.update(prefix));
+    }
+  }
   renderImagePicker("pImages", "pImagePicker", "pBody");
   renderImagePicker("eImages", "eImagePicker", "eBody");
   renderVidInsertButton("pVideo", "pBody", "pVidInsert");
@@ -4328,7 +4363,7 @@ setInterval(touchAnalyticsVisit, 60000);
 async function init() {
   if ("serviceWorker" in navigator) {
     try {
-      const registration = await navigator.serviceWorker.register("./sw.js?v=article-refresh-demo-2", {
+      const registration = await navigator.serviceWorker.register("./sw.js?v=thumbnail-demo-1", {
         scope: "./"
       });
 

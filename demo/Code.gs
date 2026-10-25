@@ -30,7 +30,7 @@ function doGet(e) {
     const token = getTokenFromGet(e);
 
     if (action === "ping") {
-      return outputJson({ ok: true });
+      return outputJson({ ok: true, thumbnailEditing: 1 });
     }
 
     if (action === "listPosts") {
@@ -339,6 +339,7 @@ if (action === "listPushSubscriptionsForServer") {
       "ctaText",
       "ctaUrl",
       "imageUrls",
+      "thumbnailJson",
       "video",
       "status",
       "publishedAt",
@@ -369,6 +370,7 @@ if (action === "listPushSubscriptionsForServer") {
     "ctaText",
     "ctaUrl",
     "imageUrls",
+    "thumbnailJson",
     "video",
     "status",
     "publishedAt",
@@ -984,6 +986,7 @@ function savePost(post) {
   } else {
     existing = rowToObj(headers, values[existingRowIndex]);
     previousStatus = normalizeStatus(existing.status, "public");
+    if (post.thumbnail === undefined) normalized.thumbnailJson = existing.thumbnailJson || "";
 
     if (!normalized.date) normalized.date = normalizeDateCell(existing.date);
 
@@ -1275,6 +1278,7 @@ function normalizePostRow(row, options) {
     ctaText: row.ctaText || "",
     ctaUrl: row.ctaUrl || "",
     imageUrls: splitField(row.imageUrls || row.images),
+    thumbnail: parsePostThumbnail(row.thumbnailJson),
     video: row.video || "",
     status: status,
     publishedAt: normalizeDateTimeCell(row.publishedAt),
@@ -1289,6 +1293,25 @@ function normalizePostRow(row, options) {
     normalized.viewerUserIdsJson = String(row.viewerUserIdsJson || "[]");
   }
   return normalized;
+}
+
+function normalizePostThumbnail(value) {
+  const src = value && typeof value === "object" ? value : {};
+  const number = (input, min, max, fallback) => {
+    if (input === "" || input == null || !Number.isFinite(Number(input))) return fallback;
+    return Math.round(Math.min(max, Math.max(min, Number(input))) * 10000) / 10000;
+  };
+  return {
+    url: String(src.url || "").trim().slice(0, 2048),
+    fit: src.fit === "contain" ? "contain" : "cover",
+    x: number(src.x, 0, 100, 50), y: number(src.y, 0, 100, 50),
+    zoom: number(src.zoom, 1, 3, 1)
+  };
+}
+
+function parsePostThumbnail(value) {
+  try { return normalizePostThumbnail(JSON.parse(String(value || "{}"))); }
+  catch (_) { return normalizePostThumbnail(null); }
 }
 
 function normalizeIncomingPost(post) {
@@ -1326,6 +1349,7 @@ function normalizeIncomingPost(post) {
     ctaText: String(post.ctaText || "").trim(),
     ctaUrl: String(post.ctaUrl || "").trim(),
     imageUrls: Array.isArray(post.imageUrls) ? post.imageUrls : (Array.isArray(post.images) ? post.images : []),
+    thumbnailJson: JSON.stringify(normalizePostThumbnail(post.thumbnail)),
     video: String(post.video || "").trim(),
     status: status,
     publishedAt: String(post.publishedAt || "").trim(),
