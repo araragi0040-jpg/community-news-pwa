@@ -6,7 +6,7 @@
   const yearNow = () => Number(new Intl.DateTimeFormat("en", { year: "numeric", timeZone: "Asia/Tokyo" }).format(new Date()));
   const today = () => new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Tokyo" }).format(new Date());
   const lockIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 10V7a6 6 0 0 1 12 0v3h1a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h1zm3 0h6V7a3 3 0 0 0-6 0v3zm2 5v4h2v-4h-2z"/></svg>';
-  const st = { cards: [], year: yearNow(), event: "", tab: "all", owner: "", listSeq: 0, claimSeq: 0, adminSeq: 0, detail: "", loginRequested: false, claiming: false, admin: null };
+  const st = { cards: [], year: yearNow(), event: "", tab: "all", owner: "", listSeq: 0, claimSeq: 0, adminSeq: 0, detail: "", loginRequested: false, claiming: false, admin: null, images: null, imageError: "", imageSeq: 0, imageLoading: false };
   function tokenFromHash() {
     const match = window.location.hash.match(/^#collection-claim=([^&]+)$/);
     if (!match) return "";
@@ -146,16 +146,21 @@
       if (tokenFromHash() && tokenFromHash() !== qrToken) resume();
     }
   }
-  async function loadAdmin() {
-    if (!isAdminUser()) return;
+  async function loadAdmin(options = {}) {
+    if (!isAdminUser()) return false;
     const root = byId("collectionAdmin"), seq = ++st.adminSeq, owner = st.owner;
-    busy(root, "管理情報を読み込んでいます…");
+    if (!options.preserveForm) busy(root, "管理情報を読み込んでいます…");
     try {
       const data = await api("collectionAdminList");
-      if (seq !== st.adminSeq || owner !== st.owner || !isAdminUser()) return;
+      if (seq !== st.adminSeq || owner !== st.owner || !isAdminUser()) return false;
       st.admin = data;
       renderAdmin();
-    } catch (err) { if (seq === st.adminSeq && active("collection-admin")) showError(root, err, "admin"); }
+      return true;
+    } catch (err) {
+      if (options.preserveForm) throw err;
+      if (seq === st.adminSeq && active("collection-admin")) showError(root, err, "admin");
+      return false;
+    }
   }
   const check = (name, label, value) => `<label class="ec-check"><input name="${name}" type="checkbox" ${value ? "checked" : ""}>${label}</label>`;
   function renderAdmin() {
@@ -165,26 +170,104 @@
         const event = events.find(e => e.id === c.eventId);
         return `<article class="ec-admin-card"><img src="${esc(image(c.imagePath))}" alt="${esc(event?.name)}のカード"><div><strong>${esc(event?.name)} ${c.year}</strong><p><span class="ec-badge">${c.published ? "公開中" : "非公開"}</span> <span class="ec-badge${c.distributionEnabled && event?.active ? "" : " ec-badge--muted"}">${c.distributionEnabled && event?.active ? "配布有効" : "配布停止"}</span></p><button class="btn" type="button" data-ec-edit-card="${esc(c.id)}">編集</button> <button class="btn" type="button" data-ec-select-qr="${esc(c.id)}">QR発行・確認</button></div></article>`;
       }).join("") || '<p class="ec-empty">カードを登録すると、ここに表示されます。</p>'}</div>
-      <details class="ec-admin-section" open><summary>1. イベント登録・編集</summary><form id="ecEventForm" class="ec-form"><input type="hidden" name="id"><label>登録済みイベント<select id="ecEditEvent"><option value="">新規イベント</option>${events.map(e => `<option value="${esc(e.id)}">${esc(e.name)}</option>`).join("")}</select></label><label>イベント名<input name="name" required maxlength="100" placeholder="日本酒会"></label><label>紹介文<textarea name="description" maxlength="2000" rows="3"></textarea></label>${check("active", "有効", true)}<button class="ec-button" type="submit">イベントを保存</button></form></details>
-      <details class="ec-admin-section" open><summary>2. 年ごとのカード登録・編集</summary><form id="ecCardForm" class="ec-form"><input type="hidden" name="id"><label>イベント<select name="eventId" required><option value="">選択してください</option>${events.map(e => `<option value="${esc(e.id)}">${esc(e.name)}</option>`).join("")}</select></label><label>対象年<input name="year" type="number" min="2000" max="2200" value="${yearNow()}" required></label><label>画像パス<input name="imagePath" required placeholder="collection-images/sake-2026.webp" maxlength="240"></label><p class="ec-help">demo/collection-images/へ画像を配置・公開してからパスを登録してください。</p><img id="ecImagePreview" class="ec-image-preview" alt="カード画像のプレビュー" hidden><p id="ecImageStatus" class="ec-help" role="status"></p><label>関連ニュース<select name="relatedPostId"><option value="">なし</option>${allArticles().filter(p => p.status === "public").map(p => `<option value="${esc(p.id)}">${esc(p.title)}</option>`).join("")}</select></label>${check("published", "一覧に公開する", true)}${check("distributionEnabled", "QRからの配布を有効にする", true)}<p class="ec-help">獲得されたカードのイベント・年・画像は変更できません。配布停止後も獲得履歴は残ります。</p><div class="ec-inline"><button class="ec-button" type="submit">カードを保存</button><button class="btn" type="button" data-ec-new-card>新規登録に戻す</button></div></form></details>
+      <details class="ec-admin-section" open><summary>1. イベント登録・編集</summary><form id="ecEventForm" class="ec-form"><input type="hidden" name="recordId"><label>登録済みイベント<select id="ecEditEvent"><option value="">新規イベント</option>${events.map(e => `<option value="${esc(e.id)}">${esc(e.name)}</option>`).join("")}</select></label><label>イベント名<input name="name" required maxlength="100" placeholder="日本酒会"></label><label>紹介文<textarea name="description" maxlength="2000" rows="3"></textarea></label>${check("active", "有効", true)}<button class="ec-button" type="submit">イベントを保存</button></form></details>
+      <details class="ec-admin-section" open><summary>2. 年ごとのカード登録・編集</summary><form id="ecCardForm" class="ec-form"><input type="hidden" name="recordId"><label>イベント<select name="eventId" required><option value="">選択してください</option>${events.map(e => `<option value="${esc(e.id)}">${esc(e.name)}</option>`).join("")}</select></label><label>対象年<input name="year" type="number" min="2000" max="2200" value="${yearNow()}" required></label><input type="hidden" name="imagePath"><fieldset class="ec-image-picker"><legend>カード画像を選択</legend><div class="ec-image-toolbar"><p class="ec-help">保管済みの画像を押して選択してください。</p><button type="button" class="btn" data-ec-reload-images>画像一覧を更新</button></div><div id="ecImageChoices" class="ec-image-choices" aria-label="保管済みカード画像"></div><p id="ecSelectedImage" class="ec-help" role="status">画像が選択されていません。</p></fieldset><img id="ecImagePreview" class="ec-image-preview" alt="選択したカード画像" hidden><p id="ecImageStatus" class="ec-help" role="status"></p><label>関連ニュース<select name="relatedPostId"><option value="">なし</option>${allArticles().filter(p => p.status === "public").map(p => `<option value="${esc(p.id)}">${esc(p.title)}</option>`).join("")}</select></label>${check("published", "一覧に公開する", true)}${check("distributionEnabled", "QRからの配布を有効にする", true)}<p class="ec-help">獲得されたカードのイベント・年・画像は変更できません。配布停止後も獲得履歴は残ります。</p><div class="ec-inline"><button class="ec-button" type="submit">カードを保存</button><button class="btn" type="button" data-ec-new-card>新規登録に戻す</button></div></form></details>
       <details class="ec-admin-section" open><summary>3. 開催回ごとのQR発行</summary><form id="ecQrForm" class="ec-form"><label>対象カード<select name="cardId" required><option value="">選択してください</option>${cards.map(c => `<option value="${esc(c.id)}">${esc(events.find(e => e.id === c.eventId)?.name)} ${c.year}</option>`).join("")}</select></label><label>開催日（日本時間）<input name="heldOn" type="date" required value="${today()}"></label><label>配布開始（日本時間）<input name="startsAt" type="datetime-local" required value="${today()}T00:00"></label><label>配布終了（日本時間）<input name="endsAt" type="datetime-local" required value="${today()}T23:59"></label><button class="ec-button" type="submit">新しいQRを発行</button></form><p class="ec-help">再発行するときは新しいQRを作成し、以前のQRを停止してください。</p><div id="ecQrList">${qrs.map(qr => {
         const card = cards.find(c => c.id === qr.cardId);
         return `<article class="ec-qr-row"><strong>${esc(events.find(e => e.id === card?.eventId)?.name)} ${card?.year || ""}</strong><p>${dateText(qr.heldOn)} 開催 ／ ${qr.enabled ? "有効" : "停止中"}</p><p>${dateText(qr.startsAt, true)} 〜 ${dateText(qr.endsAt, true)}</p><button type="button" class="btn" data-ec-show-qr="${esc(qr.id)}">QR表示・保存</button> <button type="button" class="btn" data-ec-toggle-qr="${esc(qr.id)}" data-enabled="${!qr.enabled}">${qr.enabled ? "停止する" : "有効にする"}</button></article>`;
       }).join("")}</div></details><dialog id="ecQrDialog" class="ec-qr-dialog"><button type="button" class="ec-back" data-ec-close-qr>閉じる ×</button><h2 id="ecQrTitle"></h2><canvas id="ecQrCanvas" aria-label="イベント配布用QRコード"></canvas><p id="ecQrPeriod"></p><label class="ec-form">共有用URL<input id="ecQrUrl" readonly></label><div class="ec-actions"><button type="button" class="ec-button" data-ec-download-qr>QRをPNG保存</button><button type="button" class="ec-button ec-button--secondary" data-ec-copy-qr>URLをコピー</button></div><p class="ec-help">担当者へQR画像を共有してください。保存・URL共有による代理取得を完全には防止できません。</p></dialog>`;
+    if (st.images === null) loadImages(); else renderImageChoices();
+  }
+  function selectEvent(id) {
+    const event = st.admin.events.find(v => v.id === id), form = byId("ecEventForm");
+    form.elements.recordId.value = event?.id || "";
+    byId("ecEditEvent").value = event?.id || "";
+    for (const key of ["name", "description"]) form.elements[key].value = event?.[key] || "";
+    form.elements.active.checked = event ? !!event.active : true;
   }
   function editCard(id) {
     const c = st.admin.cards.find(c => c.id === id), f = byId("ecCardForm");
-    for (const key of ["id", "eventId", "year", "imagePath", "relatedPostId"]) f.elements[key].value = c[key] || "";
+    f.elements.recordId.value = c.id;
+    for (const key of ["eventId", "year", "imagePath", "relatedPostId"]) f.elements[key].value = c[key] || "";
     f.elements.published.checked = !!c.published; f.elements.distributionEnabled.checked = !!c.distributionEnabled;
-    updateImagePreview(); f.scrollIntoView({ behavior: "smooth", block: "start" });
+    selectImage(c.imagePath); f.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+  function githubImageListUrl() {
+    const base = new URL(".", window.location.href);
+    const owner = base.hostname.match(/^([A-Za-z0-9-]+)\.github\.io$/)?.[1];
+    const parts = base.pathname.split("/").filter(Boolean);
+    if (!owner || parts.length !== 2 || parts[1] !== "demo") return "";
+    const url = new URL(`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(parts[0])}/contents/demo/collection-images`);
+    if (window.APP_CONFIG?.COLLECTION_IMAGES_REF) url.searchParams.set("ref", window.APP_CONFIG.COLLECTION_IMAGES_REF);
+    return url.toString();
+  }
+  async function imageListJson(url) {
+    const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 12000);
+    try {
+      const response = await fetch(url, { cache: "no-store", credentials: "omit", signal: controller.signal, headers: { Accept: "application/json" } });
+      if (!response.ok) throw new Error("画像一覧を取得できませんでした。");
+      return JSON.parse(await response.text());
+    } finally { clearTimeout(timer); }
+  }
+  async function loadImages(force = false) {
+    if (!isAdminUser() || st.imageLoading) return;
+    if (st.images !== null && !force) { renderImageChoices(); return; }
+    const owner = st.owner, seq = ++st.imageSeq;
+    st.imageLoading = true;
+    const root = byId("ecImageChoices");
+    if (root) root.innerHTML = '<p class="ec-help" role="status">保管済みの画像を読み込んでいます…</p>';
+    try {
+      let items, githubFailed = false;
+      const githubUrl = githubImageListUrl();
+      if (githubUrl) {
+        try {
+          const files = await imageListJson(githubUrl);
+          if (!Array.isArray(files)) throw new Error("画像一覧の形式を確認してください。");
+          items = files.filter(f => f.type === "file" && image("collection-images/" + f.name))
+            .map(f => ({ path: "collection-images/" + f.name, invalid: Number.isFinite(f.size) && f.size < 20 }));
+        } catch (_) { githubFailed = true; }
+      }
+      if (!items) {
+        const catalog = await imageListJson(new URL("./collection-images/catalog.json", window.location.href).toString());
+        const entries = Array.isArray(catalog) ? catalog : catalog.images;
+        if (!Array.isArray(entries)) throw new Error("画像一覧の形式を確認してください。");
+        items = entries.map(entry => ({ path: typeof entry === "string" ? entry : entry?.path, invalid: false })).filter(entry => image(entry.path));
+      }
+      if (seq !== st.imageSeq || owner !== st.owner || !isAdminUser()) return;
+      st.images = [...new Map(items.map(item => [item.path, item])).values()];
+      st.imageError = githubFailed && !items.length ? "画像一覧を取得できませんでした。時間をおいて「画像一覧を更新」を押してください。" : "";
+    } catch (_) {
+      if (seq !== st.imageSeq || owner !== st.owner) return;
+      st.images = [];
+      st.imageError = "画像一覧を取得できませんでした。公開ファイルを確認し、「画像一覧を更新」を押してください。";
+    } finally {
+      if (seq === st.imageSeq) { st.imageLoading = false; renderImageChoices(); }
+    }
+  }
+  function renderImageChoices() {
+    const root = byId("ecImageChoices"), form = byId("ecCardForm");
+    if (!root || !form || !isAdminUser()) return;
+    const selected = form.elements.imagePath.value;
+    const paths = new Map((st.images || []).map(item => [item.path, item]));
+    for (const card of st.admin?.cards || []) if (image(card.imagePath) && !paths.has(card.imagePath)) paths.set(card.imagePath, { path: card.imagePath, invalid: false });
+    root.innerHTML = (st.imageError ? `<p class="ec-help ec-image-warning" role="status">${esc(st.imageError)}</p>` : "") +
+      [...paths.values()].sort((a, b) => a.path.localeCompare(b.path)).map(item => `<button type="button" class="ec-image-choice" data-ec-image="${esc(item.path)}" aria-pressed="${selected === item.path}" ${item.invalid ? "disabled" : ""}>${item.invalid ? '<span class="ec-image-unavailable">画像データがありません</span>' : `<img src="${esc(image(item.path))}" alt="${esc(item.path.split("/").pop())}" loading="lazy">`}<span>${esc(item.path.split("/").pop())}</span><small>${item.invalid ? "画像ファイルを再アップロードしてください" : selected === item.path ? "選択中" : "この画像を選ぶ"}</small></button>`).join("") +
+      (!paths.size && !st.imageError ? '<p class="ec-help">保管済みの画像がありません。collection-imagesフォルダへ画像をアップロードし、「画像一覧を更新」を押してください。</p>' : "");
+  }
+  function selectImage(path) {
+    const clean = path.replace(/^\.\//, ""), form = byId("ecCardForm");
+    form.elements.imagePath.value = image(clean) ? clean : "";
+    byId("ecSelectedImage").textContent = form.elements.imagePath.value ? "選択中：" + clean.split("/").pop() : "画像が選択されていません。";
+    renderImageChoices();
+    updateImagePreview();
   }
   function updateImagePreview() {
     const path = image(byId("ecCardForm").elements.imagePath.value.replace(/^\.\//, ""));
     const img = byId("ecImagePreview"), status = byId("ecImageStatus");
     img.hidden = true; status.textContent = "";
-    if (!path) { status.textContent = "collection-images/内の画像パスを指定してください。"; return; }
+    if (!path) { img.removeAttribute("src"); return; }
     img.onload = () => { img.hidden = false; status.textContent = "画像を確認できました。"; };
-    img.onerror = () => { img.hidden = true; status.textContent = "画像が見つかりません。ファイルの配置・公開と大文字小文字を確認してください。"; };
+    img.onerror = () => { img.hidden = true; status.textContent = "画像を読み込めません。実際の画像ファイルがアップロードされているか確認してください。"; };
     img.src = path;
   }
   function showQr(id) {
@@ -202,28 +285,46 @@
   }
   function adminNotice(text) { const el = byId("ecAdminMsg"); if (el) { el.hidden = false; el.textContent = text; el.scrollIntoView({ behavior: "smooth", block: "nearest" }); } }
   async function submitAdmin(form) {
-    const submit = form.querySelector('[type="submit"]'); submit.disabled = true;
-    const values = Object.fromEntries(new FormData(form));
+    if (form.dataset.ecSubmitting) return;
+    const submit = form.querySelector('[type="submit"]'), formId = form.getAttribute("id"), owner = st.owner;
+    form.dataset.ecSubmitting = "true"; submit.disabled = true;
+    let saved = false, result;
     try {
-      if (form.id === "ecEventForm") await api("collectionSaveEvent", { event: { ...values, active: form.elements.active.checked } });
-      if (form.id === "ecCardForm") {
+      const values = Object.fromEntries(new FormData(form));
+      if (formId === "ecEventForm") result = await api("collectionSaveEvent", { event: { ...values, id: values.recordId, active: form.elements.active.checked } });
+      if (formId === "ecCardForm") {
         const preview = byId("ecImagePreview");
-        if (!image(values.imagePath.replace(/^\.\//, "")) || preview.hidden || !preview.complete || !preview.naturalWidth) throw new Error("先に画像プレビューを確認してください。");
-        await api("collectionSaveCard", { card: { ...values, year: Number(values.year), published: form.elements.published.checked, distributionEnabled: form.elements.distributionEnabled.checked } });
+        if (!image(values.imagePath) || preview.hidden || !preview.complete || !preview.naturalWidth) throw new Error("画像を選び、プレビューが表示されてから保存してください。");
+        result = await api("collectionSaveCard", { card: { ...values, id: values.recordId, year: Number(values.year), published: form.elements.published.checked, distributionEnabled: form.elements.distributionEnabled.checked } });
       }
-      let created;
-      if (form.id === "ecQrForm") created = await api("collectionCreateQr", { qr: { ...values, startsAt: values.startsAt + ":00+09:00", endsAt: values.endsAt + ":00+09:00" } });
-      await loadAdmin();
-      adminNotice("保存しました。");
-      if (created && st.admin?.qrs.some(q => q.id === created.qr.id)) showQr(created.qr.id);
-    } catch (err) { adminNotice(err.message); } finally { submit.disabled = false; }
+      if (formId === "ecQrForm") result = await api("collectionCreateQr", { qr: { ...values, startsAt: values.startsAt + ":00+09:00", endsAt: values.endsAt + ":00+09:00" } });
+      saved = true;
+      if (owner !== st.owner || !active("collection-admin")) return;
+      if (result.event || result.card) form.elements.recordId.value = (result.event || result.card).id;
+      if (!(await loadAdmin({ preserveForm: true }))) return;
+      if (result.event) {
+        selectEvent(result.event.id);
+        byId("ecCardForm").elements.eventId.value = result.event.id;
+        adminNotice(`イベント「${result.event.name}」を保存しました。続いて「2. 年ごとのカード登録・編集」で画像を選択できます。`);
+      } else if (result.card) {
+        editCard(result.card.id);
+        byId("ecQrForm").elements.cardId.value = result.card.id;
+        adminNotice("カードを保存しました。続いて「3. 開催回ごとのQR発行」で配布期間を設定できます。");
+      } else {
+        adminNotice("QRを発行しました。");
+        if (st.admin?.qrs.some(q => q.id === result.qr.id)) showQr(result.qr.id);
+      }
+    } catch (err) {
+      if (owner === st.owner && active("collection-admin")) adminNotice(saved ? "保存は完了しましたが、一覧の再読み込みに失敗しました。入力内容は残っています。時間をおいて管理画面を開き直してください。" : err.message);
+    } finally { delete form.dataset.ecSubmitting; submit.disabled = false; }
   }
   function authChanged() {
     const owner = String(getCurrentUser()?.id || "");
     if (owner) st.loginRequested = false;
     if (owner !== st.owner) {
       st.owner = owner; st.cards = []; st.admin = null; st.detail = ""; st.year = yearNow(); st.event = ""; st.tab = "all";
-      st.listSeq++; st.claimSeq++; st.adminSeq++;
+      st.images = null; st.imageError = ""; st.imageLoading = false;
+      st.listSeq++; st.claimSeq++; st.adminSeq++; st.imageSeq++;
       ["collectionRoot", "collectionDetail", "collectionAdmin", "collectionClaim"].forEach(id => { if (byId(id)) byId(id).replaceChildren(); });
     }
     if (owner || !tokenFromHash() || st.loginRequested) byId("collectionPublic").hidden = true;
@@ -254,7 +355,9 @@
           if (post) openDrawer(post.id); else showToast("関連記事を読み込めません。時間をおいてお試しください。");
         }
         if (target.dataset.ecEditCard) editCard(target.dataset.ecEditCard);
-        if (target.hasAttribute("data-ec-new-card")) { byId("ecCardForm").reset(); byId("ecCardForm").elements.id.value = ""; byId("ecImagePreview").hidden = true; byId("ecImageStatus").textContent = ""; }
+        if (target.hasAttribute("data-ec-new-card")) { byId("ecCardForm").reset(); byId("ecCardForm").elements.recordId.value = ""; selectImage(""); }
+        if (target.dataset.ecImage) selectImage(target.dataset.ecImage);
+        if (target.hasAttribute("data-ec-reload-images")) loadImages(true);
         if (target.dataset.ecSelectQr) { byId("ecQrForm").elements.cardId.value = target.dataset.ecSelectQr; byId("ecQrForm").scrollIntoView({ behavior: "smooth" }); }
         if (target.dataset.ecShowQr) showQr(target.dataset.ecShowQr);
         if (target.dataset.ecToggleQr) {
@@ -268,15 +371,17 @@
       } catch (err) { adminNotice(err.message); showToast(err.message); }
     });
     document.addEventListener("submit", e => {
-      if (["ecEventForm", "ecCardForm", "ecQrForm"].includes(e.target.id)) { e.preventDefault(); submitAdmin(e.target); }
-    });
+      const form = e.target;
+      // HTMLFormElement named controls can override .id in real browsers.
+      if (form.matches?.("form#ecEventForm,form#ecCardForm,form#ecQrForm")) {
+        e.preventDefault(); e.stopPropagation(); submitAdmin(form);
+      }
+    }, true);
     document.addEventListener("change", e => {
       if (e.target.id === "ecYear") { st.year = Number(e.target.value); renderList(); }
       if (e.target.id === "ecEvent") { st.event = e.target.value; renderList(); }
       if (e.target.id === "ecEditEvent") {
-        const event = st.admin.events.find(v => v.id === e.target.value), form = byId("ecEventForm");
-        for (const key of ["id", "name", "description"]) form.elements[key].value = event?.[key] || "";
-        form.elements.active.checked = event ? !!event.active : true;
+        selectEvent(e.target.value);
       }
       if (e.target.name === "imagePath") updateImagePreview();
     });
@@ -284,7 +389,15 @@
     document.querySelector(".bottomnav")?.addEventListener("click", e => { if (e.target.closest(".navitem")) { clearClaimHash(); st.claimSeq++; } });
     window.addEventListener("hashchange", () => { st.loginRequested = false; resume(); });
     document.addEventListener("keydown", e => { if (e.key === "Escape" && active("collection-detail")) go("collection"); });
-    document.addEventListener("error", e => { if (e.target.matches?.(".ec-card img,.ec-detail-art img,.ec-celebrate img,.ec-admin-card img")) { e.target.classList.add("ec-image-missing"); e.target.alt = "画像が見つかりません。公開ファイルを確認してください。"; } }, true);
+    document.addEventListener("error", e => {
+      if (e.target.matches?.(".ec-image-choice img")) {
+        const choice = e.target.closest("button");
+        choice.disabled = true;
+        choice.querySelector("small").textContent = "画像を読み込めません。再アップロードしてください。";
+        e.target.alt = "画像を表示できません";
+      }
+      if (e.target.matches?.(".ec-card img,.ec-detail-art img,.ec-celebrate img,.ec-admin-card img")) { e.target.classList.add("ec-image-missing"); e.target.alt = "画像が見つかりません。公開ファイルを確認してください。"; }
+    }, true);
     authChanged();
     resume();
   }
