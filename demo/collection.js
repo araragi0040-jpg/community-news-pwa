@@ -96,6 +96,7 @@
     byId("collectionRoot").innerHTML = `
       <div class="ec-tabs" aria-label="コレクションの表示">${[["all", "すべて"], ["event", "イベント別"], ["year", "年別"]].map(([value, label]) => `<button type="button" data-ec-tab="${value}" aria-pressed="${st.tab === value}">${label}</button>`).join("")}</div>
       <header class="ec-heading"><div class="ec-heading__icon" aria-hidden="true">▧</div><div><h1>語り場コレクション</h1><p>参加した思い出を、1枚ずつ。</p></div><div class="ec-count"><span>${st.year}年の獲得枚数</span><strong>${selected.filter(c => c.acquired).length}<small>枚</small></strong><span>／ ${selected.length}枚</span></div></header>
+      <div class="ec-scan-entry"><button type="button" class="ec-button" data-ec-scan>▣　QRを読み取る</button><p>会場のQRコードをカメラで読み取って、カードを獲得できます。</p></div>
       <div class="ec-filters"><label>表示する年<select id="ecYear">${years.map(y => `<option value="${y}" ${y === st.year ? "selected" : ""}>${y}年</option>`).join("")}</select></label><label ${st.tab !== "event" ? "hidden" : ""}>イベント<select id="ecEvent"><option value="">すべてのイベント</option>${events.map(([id, name]) => `<option value="${esc(id)}" ${st.event === id ? "selected" : ""}>${esc(name)}</option>`).join("")}</select></label></div>
       <div class="ec-grid">${filtered.map(c => `<button type="button" class="ec-card${c.acquired ? "" : " ec-card--locked"}" data-ec-card="${esc(c.id)}" aria-label="${esc(c.eventName)} ${c.year} ${c.acquired ? "獲得済み・詳細を見る" : "未獲得"}"><div class="ec-card__art">${c.acquired ? `<img src="${esc(image(c.imagePath))}" alt="${esc(c.eventName)}の記念カード" loading="lazy">` : `<div class="ec-silhouette" aria-hidden="true"><i></i><i></i><i></i>${lockIcon}</div>`}<span class="ec-year">${c.year}</span></div><div class="ec-card__name">${esc(c.eventName)} ${c.year}</div><span class="ec-badge${c.acquired ? "" : " ec-badge--muted"}">${c.acquired ? "獲得済み" : "未獲得"}</span></button>`).join("")}</div>
       ${filtered.length ? "" : `<div class="ec-empty">${st.year}年のカードはまだ公開されていません。</div>`}
@@ -103,7 +104,7 @@
   }
   function renderDetail(card) {
     st.detail = card.id;
-    byId("collectionDetail").innerHTML = `<button type="button" class="ec-back" data-ec-go="collection">〈 コレクションに戻る</button><div class="ec-detail-art"><img src="${esc(image(card.imagePath))}" alt="${esc(card.eventName)} ${card.year}"><span class="ec-year">${card.year}</span></div><div class="ec-detail-title"><h1>${esc(card.eventName)} ${card.year}</h1><span class="ec-badge">獲得済み</span></div><dl class="ec-facts"><div><dt>開催日</dt><dd>${dateText(card.heldOn)}</dd></div><div><dt>獲得日時</dt><dd>${dateText(card.acquiredAt, true)}</dd></div><div><dt>イベント紹介</dt><dd class="ec-description">${esc(card.description || "イベントの思い出をお楽しみください。")}</dd></div></dl>${card.relatedPostId ? `<button type="button" class="ec-button ec-button--secondary" data-ec-article="${esc(card.relatedPostId)}">関連ニュースを見る　›</button>` : ""}`;
+    byId("collectionDetail").innerHTML = `<button type="button" class="ec-back" data-ec-go="collection">〈 コレクションに戻る</button><div class="ec-detail-art"><img src="${esc(image(card.imagePath))}" alt="${esc(card.eventName)} ${card.year}"><span class="ec-year">${card.year}</span></div><div class="ec-detail-title"><h1>${esc(card.eventName)} ${card.year}</h1><span class="ec-badge">獲得済み</span></div><dl class="ec-facts"><div><dt>開催日</dt><dd>${dateText(card.heldOn)}</dd></div><div><dt>獲得日時</dt><dd>${dateText(card.acquiredAt, true)}</dd></div><div><dt>イベント紹介</dt><dd class="ec-description">${esc(card.description || "イベントの思い出をお楽しみください。")}</dd></div></dl>`;
   }
   async function showClaim() {
     if (st.claiming) {
@@ -174,7 +175,7 @@
         return `<article class="ec-admin-card"><img src="${esc(image(c.imagePath))}" alt="${esc(event?.name)}のカード"><div><strong>${esc(event?.name)} ${c.year}</strong><p><span class="ec-badge">${c.published ? "公開中" : "非公開"}</span> <span class="ec-badge${c.distributionEnabled && event?.active ? "" : " ec-badge--muted"}">${c.distributionEnabled && event?.active ? "配布有効" : "配布停止"}</span></p><button class="btn" type="button" data-ec-edit-card="${esc(c.id)}">編集</button> <button class="btn" type="button" data-ec-select-qr="${esc(c.id)}">QR発行・確認</button></div></article>`;
       }).join("") || '<p class="ec-empty">カードを登録すると、ここに表示されます。</p>'}</div>
       <details class="ec-admin-section" open><summary>1. イベント登録・編集</summary><form id="ecEventForm" class="ec-form"><input type="hidden" name="recordId"><label>登録済みイベント<select id="ecEditEvent"><option value="">新規イベント</option>${events.map(e => `<option value="${esc(e.id)}">${esc(e.name)}</option>`).join("")}</select></label><label>イベント名<input name="name" required maxlength="100" placeholder="日本酒会"></label><label>紹介文<textarea name="description" maxlength="2000" rows="3"></textarea></label>${check("active", "有効", true)}<button class="ec-button" type="submit">イベントを保存</button></form></details>
-      <details class="ec-admin-section" open><summary>2. 年ごとのカード登録・編集</summary><form id="ecCardForm" class="ec-form"><input type="hidden" name="recordId"><label>イベント<select name="eventId" required><option value="">選択してください</option>${events.map(e => `<option value="${esc(e.id)}">${esc(e.name)}</option>`).join("")}</select></label><label>対象年<input name="year" type="number" min="2000" max="2200" value="${yearNow()}" required></label><input type="hidden" name="imagePath"><fieldset class="ec-image-picker"><legend>カード画像を選択</legend><div class="ec-image-toolbar"><p class="ec-help">保管済みの画像を押して選択してください。</p><button type="button" class="btn" data-ec-reload-images>画像一覧を更新</button></div><div id="ecImageChoices" class="ec-image-choices" aria-label="保管済みカード画像"></div><p id="ecSelectedImage" class="ec-help" role="status">画像が選択されていません。</p></fieldset><img id="ecImagePreview" class="ec-image-preview" alt="選択したカード画像" hidden><p id="ecImageStatus" class="ec-help" role="status"></p><label>関連ニュース<select name="relatedPostId"><option value="">なし</option>${allArticles().filter(p => p.status === "public").map(p => `<option value="${esc(p.id)}">${esc(p.title)}</option>`).join("")}</select></label>${check("published", "一覧に公開する", true)}${check("distributionEnabled", "QRからの配布を有効にする", true)}<p class="ec-help">獲得されたカードのイベント・年・画像は変更できません。配布停止後も獲得履歴は残ります。</p><div class="ec-inline"><button class="ec-button" type="submit">カードを保存</button><button class="btn" type="button" data-ec-new-card>新規登録に戻す</button></div></form></details>
+      <details class="ec-admin-section" open><summary>2. 年ごとのカード登録・編集</summary><form id="ecCardForm" class="ec-form"><input type="hidden" name="recordId"><label>イベント<select name="eventId" required><option value="">選択してください</option>${events.map(e => `<option value="${esc(e.id)}">${esc(e.name)}</option>`).join("")}</select></label><label>対象年<input name="year" type="number" min="2000" max="2200" value="${yearNow()}" required></label><input type="hidden" name="imagePath"><fieldset class="ec-image-picker"><legend>カード画像を選択</legend><div class="ec-image-toolbar"><p class="ec-help">保管済みの画像を押して選択してください。</p><button type="button" class="btn" data-ec-reload-images>画像一覧を更新</button></div><div id="ecImageChoices" class="ec-image-choices" aria-label="保管済みカード画像"></div><p id="ecSelectedImage" class="ec-help" role="status">画像が選択されていません。</p></fieldset><img id="ecImagePreview" class="ec-image-preview" alt="選択したカード画像" hidden><p id="ecImageStatus" class="ec-help" role="status"></p>${check("published", "一覧に公開する", true)}${check("distributionEnabled", "QRからの配布を有効にする", true)}<p class="ec-help">獲得されたカードのイベント・年・画像は変更できません。配布停止後も獲得履歴は残ります。</p><div class="ec-inline"><button class="ec-button" type="submit">カードを保存</button><button class="btn" type="button" data-ec-new-card>新規登録に戻す</button></div></form></details>
       <details class="ec-admin-section" open><summary>3. 開催回ごとのQR発行</summary><form id="ecQrForm" class="ec-form"><label>対象カード<select name="cardId" required><option value="">選択してください</option>${cards.map(c => `<option value="${esc(c.id)}">${esc(events.find(e => e.id === c.eventId)?.name)} ${c.year}</option>`).join("")}</select></label><label>開催日（日本時間）<input name="heldOn" type="date" required value="${today()}"></label><label>配布開始（日本時間）<input name="startsAt" type="datetime-local" required value="${today()}T00:00"></label><label>配布終了（日本時間）<input name="endsAt" type="datetime-local" required value="${today()}T23:59"></label><button class="ec-button" type="submit">新しいQRを発行</button></form><p class="ec-help">再発行するときは新しいQRを作成し、以前のQRを停止してください。</p><div id="ecQrList">${qrs.map(qr => {
         const card = cards.find(c => c.id === qr.cardId);
         return `<article class="ec-qr-row"><strong>${esc(events.find(e => e.id === card?.eventId)?.name)} ${card?.year || ""}</strong><p>${dateText(qr.heldOn)} 開催 ／ ${qr.enabled ? "有効" : "停止中"}</p><p>${dateText(qr.startsAt, true)} 〜 ${dateText(qr.endsAt, true)}</p><button type="button" class="btn" data-ec-show-qr="${esc(qr.id)}">QR表示・保存</button> <button type="button" class="btn" data-ec-toggle-qr="${esc(qr.id)}" data-enabled="${!qr.enabled}">${qr.enabled ? "停止する" : "有効にする"}</button></article>`;
@@ -191,7 +192,7 @@
   function editCard(id) {
     const c = st.admin.cards.find(c => c.id === id), f = byId("ecCardForm");
     f.elements.recordId.value = c.id;
-    for (const key of ["eventId", "year", "imagePath", "relatedPostId"]) f.elements[key].value = c[key] || "";
+    for (const key of ["eventId", "year", "imagePath"]) f.elements[key].value = c[key] || "";
     f.elements.published.checked = !!c.published; f.elements.distributionEnabled.checked = !!c.distributionEnabled;
     selectImage(c.imagePath); f.scrollIntoView({ behavior: "smooth", block: "start" });
   }
@@ -330,6 +331,7 @@
     const owner = String(getCurrentUser()?.id || "");
     if (owner) st.loginRequested = false;
     if (owner !== st.owner) {
+      window.CollectionScanner?.close();
       st.owner = owner; st.cards = []; st.admin = null; st.detail = ""; st.year = yearNow(); st.event = ""; st.tab = "all";
       st.images = null; st.imageError = ""; st.imageLoading = false;
       st.imageVersions = new Map(); st.imageRefresh = 0;
@@ -339,6 +341,7 @@
     if (owner || !tokenFromHash() || st.loginRequested) byId("collectionPublic").hidden = true;
   }
   function pageChanged(key) {
+    if (key !== "collection") window.CollectionScanner?.close();
     document.querySelector('.navitem[data-nav="collection"]')?.classList.toggle("navitem--active", ["collection", "collection-detail", "collection-claim"].includes(key));
     if (key === "collection") loadList();
     if (key === "collection-admin") loadAdmin();
@@ -349,6 +352,15 @@
       const target = e.target.closest("button"); if (!target) return;
       try {
         if (target.dataset.ecGo) await go(target.dataset.ecGo);
+        if (target.hasAttribute("data-ec-scan")) {
+          if (!getCurrentUser() || !getAuthToken() || !active("collection")) return;
+          if (!window.CollectionScanner) { showToast("読み取り機能を読み込めません。アプリを開き直してください。"); return; }
+          window.CollectionScanner.open(qrToken => {
+            window.history.replaceState({}, "", window.location.pathname + window.location.search + "#collection-claim=" + encodeURIComponent(qrToken));
+            st.loginRequested = false;
+            resume();
+          });
+        }
         if (target.hasAttribute("data-ec-login")) { st.loginRequested = true; byId("collectionPublic").hidden = true; byId("authGate").hidden = false; byId("loginEmail").focus(); }
         if (target.dataset.ecRetry === "list") loadList();
         if (target.dataset.ecRetry === "claim") showClaim();
@@ -358,10 +370,6 @@
           const card = st.cards.find(c => c.id === target.dataset.ecCard);
           if (!card?.acquired) { showToast("イベント会場のQRコードから獲得できます。"); return; }
           setActivePage("collection-detail"); renderDetail(card); window.scrollTo(0, 0);
-        }
-        if (target.dataset.ecArticle) {
-          const post = allArticles().find(p => p.id === target.dataset.ecArticle && p.status === "public");
-          if (post) openDrawer(post.id); else showToast("関連記事を読み込めません。時間をおいてお試しください。");
         }
         if (target.dataset.ecEditCard) editCard(target.dataset.ecEditCard);
         if (target.hasAttribute("data-ec-new-card")) { byId("ecCardForm").reset(); byId("ecCardForm").elements.recordId.value = ""; selectImage(""); }

@@ -1,13 +1,15 @@
-const CACHE_NAME = "community-news-demo-collection-3";
+const CACHE_NAME = "community-news-demo-collection-4";
 const ASSETS = [
   "./",
-  "./index.html?v=collection-demo-3",
+  "./index.html?v=collection-demo-4",
   "./styles.css?v=thumbnail-demo-1",
   "./thumbnail.js?v=thumbnail-demo-1",
-  "./app.js?v=collection-demo-3",
-  "./collection.js?v=collection-demo-3",
-  "./collection.css?v=collection-demo-3",
+  "./app.js?v=collection-demo-4",
+  "./collection.js?v=collection-demo-4",
+  "./collection.css?v=collection-demo-4",
   "./vendor/qrcode.js?v=2.0.4",
+  "./vendor/jsQR.js?v=1.4.0",
+  "./collection-scanner.js?v=collection-demo-4",
   "./manifest.webmanifest",
   "./favicon.png",
   "./logo.png"
