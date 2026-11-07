@@ -1,12 +1,12 @@
-const CACHE_NAME = "community-news-demo-collection-2";
+const CACHE_NAME = "community-news-demo-collection-3";
 const ASSETS = [
   "./",
-  "./index.html?v=collection-demo-2",
+  "./index.html?v=collection-demo-3",
   "./styles.css?v=thumbnail-demo-1",
   "./thumbnail.js?v=thumbnail-demo-1",
-  "./app.js?v=collection-demo-2",
-  "./collection.js?v=collection-demo-2",
-  "./collection.css?v=collection-demo-2",
+  "./app.js?v=collection-demo-3",
+  "./collection.js?v=collection-demo-3",
+  "./collection.css?v=collection-demo-3",
   "./vendor/qrcode.js?v=2.0.4",
   "./manifest.webmanifest",
   "./favicon.png",
@@ -37,6 +37,21 @@ self.addEventListener("fetch", (event) => {
   const isGasApi = url.hostname.includes("script.google.com") || url.searchParams.has("action");
   const isConfig = path.endsWith("/config.js") || path.endsWith("config.js");
   const isHtml = event.request.mode === "navigate" || path.endsWith("/index.html");
+
+  // Revalidate replaced card images instead of reusing a fresh-but-invalid HTTP cache entry.
+  if (path.includes("/collection-images/") && /\.(png|jpe?g|webp|gif)$/i.test(path)) {
+    event.respondWith(
+      fetch(event.request, { cache: "no-cache" }).then(response => {
+        const length = response.headers.get("content-length");
+        if (response.ok && (!length || Number(length) >= 20)) {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+        }
+        return response;
+      }).catch(() => caches.match(event.request))
+    );
+    return;
+  }
 
   if (isGasApi || isConfig || isHtml) {
     event.respondWith(fetch(event.request, { cache: "no-store" }).catch(() => caches.match(event.request)));

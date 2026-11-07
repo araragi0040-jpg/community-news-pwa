@@ -6,7 +6,7 @@
   const yearNow = () => Number(new Intl.DateTimeFormat("en", { year: "numeric", timeZone: "Asia/Tokyo" }).format(new Date()));
   const today = () => new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Tokyo" }).format(new Date());
   const lockIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 10V7a6 6 0 0 1 12 0v3h1a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h1zm3 0h6V7a3 3 0 0 0-6 0v3zm2 5v4h2v-4h-2z"/></svg>';
-  const st = { cards: [], year: yearNow(), event: "", tab: "all", owner: "", listSeq: 0, claimSeq: 0, adminSeq: 0, detail: "", loginRequested: false, claiming: false, admin: null, images: null, imageError: "", imageSeq: 0, imageLoading: false };
+  const st = { cards: [], year: yearNow(), event: "", tab: "all", owner: "", listSeq: 0, claimSeq: 0, adminSeq: 0, detail: "", loginRequested: false, claiming: false, admin: null, images: null, imageError: "", imageSeq: 0, imageLoading: false, imageVersions: new Map(), imageRefresh: 0 };
   function tokenFromHash() {
     const match = window.location.hash.match(/^#collection-claim=([^&]+)$/);
     if (!match) return "";
@@ -14,7 +14,10 @@
   }
   function active(key) { return document.querySelector(`.page[data-page="${key}"]`)?.classList.contains("page--active") === true; }
   function image(path) {
-    return typeof path === "string" && /^collection-images\/[A-Za-z0-9_\/-]+\.(png|jpe?g|webp|gif)$/i.test(path) ? "./" + path : "";
+    if (typeof path !== "string" || !/^collection-images\/[A-Za-z0-9_\/-]+\.(png|jpe?g|webp|gif)$/i.test(path)) return "";
+    const params = new URLSearchParams({ "ec-image": st.imageVersions.get(path) || "collection-demo-3" });
+    if (st.imageRefresh) params.set("ec-refresh", String(st.imageRefresh));
+    return "./" + path + "?" + params.toString();
   }
   function dateText(value, withTime = false) {
     if (!value) return "—";
@@ -213,6 +216,7 @@
     if (!isAdminUser() || st.imageLoading) return;
     if (st.images !== null && !force) { renderImageChoices(); return; }
     const owner = st.owner, seq = ++st.imageSeq;
+    if (force) st.imageRefresh++;
     st.imageLoading = true;
     const root = byId("ecImageChoices");
     if (root) root.innerHTML = '<p class="ec-help" role="status">保管済みの画像を読み込んでいます…</p>';
@@ -224,24 +228,28 @@
           const files = await imageListJson(githubUrl);
           if (!Array.isArray(files)) throw new Error("画像一覧の形式を確認してください。");
           items = files.filter(f => f.type === "file" && image("collection-images/" + f.name))
-            .map(f => ({ path: "collection-images/" + f.name, invalid: Number.isFinite(f.size) && f.size < 20 }));
+            .map(f => ({ path: "collection-images/" + f.name, invalid: Number.isFinite(f.size) && f.size < 20, revision: f.sha }));
         } catch (_) { githubFailed = true; }
       }
       if (!items) {
         const catalog = await imageListJson(new URL("./collection-images/catalog.json", window.location.href).toString());
         const entries = Array.isArray(catalog) ? catalog : catalog.images;
         if (!Array.isArray(entries)) throw new Error("画像一覧の形式を確認してください。");
-        items = entries.map(entry => ({ path: typeof entry === "string" ? entry : entry?.path, invalid: false })).filter(entry => image(entry.path));
+        items = entries.map(entry => ({ path: typeof entry === "string" ? entry : entry?.path, invalid: false, revision: entry?.revision })).filter(entry => image(entry.path));
       }
       if (seq !== st.imageSeq || owner !== st.owner || !isAdminUser()) return;
       st.images = [...new Map(items.map(item => [item.path, item])).values()];
+      st.imageVersions = new Map(items.filter(item => typeof item.revision === "string" && /^[a-f0-9]{40,64}$/i.test(item.revision)).map(item => [item.path, item.revision]));
       st.imageError = githubFailed && !items.length ? "画像一覧を取得できませんでした。時間をおいて「画像一覧を更新」を押してください。" : "";
     } catch (_) {
       if (seq !== st.imageSeq || owner !== st.owner) return;
       st.images = [];
       st.imageError = "画像一覧を取得できませんでした。公開ファイルを確認し、「画像一覧を更新」を押してください。";
     } finally {
-      if (seq === st.imageSeq) { st.imageLoading = false; renderImageChoices(); }
+      if (seq === st.imageSeq) {
+        st.imageLoading = false; renderImageChoices();
+        if (byId("ecCardForm")?.elements.imagePath.value) updateImagePreview();
+      }
     }
   }
   function renderImageChoices() {
@@ -267,7 +275,7 @@
     img.hidden = true; status.textContent = "";
     if (!path) { img.removeAttribute("src"); return; }
     img.onload = () => { img.hidden = false; status.textContent = "画像を確認できました。"; };
-    img.onerror = () => { img.hidden = true; status.textContent = "画像を読み込めません。実際の画像ファイルがアップロードされているか確認してください。"; };
+    img.onerror = () => { img.hidden = true; status.textContent = "画像を読み込めません。「画像一覧を更新」で読み直してください。公開直後の場合は少し待ってからお試しください。"; };
     img.src = path;
   }
   function showQr(id) {
@@ -324,6 +332,7 @@
     if (owner !== st.owner) {
       st.owner = owner; st.cards = []; st.admin = null; st.detail = ""; st.year = yearNow(); st.event = ""; st.tab = "all";
       st.images = null; st.imageError = ""; st.imageLoading = false;
+      st.imageVersions = new Map(); st.imageRefresh = 0;
       st.listSeq++; st.claimSeq++; st.adminSeq++; st.imageSeq++;
       ["collectionRoot", "collectionDetail", "collectionAdmin", "collectionClaim"].forEach(id => { if (byId(id)) byId(id).replaceChildren(); });
     }
@@ -393,7 +402,7 @@
       if (e.target.matches?.(".ec-image-choice img")) {
         const choice = e.target.closest("button");
         choice.disabled = true;
-        choice.querySelector("small").textContent = "画像を読み込めません。再アップロードしてください。";
+        choice.querySelector("small").textContent = "画像を読み込めません。「画像一覧を更新」で再試行してください。";
         e.target.alt = "画像を表示できません";
       }
       if (e.target.matches?.(".ec-card img,.ec-detail-art img,.ec-celebrate img,.ec-admin-card img")) { e.target.classList.add("ec-image-missing"); e.target.alt = "画像が見つかりません。公開ファイルを確認してください。"; }

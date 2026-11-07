@@ -4369,7 +4369,7 @@ setInterval(touchAnalyticsVisit, 60000);
 async function init() {
   if ("serviceWorker" in navigator) {
     try {
-      const registration = await navigator.serviceWorker.register("./sw.js?v=collection-demo-2", {
+      const registration = await navigator.serviceWorker.register("./sw.js?v=collection-demo-3", {
         scope: "./"
       });
 
