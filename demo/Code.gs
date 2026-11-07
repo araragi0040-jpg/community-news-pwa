@@ -75,6 +75,11 @@ function doPost(e) {
     const action = body.action || "";
     const token = getTokenFromPost(body);
 
+    if (String(action).indexOf("collection") === 0) {
+      if (typeof eventCollectionApi !== "function") throw fail("DEMO GASにEventCollection.gsを追加してください。", "COLLECTION_NOT_CONFIGURED");
+      return outputJson(eventCollectionApi(body));
+    }
+
     if (action === "savePost") {
       requireAdmin(token);
       return outputJson({ ok: true, post: savePost(body.post || {}) });

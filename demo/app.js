@@ -7,12 +7,13 @@
 const $ = (sel, root=document) => root.querySelector(sel);
 const $$ = (sel, root=document) => Array.from(root.querySelectorAll(sel));
 
-const LS_KEY_SAVED = "community_news_saved_v1";
-const LS_KEY_USER = "community_news_user_v1";
-const LS_KEY_TOKEN = "community_news_token_v1";
-const LS_KEY_POSTS_CACHE = "community_news_posts_cache_v1";
-const LS_KEY_EVENTS_CACHE = "community_news_events_cache_v1";
-const LS_KEY_DAILY_POINT_DATE_PREFIX = "community_news_daily_point_date_v1:";
+// DEMO storage is isolated from the production app on the same Pages origin.
+const LS_KEY_SAVED = "community_news_demo_saved_v1";
+const LS_KEY_USER = "community_news_demo_user_v1";
+const LS_KEY_TOKEN = "community_news_demo_token_v1";
+const LS_KEY_POSTS_CACHE = "community_news_demo_posts_cache_v1";
+const LS_KEY_EVENTS_CACHE = "community_news_demo_events_cache_v1";
+const LS_KEY_DAILY_POINT_DATE_PREFIX = "community_news_demo_daily_point_date_v1:";
 const ITEMS_PER_PAGE = 10;
 
 // Visits are acknowledged online only. No offline queue or synthetic backfill.
@@ -1090,6 +1091,7 @@ function applyAuthUI() {
     const installBtn = document.getElementById("btnInstall");
     if (installBtn) installBtn.hidden = true;
     clearInstallHelpTimer();
+    window.EventCollection?.authChanged();
     return;
   }
 
@@ -1124,6 +1126,7 @@ function applyAuthUI() {
   updateProfileButton(user);
   updateTopGachaButton(user);
   scheduleInstallButtonVisibility();
+  window.EventCollection?.authChanged();
 }
 
 // ===== Rendering: Chips =====
@@ -1899,6 +1902,7 @@ function setActivePage(key){
   if (key === "event-admin" && (!user || !canManageEvents(user))) {
     key = "home";
   }
+  if (key === "collection-admin" && (!user || !isAdminUser(user))) key = "home";
 
   state.activePage = key;
   $$(".page").forEach(p => p.classList.remove("page--active"));
@@ -1914,6 +1918,7 @@ function setActivePage(key){
   if(key === "schedule") renderCalendar();
   if(key === "event-admin") renderEventAdminPanel();
   if(key === "admin") renderAdmin();
+  window.EventCollection?.pageChanged(key);
 }
 
 // ===== Schedule =====
@@ -3953,6 +3958,7 @@ function bind(){
         awardDailyVisitPointIfNeeded().catch(err => console.warn("Daily point update failed:", err));
         requestSystemNotificationPermission();
         setActivePage("home");
+        window.EventCollection?.resume();
         const cachedPosts = loadCachedPosts();
         const cachedEvents = loadCachedEvents();
         const hasPostCache = cachedPosts.length > 0;
@@ -4363,7 +4369,7 @@ setInterval(touchAnalyticsVisit, 60000);
 async function init() {
   if ("serviceWorker" in navigator) {
     try {
-      const registration = await navigator.serviceWorker.register("./sw.js?v=thumbnail-demo-1", {
+      const registration = await navigator.serviceWorker.register("./sw.js?v=collection-demo-1", {
         scope: "./"
       });
 
@@ -4392,6 +4398,7 @@ async function init() {
     }
     clearCurrentUser();
     applyAuthUI();
+    window.EventCollection?.resume();
     return;
   }
 
@@ -4411,6 +4418,7 @@ async function init() {
 
   requestSystemNotificationPermission();
   setActivePage("home");
+  window.EventCollection?.resume();
   renderAll();
   setFeedLoading(!hasPostCache);
   awardDailyVisitPointIfNeeded().catch(err => console.warn("Daily point update failed:", err));

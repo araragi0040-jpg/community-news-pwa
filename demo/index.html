@@ -9,8 +9,10 @@
   <link rel="apple-touch-icon" href="./favicon.png">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="stylesheet" href="./styles.css?v=thumbnail-demo-1" />
+  <link rel="stylesheet" href="./collection.css?v=collection-demo-1" />
 </head>
 <body>
+  <section id="collectionPublic" class="ec-public" hidden aria-live="polite"></section>
   <div class="auth" id="authGate">
     <div class="auth__panel">
       <h1 class="auth__title">語り場ニュース</h1>
@@ -293,10 +295,15 @@
 </section>
 
     <!-- Admin Page -->
+    <section class="page" data-page="collection"><div id="collectionRoot" class="ec-shell"></div></section>
+    <section class="page" data-page="collection-detail"><div id="collectionDetail" class="ec-shell"></div></section>
+    <section class="page" data-page="collection-claim"><div id="collectionClaim" class="ec-shell" aria-live="polite"></div></section>
+    <section class="page" data-page="collection-admin"><div id="collectionAdmin" class="ec-shell"></div></section>
     <section class="page" data-page="admin">
       <section class="pane">
         <div class="pane__head pane__head--row">
           <h2 class="pane__title">管理</h2>
+          <button class="btn" type="button" data-ec-go="collection-admin">コレクション管理</button>
           <a class="btn" href="./news_records-main/" target="_blank" rel="noopener">利用状況を分析 ↗</a>
         </div>
         <div class="admin-tabs" role="tablist" aria-label="Admin tabs">
@@ -495,6 +502,10 @@
         <span>Schedule</span>
       </button>
 
+      <button class="navitem" data-nav="collection" aria-label="Collection">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3h8v18H3V3zm10 0h8v18h-8V3zM5 5v6h4V5H5zm10 0v6h4V5h-4zM5 13v6h4v-6H5zm10 0v6h4v-6h-4z"/></svg>
+        <span>Collection</span>
+      </button>
       <button class="navitem" data-nav="saved" aria-label="Saved">
         <svg viewBox="0 0 24 24"><path d="M6 2h12a2 2 0 0 1 2 2v18l-8-4-8 4V4a2 2 0 0 1 2-2z"/></svg>
         <span>Saved</span>
@@ -706,6 +717,8 @@
 
   <script src="./config.js?v=scheduled-post-demo-1"></script>
   <script src="./thumbnail.js?v=thumbnail-demo-1"></script>
-  <script src="./app.js?v=thumbnail-demo-1"></script>
+  <script src="./vendor/qrcode.js?v=2.0.4"></script>
+  <script src="./app.js?v=collection-demo-1"></script>
+  <script src="./collection.js?v=collection-demo-1"></script>
 </body>
 </html>
